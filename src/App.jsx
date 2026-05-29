@@ -20,6 +20,8 @@ import TagModal from './modals/TagModal'
 import AnalyticsModal from './modals/AnalyticsModal'
 import StatsModal from './modals/StatsModal'
 import SingleHabitView from './modals/SingleHabitView'
+import SingleRewardView from './modals/SingleRewardView'
+import StatsPage from './modals/StatsPage'
 
 export default function App() {
   const { state, actions } = useApp()
@@ -157,6 +159,8 @@ export default function App() {
       <AnalyticsModal />
       <StatsModal />
       <SingleHabitView />
+      <SingleRewardView />
+      <StatsPage />
     </>
   )
 }

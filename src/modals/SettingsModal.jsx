@@ -12,8 +12,9 @@ export default function SettingsModal() {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && actions.closeModal()}>
       <div className="modal-box" style={{ textAlign: 'center' }}>
         <h3>Impostazioni</h3>
-        <button className="btn-backup" onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('analytics'), 50) }}>📉 Analisi</button>
-        <button className="btn-backup" onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('stats'), 50) }}>📊 Statistiche</button>
+        <button className="btn-backup" onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('statsPage'), 50) }}>📊 Statistiche Complete</button>
+        <button className="btn-backup" onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('analytics'), 50) }}>📉 Analisi Rapida</button>
+        <button className="btn-backup" onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('stats'), 50) }}>🏅 Stats Vecchie</button>
         <button className="btn-backup" onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('tags'), 50) }}>🏷️ Tag</button>
         <hr style={{ margin: '20px 0', border: '1px solid #333' }} />
         <button className="btn-backup" onClick={actions.exportData}>Backup JSON</button>

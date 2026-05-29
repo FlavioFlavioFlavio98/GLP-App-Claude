@@ -11,9 +11,14 @@ export default function Header() {
         <div className="avatar">{currentUser === 'flavio' ? 'F' : 'S'}</div>
         <div className="username">{currentUser === 'flavio' ? 'Flavio' : 'Simona'}</div>
       </div>
-      <button className="icon-btn" onClick={() => actions.openModal('settings')}>
-        <span className="material-icons-round">settings</span>
-      </button>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button className="icon-btn" onClick={() => actions.openModal('statsPage')} title="Statistiche">
+          <span className="material-icons-round">bar_chart</span>
+        </button>
+        <button className="icon-btn" onClick={() => actions.openModal('settings')}>
+          <span className="material-icons-round">settings</span>
+        </button>
+      </div>
     </div>
   )
 }

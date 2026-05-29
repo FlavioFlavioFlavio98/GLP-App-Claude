@@ -44,6 +44,9 @@ export default function ShopList() {
             </div>
             <div className="actions-group" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
               <div className="actions-group">
+                <button className="btn-icon" title="Statistiche" onClick={() => actions.openModal('singleReward', r.id)}>
+                  <span className="material-icons-round" style={{ fontSize: 18 }}>insights</span>
+                </button>
                 <button className="btn-icon" onClick={() => actions.openModal('edit', { id: r.id, type: 'reward' })}>
                   <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
                 </button>

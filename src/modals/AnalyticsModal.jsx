@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale } from 'chart.js'
+import { Chart } from '../lib/chartSetup'
 import { useApp } from '../lib/store'
 import { getDailyNet, toDateString } from '../lib/habitLogic'
-
-Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale)
 
 export default function AnalyticsModal() {
   const { state, actions } = useApp()

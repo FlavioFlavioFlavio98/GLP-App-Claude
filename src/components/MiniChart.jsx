@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Filler } from 'chart.js'
+import { Chart } from '../lib/chartSetup'
 import { getDailyNet, toDateString } from '../lib/habitLogic'
-
-Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Filler)
 
 export default function MiniChart({ allUsersData }) {
   const canvasRef = useRef(null)

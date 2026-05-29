@@ -1,9 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { Chart, DoughnutController, ArcElement, Tooltip, Legend } from 'chart.js'
+import { Chart } from '../lib/chartSetup'
 import { useApp } from '../lib/store'
 import { parseEntry, getItemValueAtDate } from '../lib/habitLogic'
-
-Chart.register(DoughnutController, ArcElement, Tooltip, Legend)
 
 const DAYS_NAME = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
 

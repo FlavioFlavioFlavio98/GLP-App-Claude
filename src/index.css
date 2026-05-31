@@ -898,6 +898,29 @@ input[type="color"] {
 .note-save-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* =============================================
+   ACHIEVEMENT OVERLAY
+   ============================================= */
+@keyframes achievement-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(30px) scale(0.85); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
+}
+@keyframes achievement-out {
+  from { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(30px) scale(0.9); }
+}
+
+/* =============================================
+   QUALITY DOT (HabitItem)
+   ============================================= */
+.quality-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  display: inline-block; margin-left: 4px;
+}
+.quality-dot.q-good   { background: var(--success); }
+.quality-dot.q-ok     { background: #EF9F27; }
+.quality-dot.q-bad    { background: var(--danger); }
+
+/* =============================================
    FEATURE 1 — ANIMATED SCORE
    ============================================= */
 .count-up {
@@ -988,6 +1011,45 @@ input[type="color"] {
   /* Note: margin-bottom is moved to .swipe-wrapper */
   margin-bottom: 0 !important;
 }
+
+/* =============================================
+   LOGIN SCREEN
+   ============================================= */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =============================================
+   TOGGLE SWITCH (notifications)
+   ============================================= */
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: rgba(255,255,255,0.1); border-radius: 24px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: ''; position: absolute;
+  height: 18px; width: 18px; left: 3px; bottom: 3px;
+  background: white; border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--theme-color); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+/* =============================================
+   FEATURE: NUMERIC HABIT INPUT
+   ============================================= */
+.numeric-input-inline {
+  width: 72px; padding: 6px 8px; text-align: right;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px; color: var(--text); font-size: 0.9em;
+  -moz-appearance: textfield;
+}
+.numeric-input-inline::-webkit-outer-spin-button,
+.numeric-input-inline::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* =============================================
    FEATURE 5 — EVENING REVIEW BUTTON

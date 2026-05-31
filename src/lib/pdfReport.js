@@ -61,13 +61,28 @@ export function buildMonthData(userData, year, month) {
     days.push({ d, dateStr, net, earned: dayEarned, spent: daySpent })
   }
 
+  // Best time slot for the month
+  const slotPts = { morning: 0, afternoon: 0, evening: 0 }
+  ;(userData?.habits || []).filter(h => h.timeSlot && slotPts[h.timeSlot] !== undefined && !h.archivedAt).forEach(h => {
+    const mm = String(month + 1).padStart(2, '0')
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${mm}-${String(d).padStart(2, '0')}`
+      const entry = parseEntry(userData?.dailyLogs?.[dateStr])
+      const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
+      if (entry.habits.includes(sid)) slotPts[h.timeSlot] += getItemValueAtDate(h, 'reward', dateStr)
+    }
+  })
+  const slotLabels = { morning: 'Mattina', afternoon: 'Pomeriggio', evening: 'Sera' }
+  const bestSlotKey = Object.keys(slotPts).reduce((a, b) => slotPts[a] >= slotPts[b] ? a : b)
+  const bestTimeSlot = Object.values(slotPts).some(v => v > 0) ? slotLabels[bestSlotKey] : null
+
   return {
     days, totalEarned, totalSpent, totalNet: totalEarned - totalSpent,
     maxNet: maxNet === -Infinity ? 0 : maxNet, maxDay,
     minNet: minNet === Infinity ? 0 : minNet, minDay,
     avgNet: daysInMonth > 0 ? Math.round((totalEarned - totalSpent) / daysInMonth) : 0,
     maxStreak, totalDone, totalPurchases,
-    tagStats, habitStats, purchaseList,
+    tagStats, habitStats, purchaseList, bestTimeSlot,
   }
 }
 
@@ -216,6 +231,7 @@ export async function generatePdfReport({ userData, currentUser, themeId, year, 
   y = kv('Streak più lunga', `${data.maxStreak} giorni`, y)
   y = kv('Abitudini completate', `${data.totalDone}`, y)
   y = kv('Acquisti effettuati', `${data.totalPurchases}`, y)
+  if (data.bestTimeSlot) y = kv('Fascia più produttiva', data.bestTimeSlot, y)
 
   // ---- PAGE 3: MONTHLY CHART ----
   doc.addPage()

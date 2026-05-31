@@ -4,7 +4,7 @@ import { APP_VERSION, APP_UPDATED } from '../version'
 
 export default function SettingsModal() {
   const { state, actions } = useApp()
-  const { modal, userColors, density } = state
+  const { modal, userColors, density, authUserId, allUsersData } = state
   const fileRef = useRef(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
@@ -52,6 +52,19 @@ export default function SettingsModal() {
           <div className="settings-section-title">Profilo Utente</div>
           <UserColorRow name="Flavio" color={userColors.flavio} onChange={c => actions.setUserColor('flavio', c)} />
           <UserColorRow name="Simona" color={userColors.simona} onChange={c => actions.setUserColor('simona', c)} />
+          {/* Avatar button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 6 }}>
+            <div style={{ fontSize: '2em', width: 40, textAlign: 'center' }}>
+              {allUsersData[authUserId]?.profile?.avatar || (authUserId === 'flavio' ? '🔥' : '⭐')}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.82em', fontWeight: 600 }}>Avatar</div>
+              <div style={{ fontSize: '0.68em', color: '#666' }}>Emoji personalizzata nell'header</div>
+            </div>
+            <button className="btn-icon" onClick={() => openAfter('avatar')} title="Modifica avatar">
+              <span className="material-icons-round" style={{ fontSize: 20 }}>edit</span>
+            </button>
+          </div>
         </div>
 
         {/* VISUALIZZAZIONE */}
@@ -82,16 +95,30 @@ export default function SettingsModal() {
           </div>
         </div>
 
-        {/* ASPETTO & SICUREZZA */}
+        {/* ASPETTO */}
         <div className="settings-section">
-          <div className="settings-section-title">Aspetto e Sicurezza</div>
+          <div className="settings-section-title">Aspetto</div>
           <button className="btn-backup" onClick={() => openAfter('themeModal')}>
             <span className="material-icons-round" style={{ fontSize: 18 }}>palette</span>
             Temi
           </button>
-          <button className="btn-backup" onClick={() => openAfter('changePin')}>
-            <span className="material-icons-round" style={{ fontSize: 18 }}>lock</span>
-            Cambia PIN
+        </div>
+
+        {/* TROFEI */}
+        <div className="settings-section">
+          <div className="settings-section-title">Progressi</div>
+          <button className="btn-backup" onClick={() => openAfter('achievements')}>
+            <span style={{ fontSize: '1.1em' }}>🏆</span>
+            Trofei e obiettivi
+          </button>
+        </div>
+
+        {/* NOTIFICHE */}
+        <div className="settings-section">
+          <div className="settings-section-title">Notifiche & Backup</div>
+          <button className="btn-backup" onClick={() => openAfter('notifications')}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>notifications</span>
+            Notifiche & Backup email
           </button>
         </div>
 
@@ -132,6 +159,10 @@ export default function SettingsModal() {
             <span className="material-icons-round" style={{ fontSize: 18 }}>download</span>
             Backup JSON
           </button>
+          <button className="btn-backup" onClick={() => actions.exportCsv(null, state.allUsersData, 'all')}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>table_chart</span>
+            Esporta CSV (ZIP)
+          </button>
           <button className="btn-backup" onClick={() => fileRef.current.click()}>
             <span className="material-icons-round" style={{ fontSize: 18 }}>upload</span>
             Ripristina da File
@@ -143,6 +174,21 @@ export default function SettingsModal() {
         <button className="btn-danger" style={{ fontSize: '0.85em', marginTop: 4 }} onClick={actions.hardReset}>
           Reset Account
         </button>
+
+        {/* LOGOUT */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <button
+            className="btn-danger"
+            style={{ borderColor: 'rgba(255,255,255,0.15)', color: '#aaa', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}
+            onClick={() => { actions.closeModal(); setTimeout(() => actions.logout(), 50) }}
+          >
+            <span className="material-icons-round" style={{ fontSize: 18 }}>logout</span>
+            Esci dall'account
+          </button>
+          <div style={{ fontSize: '0.68em', color: '#444', textAlign: 'center', marginTop: 6 }}>
+            Accesso tramite Google — {authUserId}
+          </div>
+        </div>
 
         {/* INFORMAZIONI */}
         <div className="settings-section" style={{ marginTop: 20 }}>

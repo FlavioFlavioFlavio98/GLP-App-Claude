@@ -1,6 +1,96 @@
 import { useRef, useState } from 'react'
 import { useApp } from '../lib/store'
-import { getItemValueAtDate, calculateStreak } from '../lib/habitLogic'
+import { getItemValueAtDate, calculateStreak, calcNumericPoints } from '../lib/habitLogic'
+import { calcQualityScore } from '../lib/statsLogic'
+
+// ---- Widget per abitudini numeriche ----
+function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
+  const { actions } = useApp()
+  const cfg = habit.numericConfig
+  const savedValue = entry.habitValues?.[stableId]
+  const [editing, setEditing] = useState(false)
+  const [inputVal, setInputVal] = useState('')
+
+  const previewPts = inputVal !== '' ? calcNumericPoints(parseFloat(inputVal), cfg) : null
+  const savedPts = savedValue !== undefined ? calcNumericPoints(parseFloat(savedValue), cfg) : null
+  const ptsColor = (pts) => pts == null ? '#666' : pts >= 0 ? 'var(--success)' : 'var(--danger)'
+
+  if (!editing && savedValue !== undefined) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.95em', color: 'var(--theme-color)' }}>
+            {savedValue} {cfg?.unit}
+          </div>
+          <div style={{ fontSize: '0.72em', color: ptsColor(savedPts), fontWeight: 700 }}>
+            {savedPts >= 0 ? '+' : ''}{savedPts} pt
+          </div>
+        </div>
+        {isToday && (
+          <button className="btn-icon" onClick={() => { setInputVal(String(savedValue)); setEditing(true) }}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  if (editing || (savedValue === undefined && isToday)) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input
+              type="number"
+              inputMode={cfg?.inputType === 'decimal' ? 'decimal' : 'numeric'}
+              step={cfg?.inputType === 'decimal' ? '0.1' : '1'}
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              placeholder="0"
+              style={{
+                width: 72, padding: '6px 8px', textAlign: 'right',
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 8, color: 'var(--text)', fontSize: '0.9em',
+              }}
+              autoFocus
+            />
+            <span style={{ fontSize: '0.75em', color: '#666' }}>{cfg?.unit}</span>
+          </div>
+          {previewPts !== null && (
+            <span style={{ fontSize: '0.68em', color: ptsColor(previewPts), fontWeight: 700 }}>
+              = {previewPts >= 0 ? '+' : ''}{previewPts} pt
+            </span>
+          )}
+        </div>
+        <button
+          className="btn-status done-btn active"
+          style={{ fontSize: '0.7em', width: 48 }}
+          onClick={() => {
+            if (inputVal === '') return
+            actions.setNumericValue(stableId, inputVal)
+            setEditing(false)
+          }}
+          disabled={inputVal === ''}
+        >OK</button>
+        {editing && (
+          <button className="btn-icon" onClick={() => setEditing(false)}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>close</span>
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ color: '#444', fontSize: '0.78em' }}>
+      {isToday ? (
+        <button className="btn-status done-btn" style={{ fontSize: '0.65em', width: 52 }} onClick={() => setEditing(true)}>
+          <span className="material-icons-round" style={{ fontSize: 16 }}>input</span>
+        </button>
+      ) : <span>—</span>}
+    </div>
+  )
+}
 
 function TagIcon({ tag }) {
   if (!tag) return <span className="tag-pill tag-pill-none">Nessuna categoria</span>
@@ -20,10 +110,14 @@ function TagIcon({ tag }) {
 const SWIPE_THRESHOLD = 80
 
 export default function HabitItem({
-  habit, viewDate, doneHabits, failedHabits, habitLevels, habitNotes, tagsMap, isToday,
-  dragHandleProps, isDragOverlay,
+  habit, viewDate, doneHabits, failedHabits, habitLevels, habitNotes, habitValues, tagsMap, isToday,
+  dragHandleProps, isDragOverlay, globalData,
 }) {
   const { actions } = useApp()
+  // Quality dot — compute only for non-numeric, non-if habits
+  const qualityScore = (!habit.numericType && habit.type !== 'if' && !isDragOverlay && globalData)
+    ? calcQualityScore(habit, globalData) : null
+  const qDotClass = qualityScore === null ? '' : qualityScore >= 70 ? 'q-good' : qualityScore >= 40 ? 'q-ok' : 'q-bad'
   const stableId = habit.id || habit.name.replace(/[^a-zA-Z0-9]/g, '')
 
   const isDone = Boolean(doneHabits && doneHabits.includes(stableId))
@@ -36,6 +130,12 @@ export default function HabitItem({
   const isMulti = getItemValueAtDate(habit, 'isMulti', viewDate)
   const description = getItemValueAtDate(habit, 'description', viewDate)
   const isIf = habit.type === 'if'
+  const isNumeric = Boolean(habit.numericType && habit.numericConfig)
+  const importance = habit.importance || 'medium'
+  const TS_ICONS = { morning: '🌅', afternoon: '☀️', evening: '🌙' }
+  const tsIcon = habit.timeSlot ? TS_ICONS[habit.timeSlot] : null
+  const importanceDot = importance === 'high' ? '#E24B4A' : importance === 'medium' ? '#EF9F27' : '#4fc3f7'
+  const isHighFailed = importance === 'high' && isFailed
 
   const tag = tagsMap[habit.tagId]
   const streak = isToday && !isIf && !isDragOverlay ? calculateStreak(stableId, {}) : 0
@@ -186,7 +286,10 @@ export default function HabitItem({
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <div className={`item ${statusClass}`} style={tag ? { borderLeftColor: tag.color } : {}}>
+        <div className={`item ${statusClass}`} style={{
+          ...(tag ? { borderLeftColor: tag.color } : {}),
+          ...(isHighFailed ? { borderLeftColor: '#E24B4A', borderLeftWidth: 5, boxShadow: '0 0 0 1px rgba(226,75,74,0.2)' } : {}),
+        }}>
           {dragHandleProps && (
             <div className="drag-handle" {...dragHandleProps} aria-label="Riordina">
               <span className="material-icons-round">drag_indicator</span>
@@ -194,7 +297,15 @@ export default function HabitItem({
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="item-name-row">
-              <h3>{habit.name}</h3>
+              <h3>
+                <span
+                  style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: importanceDot, marginRight: 5, verticalAlign: 'middle', flexShrink: 0 }}
+                  title={`Importanza: ${importance}`}
+                />
+                {habit.name}
+                {tsIcon && <span style={{ fontSize: '0.7em', marginLeft: 4, opacity: 0.6 }}>{tsIcon}</span>}
+                {qualityScore !== null && <span className={`quality-dot ${qDotClass}`} title={`Qualità: ${qualityScore}/100`} />}
+              </h3>
               <TagIcon tag={tag} />
               {streak > 1 && (
                 <span className="streak-badge">
@@ -225,22 +336,34 @@ export default function HabitItem({
             <button className="btn-icon" onClick={() => actions.openModal('edit', { id: habit.id, type: 'habit' })}>
               <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
             </button>
-            {!isIf && (
-              <button
-                key={failButtonKey}
-                className={`btn-status fail-btn${isFailed ? ' active' : ''}`}
-                onClick={() => actions.setHabitStatus(stableId, 'failed')}
-              >
-                <span className="material-icons-round">close</span>
-              </button>
+            {isNumeric ? (
+              <NumericWidget
+                habit={habit}
+                stableId={stableId}
+                viewDate={viewDate}
+                entry={{ habitValues: habitValues || {}, habits: doneHabits || [], failedHabits: failedHabits || [], habitLevels: habitLevels || {} }}
+                isToday={isToday}
+              />
+            ) : (
+              <>
+                {!isIf && (
+                  <button
+                    key={failButtonKey}
+                    className={`btn-status fail-btn${isFailed ? ' active' : ''}`}
+                    onClick={() => actions.setHabitStatus(stableId, 'failed')}
+                  >
+                    <span className="material-icons-round">close</span>
+                  </button>
+                )}
+                <button
+                  key={doneButtonKey}
+                  className={`btn-status ${doneClass}`}
+                  onClick={() => actions.setHabitStatus(stableId, 'next')}
+                >
+                  {doneContent}
+                </button>
+              </>
             )}
-            <button
-              key={doneButtonKey}
-              className={`btn-status ${doneClass}`}
-              onClick={() => actions.setHabitStatus(stableId, 'next')}
-            >
-              {doneContent}
-            </button>
           </div>
         </div>
       </div>

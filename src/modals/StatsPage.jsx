@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chart } from '../lib/chartSetup'
 import { useApp } from '../lib/store'
-import { buildDailyNets, buildWeeklyNets, buildTagScores, buildRecords, buildMonthHeatmap, buildTagStats, buildTagWeeklyTrend, buildTagDetailStats } from '../lib/statsLogic'
+import { buildDailyNets, buildWeeklyNets, buildTagScores, buildRecords, buildMonthHeatmap, buildTagStats, buildTagWeeklyTrend, buildTagDetailStats, buildMoodTimeline, buildMoodNetAverage, buildLifeMap, buildQualityRanking, qualityLabel, buildMoodToWinRate, buildHabitToMood, buildHabitCoMatrix, buildBubbleData, buildEnergyTimeline, buildEnergyCorrelations, buildLifeTimeline, buildAnnualHeatmap, buildMomentumScoreHistory, buildTimeSlotStats, calcMomentumScore } from '../lib/statsLogic'
 import { toDateString } from '../lib/habitLogic'
+import { MOODS } from './MoodModal'
 
 function PdfExportButton({ onClose }) {
   const { actions } = useApp()
@@ -29,6 +30,7 @@ export default function StatsPage() {
 }
 
 function StatsPageInner({ allUsersData, currentUser, onClose }) {
+  const { actions } = useApp()
   const [section, setSection] = useState('comparison')
   const userData = allUsersData[currentUser]
   const otherUser = currentUser === 'flavio' ? 'simona' : 'flavio'
@@ -40,6 +42,15 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
     { id: 'weekly', icon: 'bar_chart', label: 'Settimane' },
     { id: 'records', icon: 'emoji_events', label: 'Record' },
     { id: 'heatmap', icon: 'calendar_month', label: 'Calendario' },
+    { id: 'timeline', icon: 'timeline', label: 'Timeline' },
+    { id: 'annoheatmap', icon: 'grid_view', label: 'Anno' },
+    { id: 'momentum', icon: 'trending_up', label: 'Momentum' },
+    { id: 'mood', icon: 'mood', label: 'Mood' },
+    { id: 'lifemap', icon: 'radar', label: 'Mappa Vita' },
+    { id: 'quality', icon: 'grade', label: 'Qualità' },
+    { id: 'causeffect', icon: 'insights', label: 'Cause-Effetto' },
+    { id: 'bubbles', icon: 'bubble_chart', label: 'Bolle' },
+    { id: 'energy', icon: 'bolt', label: 'Energia' },
   ]
 
   return (
@@ -74,6 +85,15 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
         {section === 'weekly' && <WeeklySection userData={userData} currentUser={currentUser} />}
         {section === 'records' && <RecordsSection userData={userData} />}
         {section === 'heatmap' && <HeatmapSection userData={userData} />}
+        {section === 'timeline' && <TimelineSection userData={userData} />}
+        {section === 'annoheatmap' && <AnnualHeatmapSection userData={userData} />}
+        {section === 'momentum' && <MomentumSection userData={userData} />}
+        {section === 'mood' && <MoodSection allUsersData={allUsersData} currentUser={currentUser} />}
+        {section === 'lifemap' && <LifeMapSection userData={userData} />}
+        {section === 'quality' && <QualitySection userData={userData} onHabitClick={id => { onClose(); setTimeout(() => actions.openModal('singleHabit', id), 60) }} />}
+        {section === 'causeffect' && <CauseEffectSection userData={userData} currentUser={currentUser} />}
+        {section === 'bubbles' && <BubblesSection userData={userData} onHabitClick={id => { onClose(); setTimeout(() => actions.openModal('singleHabit', id), 60) }} />}
+        {section === 'energy' && <EnergySection userData={userData} currentUser={currentUser} />}
       </div>
     </div>
   )
@@ -356,6 +376,894 @@ function HeatmapSection({ userData }) {
   )
 }
 
+/* ---- SEZIONE BOLLE ---- */
+function BubblesSection({ userData, onHabitClick }) {
+  const [days, setDays] = useState(30)
+  const [selectedTags, setSelectedTags] = useState(null) // null = show all
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+
+  const tagsMap = {}
+  ;(userData?.tags || []).forEach(t => { tagsMap[t.id] = t })
+  const allData = buildBubbleData(userData, days)
+  const filtered = selectedTags ? allData.filter(d => selectedTags.has(d.tagId || '__none__')) : allData
+  const tagIds = [...new Set(allData.map(d => d.tagId || '__none__'))]
+
+  const IMPORTANCE_OPACITY = { high: 0.9, medium: 0.65, low: 0.4 }
+  const [hoveredId, setHoveredId] = useState(null)
+
+  useEffect(() => {
+    if (!canvasRef.current || filtered.length === 0) return
+    if (chartRef.current) chartRef.current.destroy()
+
+    chartRef.current = new Chart(canvasRef.current, {
+      type: 'bubble',
+      data: {
+        datasets: filtered.map(d => {
+          const opacity = IMPORTANCE_OPACITY[d.importance] || 0.65
+          const hex = d.color || '#888'
+          return {
+            label: d.name,
+            data: [{ x: d.x, y: d.y, r: d.r, id: d.id }],
+            backgroundColor: `${hex}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`,
+            borderColor: d.color || '#888',
+            borderWidth: 1.5,
+          }
+        }),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const d = ctx.raw
+                const habit = filtered[ctx.datasetIndex]
+                return `${habit.name} — freq: ${d.x}/sett, win: ${d.y}%, pt: ${habit.totalPts}`
+              },
+            },
+          },
+        },
+        scales: {
+          x: { title: { display: true, text: 'Frequenza (volte/sett)', color: '#666' }, grid: { color: '#2a2a2a' }, ticks: { color: '#666' }, beginAtZero: true },
+          y: { title: { display: true, text: 'Win rate %', color: '#666' }, grid: { color: '#2a2a2a' }, ticks: { color: '#666' }, min: 0, max: 100 },
+        },
+        onClick(e, els) {
+          if (els[0]) {
+            const d = filtered[els[0].datasetIndex]
+            if (d?.id) onHabitClick?.(d.id)
+          }
+        },
+      },
+    })
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [days, filtered])
+
+  function toggleTag(tagId) {
+    setSelectedTags(prev => {
+      if (!prev) {
+        const s = new Set(tagIds)
+        s.delete(tagId)
+        return s.size === tagIds.length - 1 ? s : null
+      }
+      const s = new Set(prev)
+      if (s.has(tagId)) s.delete(tagId)
+      else s.add(tagId)
+      return s.size === tagIds.length ? null : (s.size === 0 ? prev : s)
+    })
+  }
+
+  return (
+    <>
+      <SectionTitle>Grafico a Bolle</SectionTitle>
+      <div style={{ fontSize: '0.72em', color: '#555', marginBottom: 10 }}>
+        Dimensione = punti totali · Opacità = importanza · Tocca per aprire l'abitudine
+      </div>
+      <div className="switch-group" style={{ marginBottom: 12 }}>
+        {[30, 60, 90].map(d => (
+          <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>
+        ))}
+      </div>
+
+      {/* Tag filters */}
+      {tagIds.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          {tagIds.map(tid => {
+            const tag = tagsMap[tid]
+            const active = !selectedTags || selectedTags.has(tid)
+            return (
+              <button key={tid} onClick={() => toggleTag(tid)} style={{
+                padding: '3px 10px', borderRadius: 20, fontSize: '0.72em', cursor: 'pointer',
+                background: active ? (tag?.color || '#666') : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${tag?.color || '#666'}`,
+                color: active ? '#fff' : '#666', fontWeight: active ? 700 : 400,
+                transition: 'all 0.18s',
+              }}>
+                {tag?.emoji || ''} {tag?.name || 'Senza tag'}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {filtered.length < 2 ? (
+        <div className="empty-state">Dati insufficienti per il grafico</div>
+      ) : (
+        <>
+          <div style={{ height: 280, marginBottom: 16, position: 'relative' }}><canvas ref={canvasRef} /></div>
+          {/* Quadrant labels */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: '0.68em', color: '#555' }}>
+            <div style={{ textAlign: 'left' }}>⭐ Bassa freq + alto WR<br/><span style={{ color: '#444' }}>Occasionali ma efficaci</span></div>
+            <div style={{ textAlign: 'right' }}>💪 Alta freq + alto WR<br/><span style={{ color: '#444' }}>Abitudini solide</span></div>
+            <div style={{ textAlign: 'left' }}>🤔 Bassa freq + basso WR<br/><span style={{ color: '#444' }}>Da rivalutare</span></div>
+            <div style={{ textAlign: 'right' }}>⚠️ Alta freq + basso WR<br/><span style={{ color: '#444' }}>Da migliorare</span></div>
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+/* ---- SEZIONE ENERGIA ---- */
+function EnergySection({ userData, currentUser }) {
+  const [days, setDays] = useState(30)
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+
+  const timeline = buildEnergyTimeline(userData, currentUser, days)
+  const corr = buildEnergyCorrelations(userData, currentUser, 60)
+  const withMorning = timeline.filter(d => d.morning !== null)
+  const withEvening = timeline.filter(d => d.evening !== null)
+
+  useEffect(() => {
+    if (!canvasRef.current) return
+    const withData = timeline.filter(d => d.morning !== null || d.evening !== null)
+    if (withData.length < 2) return
+    if (chartRef.current) chartRef.current.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: 'line',
+      data: {
+        labels: timeline.map(d => d.label),
+        datasets: [
+          { label: '☀️ Mattina', data: timeline.map(d => d.morning), borderColor: '#EF9F27', backgroundColor: 'rgba(239,159,39,0.1)', fill: true, tension: 0.3, pointRadius: 4, spanGaps: true, borderWidth: 2 },
+          { label: '🌙 Sera', data: timeline.map(d => d.evening), borderColor: '#7986cb', backgroundColor: 'rgba(121,134,203,0.1)', fill: true, tension: 0.3, pointRadius: 4, spanGaps: true, borderWidth: 2 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { labels: { color: '#aaa', boxWidth: 12 } } },
+        scales: {
+          y: { min: 0.5, max: 3.5, ticks: { color: '#666', callback: v => ['', '⚡', '🔋', '⚡⚡'][Math.round(v)] || v, font: { size: 14 } }, grid: { color: '#2a2a2a' } },
+          x: { grid: { display: false }, ticks: { color: '#666', maxTicksLimit: 8 } },
+        },
+      },
+    })
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [days, userData])
+
+  return (
+    <>
+      <SectionTitle>Livelli di Energia</SectionTitle>
+      <div className="switch-group" style={{ marginBottom: 12 }}>
+        {[14, 30, 60].map(d => (
+          <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>
+        ))}
+      </div>
+
+      {withMorning.length < 3 && withEvening.length < 3 ? (
+        <div className="empty-state">Registra l'energia per vedere le statistiche</div>
+      ) : (
+        <div style={{ height: 180, marginBottom: 16, position: 'relative' }}><canvas ref={canvasRef} /></div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+        <StatCard label="Media mattutina" value={corr.avgMorning !== null ? `${corr.avgMorning}/3` : '-'} color="#EF9F27" />
+        <StatCard label="Media serale" value={corr.avgEvening !== null ? `${corr.avgEvening}/3` : '-'} color="#7986cb" />
+      </div>
+
+      {corr.bestDOW && corr.bestDOWAvg > 0 && (
+        <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '10px 14px', marginBottom: 16, fontSize: '0.85em' }}>
+          ⚡ Giorno con più energia: <strong style={{ color: 'var(--theme-color)' }}>{corr.bestDOW}</strong> (media {corr.bestDOWAvg}/3)
+        </div>
+      )}
+
+      {/* Morning energy → win rate */}
+      {corr.morningToWinRate.some(m => m.count >= 3) && (
+        <>
+          <SectionTitle>Energia Mattutina → Abitudini</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+            {corr.morningToWinRate.filter(m => m.count > 0).map(m => {
+              const icons = ['', '⚡', '🔋', '⚡⚡']
+              return (
+                <div key={m.level} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '8px 14px' }}>
+                  <span style={{ fontSize: '1.1em' }}>{icons[m.level]}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2 }}>
+                      <div style={{ height: '100%', background: '#EF9F27', width: `${m.avgWinRate || 0}%`, borderRadius: 2 }} />
+                    </div>
+                  </div>
+                  <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '0.88em', minWidth: 40 }}>{m.avgWinRate !== null ? `${m.avgWinRate}%` : '-'}</span>
+                  <span style={{ fontSize: '0.68em', color: '#444' }}>({m.count}gg)</span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Evening energy → mood */}
+      {corr.eveningToMood.some(m => m.count >= 3) && (
+        <>
+          <SectionTitle>Energia Serale → Mood</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {corr.eveningToMood.filter(m => m.count > 0).map(m => {
+              const icons = ['', '⚡', '🔋', '⚡⚡']
+              const MOODS_E = ['', '😞', '😕', '😐', '😊', '🤩']
+              const moodIdx = m.avgMood !== null ? Math.round(m.avgMood) : null
+              return (
+                <div key={m.level} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '8px 14px' }}>
+                  <span style={{ fontSize: '1.1em' }}>{icons[m.level]}</span>
+                  <span style={{ flex: 1, fontSize: '0.82em', color: '#888' }}>Mood medio quando energia {['','bassa','media','alta'][m.level]}</span>
+                  <span style={{ fontSize: '1.2em' }}>{moodIdx ? MOODS_E[moodIdx] : '-'}</span>
+                  <span style={{ fontSize: '0.78em', color: '#666' }}>{m.avgMood !== null ? `${m.avgMood}⭐` : '-'}</span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+/* ---- SEZIONE LIFE MAP ---- */
+function LifeMapSection({ userData }) {
+  const [days, setDays] = useState(30)
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+  const data = buildLifeMap(userData, days)
+
+  const stdDev = (arr) => {
+    if (arr.length < 2) return 0
+    const avg = arr.reduce((a, b) => a + b, 0) / arr.length
+    return Math.sqrt(arr.reduce((acc, v) => acc + (v - avg) ** 2, 0) / arr.length)
+  }
+  const winRates = data.map(d => d.winRate)
+  const balance = data.length > 1 ? Math.max(0, Math.round(100 - stdDev(winRates))) : 0
+  const best = data[0]
+  const worst = data[data.length - 1]
+
+  useEffect(() => {
+    if (!canvasRef.current || data.length < 3) return
+    if (chartRef.current) chartRef.current.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: 'radar',
+      data: {
+        labels: data.map(d => d.emoji ? `${d.emoji} ${d.name}` : d.name),
+        datasets: [{
+          label: 'Win Rate %',
+          data: data.map(d => d.winRate),
+          backgroundColor: 'rgba(var(--theme-color-rgb,255,202,40),0.15)',
+          borderColor: 'var(--theme-color)',
+          pointBackgroundColor: data.map(d => d.color),
+          pointRadius: 5, borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        scales: {
+          r: {
+            beginAtZero: true, max: 100,
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            ticks: { color: '#555', backdropColor: 'transparent', stepSize: 25, font: { size: 9 } },
+            pointLabels: { color: '#aaa', font: { size: 10 } },
+          },
+        },
+        plugins: { legend: { display: false } },
+      },
+    })
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [days, userData])
+
+  return (
+    <>
+      <SectionTitle>Mappa della Vita</SectionTitle>
+      <div className="switch-group" style={{ marginBottom: 12 }}>
+        {[7, 30, 90].map(d => (
+          <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>
+        ))}
+      </div>
+      {data.length < 3 ? (
+        <div className="empty-state">Servono almeno 3 categorie con dati</div>
+      ) : (
+        <div style={{ height: 240, marginBottom: 20, position: 'relative' }}><canvas ref={canvasRef} /></div>
+      )}
+
+      {/* Category bars */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
+        {data.map(d => (
+          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: '0.82em' }}>{d.emoji ? `${d.emoji} ` : ''}{d.name}</span>
+            <span style={{ fontSize: '0.78em', color: d.winRate < 40 ? 'var(--danger)' : 'var(--text)', fontWeight: 700 }}>
+              {d.winRate}% {d.winRate >= 80 ? '⭐' : d.winRate < 40 ? '⚠️' : ''}
+            </span>
+            <div style={{ width: 60, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ height: '100%', background: d.color, width: `${d.winRate}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+        {best && <StatCard label="Area più forte" value={`${best.winRate}%`} color={best.color || 'var(--success)'} />}
+        {worst && <StatCard label="Da migliorare" value={`${worst.winRate}%`} color={worst.winRate < 40 ? 'var(--danger)' : '#888'} />}
+        <StatCard label="Equilibrio" value={`${balance}/100`} color={balance >= 70 ? 'var(--success)' : balance >= 50 ? '#EF9F27' : 'var(--danger)'} />
+      </div>
+    </>
+  )
+}
+
+/* ---- SEZIONE QUALITY RANKING ---- */
+function QualitySection({ userData, onHabitClick }) {
+  const ranking = buildQualityRanking(userData)
+  return (
+    <>
+      <SectionTitle>Classifica Qualità Abitudini</SectionTitle>
+      {ranking.length === 0 ? <div className="empty-state">Nessuna abitudine attiva</div> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {ranking.map(({ habit, score }, i) => {
+            const ql = qualityLabel(score)
+            return (
+              <div key={habit.id} onClick={() => onHabitClick?.(habit.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 12, cursor: 'pointer',
+              }}>
+                <div style={{ fontSize: '0.82em', color: '#555', minWidth: 20, textAlign: 'center' }}>#{i + 1}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, fontSize: '0.9em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{habit.name}</div>
+                  <div style={{ fontSize: '0.7em', color: ql.color }}>{ql.text}</div>
+                </div>
+                <div style={{
+                  background: ql.color + '22', border: `1px solid ${ql.color}44`,
+                  borderRadius: 20, padding: '3px 10px', fontSize: '0.78em', fontWeight: 800, color: ql.color, flexShrink: 0,
+                }}>
+                  {score}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+}
+
+/* ---- SEZIONE CAUSA-EFFETTO ---- */
+function CauseEffectSection({ userData, currentUser }) {
+  const moodToWR = buildMoodToWinRate(userData, currentUser, 60)
+  const habitToMood = buildHabitToMood(userData, currentUser, 60)
+  const coMatrix = buildHabitCoMatrix(userData, 60)
+  const MOOD_EMOJIS = ['', '😞', '😕', '😐', '😊', '🤩']
+
+  const hasEnoughMood = moodToWR.some(m => m.count >= 3)
+
+  if (!hasEnoughMood) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#555' }}>
+        <div style={{ fontSize: '3em', marginBottom: 12 }}>📊</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Servono più dati mood</div>
+        <div style={{ fontSize: '0.82em' }}>Registra il tuo mood ogni giorno per almeno 30 giorni per sbloccare questa analisi.</div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {/* Mood → Win Rate */}
+      <SectionTitle>Mood → Produttività</SectionTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
+        {moodToWR.filter(m => m.count > 0).map(m => (
+          <div key={m.mood} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 14px' }}>
+            <span style={{ fontSize: '1.3em' }}>{MOOD_EMOJIS[m.mood]}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.72em', color: '#555' }}>{m.count} giorni</div>
+              <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, marginTop: 4 }}>
+                <div style={{ height: '100%', background: m.avgWinRate >= 70 ? 'var(--success)' : m.avgWinRate >= 40 ? '#EF9F27' : 'var(--danger)', width: `${m.avgWinRate}%`, borderRadius: 2 }} />
+              </div>
+            </div>
+            <div style={{ fontWeight: 700, fontSize: '0.9em', color: m.avgWinRate >= 70 ? 'var(--success)' : m.avgWinRate >= 40 ? '#EF9F27' : 'var(--danger)' }}>
+              {m.avgWinRate}%
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Habit → Mood */}
+      {habitToMood.length > 0 && (
+        <>
+          <SectionTitle>Abitudini → Impatto sul Mood</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {habitToMood.slice(0, 6).map(h => (
+              <div key={h.sid} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '10px 14px' }}>
+                <div style={{ fontWeight: 500, fontSize: '0.88em', marginBottom: 4 }}>{h.name}</div>
+                <div style={{ display: 'flex', gap: 12, fontSize: '0.75em' }}>
+                  <span>✓ Fatto: <strong style={{ color: 'var(--success)' }}>{h.avgDone} ⭐</strong></span>
+                  <span>✗ Non fatto: <strong style={{ color: 'var(--danger)' }}>{h.avgNotDone} ⭐</strong></span>
+                  <span style={{ color: h.diff > 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
+                    {h.diff > 0 ? '+' : ''}{h.diff} Δ
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Co-occurrence matrix */}
+      {coMatrix.habits.length >= 2 && (
+        <>
+          <SectionTitle>Matrice Co-occorrenza</SectionTitle>
+          <div style={{ overflowX: 'auto', marginBottom: 20 }}>
+            <table style={{ borderCollapse: 'collapse', minWidth: '100%', fontSize: '0.68em' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '4px 6px', color: '#555', textAlign: 'left', maxWidth: 60, overflow: 'hidden' }}></th>
+                  {coMatrix.habits.map(h => (
+                    <th key={h.sid} style={{ padding: '4px 6px', color: '#555', writingMode: 'vertical-rl', maxWidth: 30 }}>
+                      {h.name.slice(0, 8)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {coMatrix.habits.map(ha => (
+                  <tr key={ha.sid}>
+                    <td style={{ padding: '4px 6px', color: '#666', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {ha.name.slice(0, 8)}
+                    </td>
+                    {coMatrix.habits.map(hb => {
+                      if (ha.sid === hb.sid) return <td key={hb.sid} style={{ background: '#333', width: 28, height: 28, borderRadius: 4 }} />
+                      const cell = coMatrix.matrix[ha.sid]?.[hb.sid]
+                      if (!cell || cell.onlyA < 10) return <td key={hb.sid} style={{ background: 'rgba(255,255,255,0.04)', width: 28, height: 28 }} />
+                      const pct = Math.round(cell.both / cell.onlyA * 100)
+                      const bg = pct >= 60 ? `rgba(76,175,80,${pct / 100})` : pct >= 30 ? `rgba(239,159,39,${pct / 100})` : `rgba(255,255,255,0.06)`
+                      return (
+                        <td key={hb.sid} title={`${ha.name} + ${hb.name}: ${pct}%`}
+                          style={{ background: bg, width: 28, height: 28, textAlign: 'center', color: pct >= 40 ? '#fff' : '#555', borderRadius: 4 }}>
+                          {pct >= 40 ? `${pct}%` : ''}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ fontSize: '0.65em', color: '#444', marginTop: 6 }}>🟢 = alta co-occorrenza · 🟡 = media · grigio = bassa/scarsi dati</div>
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+/* ---- SEZIONE MOOD ---- */
+function MoodSection({ allUsersData, currentUser }) {
+  const [user, setUser] = useState(currentUser)
+  const [days, setDays] = useState(30)
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+  const userData = allUsersData[user]
+
+  const timeline = buildMoodTimeline(userData, user, days)
+  const correlation = buildMoodNetAverage(userData, user, days)
+  const withData = timeline.filter(d => d.value !== null)
+  const avgMood = withData.length ? (withData.reduce((a, b) => a + b.value, 0) / withData.length).toFixed(1) : '-'
+  const dominant = withData.length ? MOODS.reduce((best, m) => {
+    const cnt = withData.filter(d => d.value === m.value).length
+    return cnt > best.cnt ? { mood: m, cnt } : best
+  }, { mood: MOODS[2], cnt: 0 }).mood : MOODS[2]
+
+  useEffect(() => {
+    if (!canvasRef.current || timeline.length === 0) return
+    if (chartRef.current) chartRef.current.destroy()
+    const filtered = timeline.filter(d => d.value !== null)
+    if (filtered.length < 2) return
+    chartRef.current = new Chart(canvasRef.current, {
+      type: 'line',
+      data: {
+        labels: filtered.map(d => d.label),
+        datasets: [{
+          label: 'Mood',
+          data: filtered.map(d => d.value),
+          borderColor: '#EF9F27',
+          backgroundColor: 'rgba(239,159,39,0.1)',
+          fill: true, tension: 0.3, pointRadius: 5,
+          borderWidth: 2,
+          pointBackgroundColor: filtered.map(d => MOODS.find(m => m.value === d.value)?.color || '#888'),
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { min: 0.5, max: 5.5, ticks: { color: '#666', callback: v => MOODS.find(m => m.value === v)?.emoji || v, font: { size: 14 } }, grid: { color: '#2a2a2a' } },
+          x: { grid: { display: false }, ticks: { color: '#666', maxTicksLimit: 8 } },
+        },
+      },
+    })
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [user, days, allUsersData])
+
+  return (
+    <>
+      <SectionTitle>Mood nel Tempo</SectionTitle>
+      <div className="switch-group" style={{ marginBottom: 10 }}>
+        <div className={`switch-opt${user === 'flavio' ? ' active' : ''}`} onClick={() => setUser('flavio')}>Flavio</div>
+        <div className={`switch-opt${user === 'simona' ? ' active' : ''}`} onClick={() => setUser('simona')}>Simona</div>
+      </div>
+      <div className="switch-group" style={{ marginBottom: 12 }}>
+        {[14, 30, 60].map(d => (
+          <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>
+        ))}
+      </div>
+
+      {withData.length < 2 ? (
+        <div className="empty-state" style={{ padding: '30px 0' }}>Pochi dati mood nel periodo</div>
+      ) : (
+        <div style={{ height: 180, marginBottom: 16, position: 'relative' }}><canvas ref={canvasRef} /></div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+        <StatCard label="Mood medio" value={`${avgMood} ${withData.length ? MOODS[Math.round(parseFloat(avgMood)) - 1]?.emoji || '' : ''}`} color="#EF9F27" />
+        <StatCard label="Mood prevalente" value={`${dominant?.emoji} ${dominant?.label}`} color={dominant?.color} />
+      </div>
+
+      {/* Correlazione mood vs punti */}
+      <SectionTitle>Mood vs Punti netti</SectionTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {correlation.filter(c => c.count > 0).map(({ moodVal, avgNet, count }) => {
+          const m = MOODS.find(x => x.value === moodVal)
+          return (
+            <div key={moodVal} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 14px' }}>
+              <span style={{ fontSize: '1.3em' }}>{m?.emoji}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.78em', color: '#888' }}>{m?.label} ({count} giorni)</div>
+              </div>
+              <div style={{ fontWeight: 700, color: avgNet >= 0 ? 'var(--success)' : 'var(--danger)', fontSize: '0.95em' }}>
+                {avgNet > 0 ? '+' : ''}{avgNet} pt/gg
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+/* ---- SEZIONE TIMELINE VITA ---- */
+const TIMELINE_COLORS = {
+  excellent: { bg: '#1b5e20', border: '#4caf50', text: '#a5d6a7' },
+  good:      { bg: '#2e7d32', border: '#81c784', text: '#c8e6c9' },
+  normal:    { bg: '#f57f17', border: '#ffd54f', text: '#fff9c4' },
+  difficult: { bg: '#bf360c', border: '#ff8a65', text: '#ffccbc' },
+  negative:  { bg: '#b71c1c', border: '#ef9a9a', text: '#ffcdd2' },
+}
+
+function TimelineSection({ userData }) {
+  const [selected, setSelected] = useState(null)
+  const months = buildLifeTimeline(userData)
+
+  if (months.length === 0) return <div className="empty-state">Nessun dato disponibile</div>
+
+  const sel = selected !== null ? months[selected] : null
+
+  return (
+    <>
+      <SectionTitle>Timeline della Vita</SectionTitle>
+      <div style={{ fontSize: '0.72em', color: '#555', marginBottom: 12 }}>
+        Scorri → per il presente. Tocca un mese per i dettagli.
+      </div>
+
+      {/* Horizontal scroll */}
+      <div style={{ overflowX: 'auto', paddingBottom: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, width: 'max-content', paddingRight: 16 }}>
+          {months.map((m, i) => {
+            const colors = TIMELINE_COLORS[m.colorClass] || TIMELINE_COLORS.normal
+            return (
+              <div
+                key={`${m.year}-${m.month}`}
+                onClick={() => setSelected(selected === i ? null : i)}
+                style={{
+                  width: 80, minHeight: 100, borderRadius: 12, padding: '10px 8px',
+                  background: colors.bg,
+                  border: `2px solid ${m.isCurrentMonth ? 'var(--theme-color)' : colors.border}`,
+                  boxShadow: m.isCurrentMonth ? '0 0 10px var(--theme-glow)' : 'none',
+                  cursor: 'pointer', flexShrink: 0, textAlign: 'center',
+                  transition: 'transform 0.15s',
+                  transform: selected === i ? 'scale(1.06)' : 'scale(1)',
+                }}
+              >
+                <div style={{ fontSize: '0.62em', color: colors.text, fontWeight: 700, marginBottom: 4, lineHeight: 1.2 }}>{m.label}</div>
+                <div style={{ fontSize: '0.9em', fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+                  {m.totalNet > 0 ? '+' : ''}{m.totalNet}
+                </div>
+                {m.moodEmoji && <div style={{ fontSize: '1.1em', marginBottom: 4 }}>{m.moodEmoji}</div>}
+                {m.maxStreak > 0 && (
+                  <div style={{ fontSize: '0.58em', color: colors.text, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                    🔥{m.maxStreak}
+                  </div>
+                )}
+                {m.daysWithData === 0 && (
+                  <div style={{ fontSize: '0.55em', color: '#888' }}>nessun dato</div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Legenda */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16, fontSize: '0.65em' }}>
+        {Object.entries(TIMELINE_COLORS).map(([k, c]) => (
+          <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: c.bg, border: `1px solid ${c.border}`, display: 'inline-block' }} />
+            {k === 'excellent' ? '≥15/gg' : k === 'good' ? '≥8/gg' : k === 'normal' ? '≥3/gg' : k === 'difficult' ? '≥0/gg' : '<0/gg'}
+          </span>
+        ))}
+      </div>
+
+      {/* Detail popup */}
+      {sel && (
+        <div style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${TIMELINE_COLORS[sel.colorClass]?.border || '#444'}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <strong style={{ color: 'var(--theme-color)' }}>{sel.label}</strong>
+            <button className="btn-icon" onClick={() => setSelected(null)}><span className="material-icons-round" style={{ fontSize: 16 }}>close</span></button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: '0.82em' }}>
+            <div><span style={{ color: '#555' }}>Punteggio netto</span><br /><strong style={{ color: sel.totalNet >= 0 ? 'var(--success)' : 'var(--danger)' }}>{sel.totalNet > 0 ? '+' : ''}{sel.totalNet}</strong></div>
+            <div><span style={{ color: '#555' }}>Media giornaliera</span><br /><strong>{sel.avgDaily > 0 ? '+' : ''}{sel.avgDaily}/gg</strong></div>
+            <div><span style={{ color: '#555' }}>Giorni tracciati</span><br /><strong>{sel.daysWithData}</strong></div>
+            <div><span style={{ color: '#555' }}>Streak massima</span><br /><strong>🔥 {sel.maxStreak} giorni</strong></div>
+            {sel.moodEmoji && <div><span style={{ color: '#555' }}>Mood medio</span><br /><strong>{sel.moodEmoji}</strong></div>}
+            {sel.topDoneName && <div><span style={{ color: '#555' }}>Abitudine top</span><br /><strong style={{ color: 'var(--success)', fontSize: '0.88em' }}>{sel.topDoneName}</strong></div>}
+            {sel.topFailedName && <div style={{ gridColumn: 'span 2' }}><span style={{ color: '#555' }}>Più fallita</span><br /><strong style={{ color: 'var(--danger)', fontSize: '0.88em' }}>{sel.topFailedName}</strong></div>}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/* ---- SEZIONE HEATMAP ANNUALE ---- */
+const HEATMAP_MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
+
+function AnnualHeatmapSection({ userData }) {
+  const today = new Date()
+  const [year, setYear] = useState(today.getFullYear())
+  const [popup, setPopup] = useState(null)
+
+  const cells = buildAnnualHeatmap(userData, year)
+  const todayStr = toDateString(today)
+  const daysWithData = cells.filter(c => c.hasData && c.inYear).length
+  const maxNet = Math.max(...cells.filter(c => c.hasData && c.net > 0).map(c => c.net), 1)
+  const bestCell = cells.filter(c => c.hasData && c.inYear).reduce((best, c) => (!best || c.net > best.net) ? c : best, null)
+
+  // Group by week columns (0..52), each col is 7 rows Mon..Sun
+  const weeks = {}
+  cells.forEach(c => {
+    if (!weeks[c.week]) weeks[c.week] = Array(7).fill(null)
+    weeks[c.week][c.dow === 0 ? 6 : c.dow - 1] = c  // convert Sun=0 → index 6
+  })
+  const weekKeys = Object.keys(weeks).map(Number).sort((a, b) => a - b)
+
+  // Month label positions
+  const monthCols = {}
+  cells.filter(c => c.inYear && c.day === 1).forEach(c => { if (!monthCols[c.month]) monthCols[c.month] = c.week })
+
+  function cellColor(c) {
+    if (!c || !c.inYear) return 'transparent'
+    if (!c.hasData) return '#2a2a2a'
+    if (c.net < 0) return `rgba(239,83,80,${Math.min(0.3 + Math.abs(c.net) / maxNet * 0.7, 1)})`
+    if (c.net === 0) return '#2a2a2a'
+    const intensity = Math.min(c.net / maxNet, 1)
+    if (intensity >= 0.75) return '#1b5e20'
+    if (intensity >= 0.5) return '#2e7d32'
+    if (intensity >= 0.25) return '#43a047'
+    return '#66bb6a'
+  }
+
+  const CELL_SIZE = 11
+  const CELL_GAP = 2
+
+  return (
+    <>
+      <SectionTitle>Heatmap Annuale</SectionTitle>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 12 }}>
+        <button className="btn-icon" onClick={() => setYear(y => y - 1)}><span className="material-icons-round">chevron_left</span></button>
+        <span style={{ fontWeight: 700, color: 'var(--theme-color)', fontSize: '1.1em' }}>{year}</span>
+        <button className="btn-icon" onClick={() => setYear(y => y + 1)} disabled={year >= today.getFullYear()}>
+          <span className="material-icons-round">chevron_right</span>
+        </button>
+      </div>
+
+      {/* Month labels */}
+      <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
+        <div style={{ position: 'relative', paddingLeft: 18 }}>
+          {/* Month labels row */}
+          <div style={{ display: 'flex', marginBottom: 4, marginLeft: 0 }}>
+            {weekKeys.map(w => {
+              const monthIdx = Object.keys(monthCols).find(m => monthCols[m] === w)
+              return (
+                <div key={w} style={{ width: CELL_SIZE + CELL_GAP, flexShrink: 0, fontSize: '0.55em', color: '#666', textAlign: 'left' }}>
+                  {monthIdx !== undefined ? HEATMAP_MONTH_NAMES[monthIdx] : ''}
+                </div>
+              )
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: CELL_GAP }}>
+            {/* Day-of-week labels */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: CELL_GAP, marginRight: 4 }}>
+              {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((d, i) => (
+                <div key={i} style={{ width: 10, height: CELL_SIZE, fontSize: '0.5em', color: '#555', display: 'flex', alignItems: 'center', lineHeight: 1 }}>{d}</div>
+              ))}
+            </div>
+
+            {/* Grid */}
+            {weekKeys.map(w => (
+              <div key={w} style={{ display: 'flex', flexDirection: 'column', gap: CELL_GAP }}>
+                {weeks[w].map((c, dow) => (
+                  <div
+                    key={dow}
+                    onClick={() => c?.hasData && c?.inYear && setPopup(c)}
+                    style={{
+                      width: CELL_SIZE, height: CELL_SIZE, borderRadius: 2,
+                      background: cellColor(c),
+                      cursor: c?.hasData && c?.inYear ? 'pointer' : 'default',
+                      border: c?.dateStr === todayStr ? '1px solid var(--theme-color)' : '1px solid transparent',
+                      flexShrink: 0,
+                    }}
+                    title={c?.inYear ? `${c.dateStr}: ${c.net > 0 ? '+' : ''}${c.net}` : ''}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10, fontSize: '0.65em', color: '#555' }}>
+        <span>Meno</span>
+        {['#2a2a2a', '#66bb6a', '#43a047', '#2e7d32', '#1b5e20'].map((c, i) => (
+          <div key={i} style={{ width: 10, height: 10, background: c, borderRadius: 2 }} />
+        ))}
+        <span>Di più</span>
+        <span style={{ marginLeft: 10, color: 'rgba(239,83,80,0.8)' }}>■ Negativo</span>
+      </div>
+
+      {/* Summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+        <StatCard label="Giorni con dati" value={`${daysWithData}`} />
+        {bestCell && (
+          <StatCard label="Giorno migliore" value={`+${bestCell.net} (${bestCell.day}/${bestCell.month + 1})`} color="var(--success)" />
+        )}
+      </div>
+
+      {/* Day popup */}
+      {popup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPopup(null)}>
+          <div style={{ background: 'var(--card-solid)', borderRadius: 16, padding: 20, minWidth: 220, border: '1px solid rgba(255,255,255,0.1)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, color: 'var(--theme-color)', marginBottom: 12, fontSize: '1em' }}>{popup.dateStr}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.85em' }}>
+              <div>Punteggio netto: <strong style={{ color: popup.net >= 0 ? 'var(--success)' : 'var(--danger)' }}>{popup.net > 0 ? '+' : ''}{popup.net}</strong></div>
+              <div>Abitudini ✅: <strong>{popup.completed}</strong> &nbsp; ❌: <strong>{popup.failed}</strong></div>
+              {popup.mood && <div>Mood: <strong>{['', '😞', '😕', '😐', '😊', '🤩'][popup.mood]}</strong></div>}
+            </div>
+            <button className="btn-icon" style={{ marginTop: 14, width: '100%' }} onClick={() => setPopup(null)}>Chiudi</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/* ---- SEZIONE MOMENTUM ---- */
+function MomentumSection({ userData }) {
+  const [days, setDays] = useState(30)
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+  const history = buildMomentumScoreHistory(userData, days)
+
+  const current = calcMomentumScore(userData)
+  const allHistory = buildMomentumScoreHistory(userData, 90)
+  const bestEntry = allHistory.reduce((best, h) => h.score > best.score ? h : best, { score: 0, label: '-' })
+
+  useEffect(() => {
+    if (!canvasRef.current || history.length === 0) return
+    if (chartRef.current) chartRef.current.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: 'line',
+      data: {
+        labels: history.map(h => h.label),
+        datasets: [{
+          label: 'Momentum',
+          data: history.map(h => h.score),
+          borderColor: 'var(--theme-color)',
+          backgroundColor: 'var(--theme-glow)',
+          fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { min: 0, max: 100, grid: { color: '#2a2a2a' }, ticks: { color: '#666' } },
+          x: { grid: { display: false }, ticks: { color: '#666', maxTicksLimit: 8 } },
+        },
+      },
+    })
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [days, userData])
+
+  const { score, trend7, avgPrev7, streak, daysAboveAvg, consistency, avg30 } = current
+  const labelInfo = score >= 81 ? { text: 'In fiamme 🔥', color: 'var(--success)' }
+    : score >= 61 ? { text: 'In crescita 📈', color: '#69f0ae' }
+    : score >= 31 ? { text: 'Stabile 📊', color: '#EF9F27' }
+    : { text: 'In difficoltà 📉', color: 'var(--danger)' }
+
+  return (
+    <>
+      <SectionTitle>Momentum Score</SectionTitle>
+
+      {/* Current score display */}
+      <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: 16, marginBottom: 16, textAlign: 'center' }}>
+        <div style={{ fontSize: '3em', fontWeight: 900, color: labelInfo.color, lineHeight: 1 }}>{score}</div>
+        <div style={{ fontSize: '0.9em', color: labelInfo.color, marginTop: 4, fontWeight: 600 }}>{labelInfo.text}</div>
+        <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden', marginTop: 12 }}>
+          <div style={{ height: '100%', width: `${score}%`, background: labelInfo.color, borderRadius: 4, transition: 'width 0.6s ease', boxShadow: score >= 81 ? `0 0 8px ${labelInfo.color}` : 'none' }} />
+        </div>
+      </div>
+
+      {/* Factor breakdown */}
+      <SectionTitle>Dettaglio Fattori</SectionTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        {[
+          { label: 'Trend 7gg vs prev 7gg', value: `${trend7 > 0 ? '+' : ''}${trend7} vs ${avgPrev7 > 0 ? '+' : ''}${avgPrev7}/gg`, weight: '35%', contribution: Math.round(Math.min(trend7 / (avgPrev7 || 1), 2) * 35 / 2) },
+          { label: 'Streak attuale', value: `${streak} giorni`, weight: '30%', contribution: Math.round(Math.min(streak / 30, 1) * 30) },
+          { label: 'Giorni sopra media (7gg)', value: `${daysAboveAvg}/7`, weight: '20%', contribution: Math.round((daysAboveAvg / 7) * 20) },
+          { label: 'Consistenza (30gg)', value: `${consistency}%`, weight: '15%', contribution: Math.round((consistency / 100) * 15) },
+        ].map(f => (
+          <div key={f.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: '0.8em', color: '#888' }}>{f.label} <span style={{ color: '#555', fontSize: '0.8em' }}>({f.weight})</span></span>
+              <span style={{ fontSize: '0.82em', color: 'var(--text)', fontWeight: 600 }}>{f.value}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Historical max */}
+      <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '10px 14px', marginBottom: 16, fontSize: '0.85em' }}>
+        🏆 Momentum massimo storico: <strong style={{ color: 'var(--theme-color)' }}>{bestEntry.score}</strong> ({bestEntry.label})
+      </div>
+
+      {/* Chart */}
+      <SectionTitle>Storico Momentum</SectionTitle>
+      <div className="switch-group" style={{ marginBottom: 12 }}>
+        {[14, 30, 60].map(d => (
+          <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>
+        ))}
+      </div>
+      <div style={{ height: 180, position: 'relative' }}><canvas ref={canvasRef} /></div>
+    </>
+  )
+}
+
 /* ---- SMALL REUSABLE COMPONENTS ---- */
 function SectionTitle({ children }) {
   return <div style={{ fontSize: '0.85em', color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>{children}</div>
@@ -560,6 +1468,9 @@ function CategoriesSection({ userData }) {
         </>
       )}
 
+      {/* TimeSlot breakdown */}
+      <TimeSlotBreakdown userData={userData} days={days} />
+
       {/* Tag detail mini-modal */}
       {detailTag && (
         <TagDetailOverlay
@@ -569,6 +1480,43 @@ function CategoriesSection({ userData }) {
           userData={userData}
           onClose={() => setDetailTag(null)}
         />
+      )}
+    </>
+  )
+}
+
+function TimeSlotBreakdown({ userData, days }) {
+  const stats = buildTimeSlotStats(userData, days)
+  const withData = stats.filter(s => s.total > 0)
+  if (withData.length === 0) return null
+  const best = withData.reduce((a, b) => b.winRate > a.winRate ? b : a)
+  return (
+    <>
+      <SectionTitle style={{ marginTop: 20 }}>Fasce Orarie</SectionTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+        {stats.map(s => (
+          <div key={s.slot} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: '0.88em', fontWeight: 600 }}>{s.label}</span>
+              <span style={{ fontSize: '0.85em', color: s.winRate >= 70 ? 'var(--success)' : s.winRate >= 40 ? '#EF9F27' : 'var(--danger)', fontWeight: 700 }}>
+                {s.total > 0 ? `${s.winRate}%` : '-'}
+              </span>
+            </div>
+            {s.total > 0 && (
+              <>
+                <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${s.winRate}%`, background: s.winRate >= 70 ? 'var(--success)' : s.winRate >= 40 ? '#EF9F27' : 'var(--danger)', borderRadius: 2 }} />
+                </div>
+                <div style={{ fontSize: '0.65em', color: '#555', marginTop: 4 }}>{s.done}/{s.total} • {s.pts} pt</div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+      {withData.length > 1 && (
+        <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '10px 14px', fontSize: '0.82em', marginBottom: 16 }}>
+          ⚡ Fascia più produttiva: <strong style={{ color: 'var(--theme-color)' }}>{best.label}</strong> ({best.winRate}% win rate)
+        </div>
       )}
     </>
   )

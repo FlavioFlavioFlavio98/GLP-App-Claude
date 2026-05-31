@@ -2,6 +2,7 @@ import {
   Chart,
   LineController, LineElement, PointElement,
   BarController, BarElement,
+  BubbleController,
   DoughnutController, ArcElement,
   RadarController, RadialLinearScale,
   LinearScale, CategoryScale, LogarithmicScale,
@@ -11,6 +12,7 @@ import {
 Chart.register(
   LineController, LineElement, PointElement,
   BarController, BarElement,
+  BubbleController,
   DoughnutController, ArcElement,
   RadarController, RadialLinearScale,
   LinearScale, CategoryScale, LogarithmicScale,

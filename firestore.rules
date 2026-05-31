@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: mappa userId → email autorizzata
+    function getUserEmail(userId) {
+      return userId == 'flavio'
+        ? 'flavio.rossi94@gmail.com'
+        : 'simonaballini2000@gmail.com';
+    }
+
+    // Helper: l'utente autenticato è nella whitelist
+    function isAllowedUser() {
+      return request.auth != null &&
+             request.auth.token.email in [
+               'flavio.rossi94@gmail.com',
+               'simonaballini2000@gmail.com'
+             ];
+    }
+
+    // Documenti utente: lettura per entrambi (per statistiche comparative)
+    // scrittura solo per il proprietario
+    match /users/{userId} {
+      allow read: if isAllowedUser();
+      allow write: if request.auth != null &&
+                      request.auth.token.email == getUserEmail(userId);
+
+      // Sottocollezione settings: stesse regole del documento padre
+      match /settings/{doc} {
+        allow read: if isAllowedUser();
+        allow write: if request.auth != null &&
+                        request.auth.token.email == getUserEmail(userId);
+      }
+
+      // FCM tokens: solo il proprietario
+      match /fcmTokens/{tokenId} {
+        allow read, write: if request.auth != null &&
+                              request.auth.token.email == getUserEmail(userId);
+      }
+    }
+
+    // Config (ex PIN) — non più usata, blocca tutto
+    match /config/{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

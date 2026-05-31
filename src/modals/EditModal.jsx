@@ -22,6 +22,9 @@ export default function EditModal() {
       name: item.name,
       desc: item.description || '',
       tagId: item.tagId || '',
+      why: item.why || '',
+      importance: item.importance || 'medium',
+      timeSlot: item.timeSlot || null,
       editDate: toDateString(new Date()),
       note: '',
       reward: item.reward || 0,
@@ -81,6 +84,9 @@ export default function EditModal() {
       name: f.name,
       tagId: f.tagId,
       description: f.desc,
+      importance: f.importance || 'medium',
+      timeSlot: f.timeSlot || undefined,
+      why: f.why?.trim() || undefined,
       changes,
       ...(type === 'habit'
         ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti }
@@ -149,6 +155,38 @@ export default function EditModal() {
               onChange={v => set('categoryId', v)}
             />
           </>
+        )}
+
+        {f.type === 'habit' && (
+          <div className="input-group">
+            <label>Importanza</label>
+            <div className="switch-group" style={{ marginTop: 4 }}>
+              {[{ v:'low',icon:'🔵',label:'Bassa'},{v:'medium',icon:'🟡',label:'Media'},{v:'high',icon:'🔴',label:'Alta'}].map(opt => (
+                <div key={opt.v} className={`switch-opt${f.importance === opt.v ? ' active' : ''}`} onClick={() => set('importance', opt.v)}>
+                  {opt.icon} {opt.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {f.type === 'habit' && (
+          <div className="input-group">
+            <label>Fascia oraria (opzionale)</label>
+            <div className="switch-group" style={{ marginTop: 4, flexWrap: 'wrap' }}>
+              {[{v:null,icon:'⬜',label:'Nessuna'},{v:'morning',icon:'🌅',label:'Mattina'},{v:'afternoon',icon:'☀️',label:'Pomeriggio'},{v:'evening',icon:'🌙',label:'Sera'}].map(opt => (
+                <div key={String(opt.v)} className={`switch-opt${f.timeSlot === opt.v ? ' active' : ''}`} onClick={() => set('timeSlot', opt.v)}>
+                  {opt.icon} {opt.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {f.type === 'habit' && (
+          <div className="input-group">
+            <label>💡 Perché vuoi fare questa abitudine?</label>
+            <textarea rows={2} placeholder="Es. Voglio correre perché voglio vivere sano..." value={f.why} onChange={e => set('why', e.target.value.slice(0, 200))} style={{ resize: 'none' }} />
+            <div style={{ fontSize: '0.68em', color: '#444', textAlign: 'right' }}>{f.why.length}/200</div>
+          </div>
         )}
 
         <div className="input-group">

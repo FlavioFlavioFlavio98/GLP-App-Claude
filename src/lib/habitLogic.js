@@ -26,9 +26,9 @@ export function getItemValueAtDate(item, field, dateStr) {
 
 // Parse a dailyLog entry handling both legacy (array) and new (object) formats
 export function parseEntry(entry) {
-  if (!entry) return { habits: [], failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {} }
+  if (!entry) return { habits: [], failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {}, habitValues: {}, mood: {} }
   if (Array.isArray(entry)) {
-    return { habits: entry, failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {} }
+    return { habits: entry, failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {}, habitValues: {}, mood: {} }
   }
   return {
     habits: entry.habits || [],
@@ -36,7 +36,32 @@ export function parseEntry(entry) {
     habitLevels: entry.habitLevels || {},
     purchases: entry.purchases || [],
     habitNotes: entry.habitNotes || {},
+    habitValues: entry.habitValues || {},
+    mood: entry.mood || {},
+    energy: entry.energy || {},
   }
+}
+
+// Calculate points for a numeric habit given a value and config
+export function calcNumericPoints(value, config) {
+  if (!config) return 0
+  const num = parseFloat(value) || 0
+  const threshold = config.threshold || 0
+  const unitSize = config.unitSize || 1
+  const ppu = config.pointsPerUnit || 0
+
+  if (num < threshold) {
+    if (config.belowThreshold === 'zero') return 0
+    if (config.belowThreshold === 'fixed') return -(config.penaltyFixed || 0)
+    if (config.belowThreshold === 'proportional') {
+      const deficit = threshold - num
+      return -Math.round((deficit / unitSize) * ppu * 10) / 10
+    }
+    return 0
+  }
+  let pts = (num / unitSize) * ppu
+  if (config.cap != null && pts > config.cap) pts = config.cap
+  return Math.round(pts * 10) / 10
 }
 
 // Determine if a habit should be visible on viewStr

@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chart } from '../lib/chartSetup'
 import { useApp } from '../lib/store'
-import { buildDailyNets, buildWeeklyNets, buildTagScores, buildRecords, buildMonthHeatmap } from '../lib/statsLogic'
+import { buildDailyNets, buildWeeklyNets, buildTagScores, buildRecords, buildMonthHeatmap, buildTagStats, buildTagWeeklyTrend, buildTagDetailStats } from '../lib/statsLogic'
 import { toDateString } from '../lib/habitLogic'
+
+function PdfExportButton({ onClose }) {
+  const { actions } = useApp()
+  return (
+    <button
+      onClick={() => { onClose(); setTimeout(() => actions.openModal('pdfReport'), 60) }}
+      style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#aaa', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontSize: '0.78em', transition: 'all 0.2s' }}
+      title="Esporta Report PDF"
+    >
+      <span className="material-icons-round" style={{ fontSize: 16 }}>picture_as_pdf</span>
+      PDF
+    </button>
+  )
+}
 
 const MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 const DOW_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
@@ -22,7 +36,7 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
 
   const sections = [
     { id: 'comparison', icon: 'show_chart', label: 'Confronto' },
-    { id: 'tags', icon: 'pie_chart', label: 'Tag' },
+    { id: 'categories', icon: 'category', label: 'Categorie' },
     { id: 'weekly', icon: 'bar_chart', label: 'Settimane' },
     { id: 'records', icon: 'emoji_events', label: 'Record' },
     { id: 'heatmap', icon: 'calendar_month', label: 'Calendario' },
@@ -34,7 +48,8 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
         <button className="btn-icon" onClick={onClose}>
           <span className="material-icons-round" style={{ fontSize: 28 }}>arrow_back</span>
         </button>
-        <h1 style={{ margin: 0, fontSize: '1.2em', color: 'var(--theme-color)' }}>Statistiche</h1>
+        <h1 style={{ margin: 0, fontSize: '1.2em', color: 'var(--theme-color)', flex: 1 }}>Statistiche</h1>
+        <PdfExportButton onClose={onClose} />
       </div>
 
       {/* Tab nav */}
@@ -55,7 +70,7 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
 
       <div className="single-habit-body">
         {section === 'comparison' && <ComparisonSection allUsersData={allUsersData} currentUser={currentUser} />}
-        {section === 'tags' && <TagSection allUsersData={allUsersData} currentUser={currentUser} />}
+        {section === 'categories' && <CategoriesSection userData={userData} />}
         {section === 'weekly' && <WeeklySection userData={userData} currentUser={currentUser} />}
         {section === 'records' && <RecordsSection userData={userData} />}
         {section === 'heatmap' && <HeatmapSection userData={userData} />}
@@ -362,6 +377,225 @@ function RecordRow({ icon, label, value, color }) {
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: '0.7em', color: '#666', textTransform: 'uppercase' }}>{label}</div>
         <div style={{ fontWeight: 'bold', color: color || 'var(--text)', marginTop: 2 }}>{value}</div>
+      </div>
+    </div>
+  )
+}
+
+/* ===================================================
+   CATEGORIES SECTION
+   =================================================== */
+function CategoriesSection({ userData }) {
+  const [days, setDays] = useState(30)
+  const [trendTagId, setTrendTagId] = useState(null)
+  const [detailTag, setDetailTag] = useState(null)
+  const donutRef = useRef(null), donutChart = useRef(null)
+  const radarRef = useRef(null), radarChart = useRef(null)
+  const trendRef = useRef(null), trendChart = useRef(null)
+
+  const tagsMap = {}
+  ;(userData?.tags || []).forEach(t => { tagsMap[t.id] = t })
+
+  const tagStats = buildTagStats(userData, days)
+  const totalPts = Object.values(tagStats).reduce((a, b) => a + b.pts, 0)
+
+  // Build sorted array with tag info
+  const tagList = Object.keys(tagStats)
+    .map(tId => {
+      const t = tagsMap[tId]
+      return {
+        tId,
+        label: tId === '__none__' ? 'Senza categoria' : (t?.name || '?'),
+        color: tId === '__none__' ? '#555' : (t?.color || '#888'),
+        icon: t?.icon || '', emoji: t?.emoji || '',
+        pts: tagStats[tId].pts, count: tagStats[tId].count,
+        pct: totalPts > 0 ? Math.round(tagStats[tId].pts / totalPts * 100) : 0,
+      }
+    })
+    .sort((a, b) => b.pts - a.pts)
+
+  // Donut chart
+  useEffect(() => {
+    if (!donutRef.current || tagList.length === 0) return
+    if (donutChart.current) donutChart.current.destroy()
+    donutChart.current = new Chart(donutRef.current, {
+      type: 'doughnut',
+      data: {
+        labels: tagList.map(t => t.label),
+        datasets: [{ data: tagList.map(t => t.pts), backgroundColor: tagList.map(t => t.color), borderWidth: 0 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '65%',
+        plugins: { legend: { display: false } },
+      },
+    })
+    return () => { if (donutChart.current) donutChart.current.destroy() }
+  }, [days, userData])
+
+  // Radar chart
+  useEffect(() => {
+    if (!radarRef.current || tagList.length < 3) return
+    const maxPts = Math.max(...tagList.map(t => t.pts), 1)
+    const normalized = tagList.map(t => Math.round(t.pts / maxPts * 100))
+    if (radarChart.current) radarChart.current.destroy()
+    radarChart.current = new Chart(radarRef.current, {
+      type: 'radar',
+      data: {
+        labels: tagList.map(t => t.label),
+        datasets: [{
+          label: 'Equilibrio',
+          data: normalized,
+          backgroundColor: 'rgba(var(--theme-color-rgb, 255,202,40),0.12)',
+          borderColor: 'var(--theme-color)',
+          pointBackgroundColor: tagList.map(t => t.color),
+          pointRadius: 5, borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        scales: {
+          r: {
+            beginAtZero: true, max: 100,
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            ticks: { color: '#555', backdropColor: 'transparent', font: { size: 9 }, stepSize: 25 },
+            pointLabels: { color: '#aaa', font: { size: 10 } },
+          },
+        },
+        plugins: { legend: { display: false } },
+      },
+    })
+    return () => { if (radarChart.current) radarChart.current.destroy() }
+  }, [days, userData])
+
+  // Trend chart for selected tag
+  useEffect(() => {
+    if (!trendRef.current || !trendTagId) return
+    const trendData = buildTagWeeklyTrend(userData, trendTagId, 12)
+    const tagColor = tagsMap[trendTagId]?.color || 'var(--theme-color)'
+    if (trendChart.current) trendChart.current.destroy()
+    trendChart.current = new Chart(trendRef.current, {
+      type: 'line',
+      data: {
+        labels: trendData.map(d => d.label),
+        datasets: [{
+          data: trendData.map(d => d.pts),
+          borderColor: tagColor, backgroundColor: `${tagColor}22`,
+          fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { grid: { color: '#2a2a2a' }, ticks: { color: '#666', font: { size: 10 } }, beginAtZero: true },
+          x: { grid: { display: false }, ticks: { color: '#666', font: { size: 9 } } },
+        },
+      },
+    })
+    return () => { if (trendChart.current) trendChart.current.destroy() }
+  }, [trendTagId, days, userData])
+
+  if (tagList.length === 0) return <div className="empty-state">Nessuna categoria con dati nel periodo</div>
+
+  return (
+    <>
+      <SectionTitle>Distribuzione per Categoria</SectionTitle>
+      <div className="switch-group" style={{ marginBottom: 12 }}>
+        {[7, 30, 90].map(d => (
+          <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>
+        ))}
+      </div>
+
+      {/* Donut with center total */}
+      <div style={{ position: 'relative', height: 180, marginBottom: 16 }}>
+        <canvas ref={donutRef} />
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+          <div style={{ fontSize: '1.4em', fontWeight: 700, color: 'var(--theme-color)' }}>{totalPts}</div>
+          <div style={{ fontSize: '0.62em', color: '#666', textTransform: 'uppercase' }}>pt totali</div>
+        </div>
+      </div>
+
+      {/* Horizontal bars */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+        {tagList.map(t => (
+          <div
+            key={t.tId}
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 14px', cursor: 'pointer' }}
+            onClick={() => { setTrendTagId(t.tId); setDetailTag(t.tId) }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+              {t.emoji ? <span>{t.emoji}</span> : t.icon ? <i className={`ti ${t.icon}`} style={{ color: t.color, fontSize: '0.9em' }} /> : null}
+              <span style={{ flex: 1, fontWeight: 500, fontSize: '0.88em' }}>{t.label}</span>
+              <span style={{ color: t.color, fontWeight: 700 }}>{t.pts}</span>
+              <span style={{ color: '#555', fontSize: '0.75em' }}>{t.pct}%</span>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+              <div style={{ background: t.color, height: '100%', width: `${t.pct}%`, borderRadius: 4, transition: 'width 0.5s ease' }} />
+            </div>
+            <div style={{ fontSize: '0.68em', color: '#555', marginTop: 4 }}>{t.count} completamenti</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Radar chart */}
+      {tagList.length >= 3 ? (
+        <>
+          <SectionTitle>Radar Equilibrio</SectionTitle>
+          <div style={{ height: 220, marginBottom: 20, position: 'relative' }}><canvas ref={radarRef} /></div>
+        </>
+      ) : (
+        <div style={{ fontSize: '0.8em', color: '#555', textAlign: 'center', marginBottom: 16 }}>
+          Il radar richiede almeno 3 categorie con dati
+        </div>
+      )}
+
+      {/* Trend per tag selezionato */}
+      {trendTagId && (
+        <>
+          <SectionTitle>
+            Trend: {tagList.find(t => t.tId === trendTagId)?.label || ''} (12 settimane)
+          </SectionTitle>
+          <div style={{ height: 140, marginBottom: 20, position: 'relative' }}><canvas ref={trendRef} /></div>
+        </>
+      )}
+
+      {/* Tag detail mini-modal */}
+      {detailTag && (
+        <TagDetailOverlay
+          tId={detailTag}
+          label={tagList.find(t => t.tId === detailTag)?.label || ''}
+          color={tagList.find(t => t.tId === detailTag)?.color || '#888'}
+          userData={userData}
+          onClose={() => setDetailTag(null)}
+        />
+      )}
+    </>
+  )
+}
+
+function TagDetailOverlay({ tId, label, color, userData, onClose }) {
+  const stats = buildTagDetailStats(userData, tId)
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 6000, display: 'flex', alignItems: 'flex-end', backdropFilter: 'blur(6px)' }} onClick={onClose}>
+      <div style={{ background: 'var(--card-solid)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxHeight: '70vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: color }} />
+          <h3 style={{ margin: 0, color }}>{label}</h3>
+          <button className="btn-icon" style={{ marginLeft: 'auto' }} onClick={onClose}><span className="material-icons-round">close</span></button>
+        </div>
+        <div className="stats-grid">
+          <div className="stat-box"><span className="stat-num" style={{ color }}>{stats.totalPts}</span><span className="stat-lbl">Punti Lifetime</span></div>
+          <div className="stat-box"><span className="stat-num" style={{ color: 'var(--success)' }}>{stats.avgCompletion}%</span><span className="stat-lbl">% Completamento</span></div>
+          <div className="stat-box"><span className="stat-num">{stats.bestStreak} 🔥</span><span className="stat-lbl">Streak Record</span></div>
+          <div className="stat-box"><span className="stat-num" style={{ fontSize: '0.9em' }}>{stats.bestDOW}</span><span className="stat-lbl">Giorno Top</span></div>
+        </div>
+        {stats.bestHabit !== '-' && (
+          <div style={{ marginTop: 12, padding: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: '0.65em', color: '#666', textTransform: 'uppercase', marginBottom: 4 }}>Abitudine Top</div>
+            <div style={{ fontWeight: 600, color }}>{stats.bestHabit}</div>
+          </div>
+        )}
       </div>
     </div>
   )

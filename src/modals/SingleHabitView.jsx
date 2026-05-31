@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Chart } from '../lib/chartSetup'
 import { useApp } from '../lib/store'
 import { buildHabitStats } from '../lib/statsLogic'
+import { parseEntry } from '../lib/habitLogic'
 
 const DOW_FULL = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
 
@@ -16,6 +17,18 @@ export default function SingleHabitView() {
   if (!habit) return null
 
   const stats = buildHabitStats(habit, globalData)
+  const stableId = habit.id || habit.name.replace(/[^a-zA-Z0-9]/g, '')
+
+  // Collect last 10 notes for this habit across all days
+  const notes = Object.keys(globalData.dailyLogs || {})
+    .sort((a, b) => b.localeCompare(a))
+    .reduce((acc, dateStr) => {
+      if (acc.length >= 10) return acc
+      const entry = parseEntry(globalData.dailyLogs[dateStr])
+      const note = entry.habitNotes?.[stableId]
+      if (note) acc.push({ dateStr, note })
+      return acc
+    }, [])
 
   return (
     <div className="single-habit-view">
@@ -65,6 +78,23 @@ export default function SingleHabitView() {
             <div key={key} className={`heat-box st-${status}`} title={key} />
           ))}
         </div>
+
+        {/* Ultime note */}
+        {notes.length > 0 && (
+          <>
+            <SectionLabel>Ultime Note 📝</SectionLabel>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+              {notes.map(({ dateStr, note }) => (
+                <div key={dateStr} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 14px' }}>
+                  <div style={{ fontSize: '0.68em', color: 'var(--theme-color)', marginBottom: 4 }}>
+                    {dateStr.split('-').reverse().join('/')}
+                  </div>
+                  <div style={{ fontSize: '0.88em', color: 'var(--text-sec)' }}>{note}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

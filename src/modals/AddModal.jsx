@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
+import RewardCategoryPicker from './RewardCategoryPicker'
 
 const today = () => toDateString(new Date())
 
@@ -8,6 +9,7 @@ const DEFAULT = {
   itemType: 'habit',
   recurMode: 'recur',
   name: '',
+  categoryId: '',
   desc: '',
   tagId: '',
   startDate: today(),
@@ -49,7 +51,7 @@ export default function AddModal() {
       await actions.addItem(habit, 'habit')
     } else {
       const c = parseInt(f.cost) || 0
-      await actions.addItem({ id, name: f.name, cost: c, tagId: f.tagId, description: f.desc, changes: [{ date: startDate, cost: c, note: 'Creazione Iniziale' }] }, 'reward')
+      await actions.addItem({ id, name: f.name, cost: c, tagId: f.tagId, categoryId: f.categoryId || '', description: f.desc, changes: [{ date: startDate, cost: c, note: 'Creazione Iniziale' }] }, 'reward')
     }
     setF(DEFAULT)
     actions.closeModal()
@@ -128,7 +130,14 @@ export default function AddModal() {
         )}
 
         {f.itemType === 'reward' && (
-          <input type="number" placeholder="Costo" value={f.cost} onChange={e => set('cost', e.target.value)} />
+          <>
+            <input type="number" placeholder="Costo" value={f.cost} onChange={e => set('cost', e.target.value)} />
+            <RewardCategoryPicker
+              categories={globalData?.rewardCategories || []}
+              value={f.categoryId || ''}
+              onChange={v => set('categoryId', v)}
+            />
+          </>
         )}
 
         <button className="btn-main" onClick={handleSave}>Salva</button>

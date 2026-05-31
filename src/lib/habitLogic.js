@@ -26,15 +26,16 @@ export function getItemValueAtDate(item, field, dateStr) {
 
 // Parse a dailyLog entry handling both legacy (array) and new (object) formats
 export function parseEntry(entry) {
-  if (!entry) return { habits: [], failedHabits: [], habitLevels: {}, purchases: [] }
+  if (!entry) return { habits: [], failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {} }
   if (Array.isArray(entry)) {
-    return { habits: entry, failedHabits: [], habitLevels: {}, purchases: [] }
+    return { habits: entry, failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {} }
   }
   return {
     habits: entry.habits || [],
     failedHabits: entry.failedHabits || [],
     habitLevels: entry.habitLevels || {},
     purchases: entry.purchases || [],
+    habitNotes: entry.habitNotes || {},
   }
 }
 

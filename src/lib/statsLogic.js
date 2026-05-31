@@ -353,3 +353,109 @@ function getISOWeek(date) {
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
 }
+
+// ---- TAG STATISTICS ----
+
+// Points per tag in last N days
+export function buildTagStats(userData, days) {
+  const result = {}
+  const today = new Date()
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today); d.setDate(today.getDate() - i)
+    const dateStr = toDateString(d)
+    const entry = parseEntry(userData?.dailyLogs?.[dateStr])
+    entry.habits.forEach(hId => {
+      const h = userData.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
+      if (!h) return
+      const isM = getItemValueAtDate(h, 'isMulti', dateStr)
+      const rMin = getItemValueAtDate(h, 'rewardMin', dateStr)
+      const rMax = getItemValueAtDate(h, 'reward', dateStr)
+      const lvl = entry.habitLevels[hId] || 'max'
+      const pts = isM && lvl === 'min' ? rMin : rMax
+      const tId = h.tagId || '__none__'
+      if (!result[tId]) result[tId] = { pts: 0, count: 0 }
+      result[tId].pts += pts
+      result[tId].count++
+    })
+  }
+  return result
+}
+
+// Weekly points for a specific tag, last N weeks
+export function buildTagWeeklyTrend(userData, tagId, weeks = 12) {
+  const today = new Date()
+  return Array.from({ length: weeks }, (_, w) => {
+    const wIdx = weeks - 1 - w
+    let pts = 0
+    const start = new Date(today); start.setDate(today.getDate() - wIdx * 7 - 6)
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(start); day.setDate(start.getDate() + d)
+      const dateStr = toDateString(day)
+      const entry = parseEntry(userData?.dailyLogs?.[dateStr])
+      entry.habits.forEach(hId => {
+        const h = userData.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
+        if (!h || (h.tagId || '__none__') !== tagId) return
+        const isM = getItemValueAtDate(h, 'isMulti', dateStr)
+        const rMin = getItemValueAtDate(h, 'rewardMin', dateStr)
+        const rMax = getItemValueAtDate(h, 'reward', dateStr)
+        const lvl = entry.habitLevels[hId] || 'max'
+        pts += isM && lvl === 'min' ? rMin : rMax
+      })
+    }
+    return { label: `${start.getDate()}/${start.getMonth() + 1}`, pts }
+  })
+}
+
+// Lifetime stats for a specific tag
+export function buildTagDetailStats(userData, tagId) {
+  const DAYS_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
+  const habitsInTag = (userData?.habits || []).filter(h => (h.tagId || '__none__') === tagId)
+
+  let totalPts = 0, totalDone = 0, totalFail = 0
+  const DOW = [0,0,0,0,0,0,0]
+  const habitPts = {}  // habitId → points
+  let bestStreak = 0, tempStreak = 0
+
+  const sortedDates = Object.keys(userData?.dailyLogs || {}).sort()
+  sortedDates.forEach(dateStr => {
+    const entry = parseEntry(userData.dailyLogs[dateStr])
+    let anyDone = false
+    habitsInTag.forEach(h => {
+      const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
+      const isDone = entry.habits.includes(sid)
+      const isFail = entry.failedHabits.includes(sid)
+      if (isDone) {
+        const isM = getItemValueAtDate(h, 'isMulti', dateStr)
+        const rMin = getItemValueAtDate(h, 'rewardMin', dateStr)
+        const rMax = getItemValueAtDate(h, 'reward', dateStr)
+        const lvl = entry.habitLevels[sid] || 'max'
+        const pts = isM && lvl === 'min' ? rMin : rMax
+        totalPts += pts; totalDone++; anyDone = true
+        DOW[new Date(dateStr).getDay()]++
+        habitPts[h.name] = (habitPts[h.name] || 0) + pts
+      }
+      if (isFail) totalFail++
+    })
+    if (anyDone) { tempStreak++; if (tempStreak > bestStreak) bestStreak = tempStreak }
+    else tempStreak = 0
+  })
+
+  const totalAttempts = totalDone + totalFail
+  const avgCompletion = totalAttempts > 0 ? Math.round((totalDone / totalAttempts) * 100) : 0
+  const bestHabit = Object.keys(habitPts).sort((a, b) => habitPts[b] - habitPts[a])[0] || '-'
+  const bestDOW = DAYS_IT[DOW.indexOf(Math.max(...DOW))] || '-'
+
+  return { totalPts, totalDone, avgCompletion, bestHabit, bestDOW, bestStreak }
+}
+
+// All purchases from a user's dailyLogs — returns sorted array
+export function getAllPurchases(userData) {
+  const purchases = []
+  Object.keys(userData?.dailyLogs || {}).sort().forEach(dateStr => {
+    const entry = parseEntry(userData.dailyLogs[dateStr])
+    entry.purchases.forEach(p => {
+      purchases.push({ dateStr, name: p.name, cost: parseInt(p.cost || 0), time: p.time || 0 })
+    })
+  })
+  return purchases.sort((a, b) => (b.time || 0) - (a.time || 0) || b.dateStr.localeCompare(a.dateStr))
+}

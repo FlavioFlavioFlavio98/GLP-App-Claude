@@ -34,6 +34,17 @@ function reducer(state, action) {
       return { ...state, modal: action.name, modalPayload: action.payload || null }
     case 'CLOSE_MODAL':
       return { ...state, modal: null, modalPayload: null }
+    case 'SET_THEME':
+      localStorage.setItem('glp_theme', action.theme)
+      return { ...state, theme: action.theme }
+    case 'SET_USER_COLOR':
+      localStorage.setItem(`glp_color_${action.user}`, action.color)
+      return { ...state, userColors: { ...state.userColors, [action.user]: action.color } }
+    case 'SET_PIN':
+      return { ...state, correctPin: action.pin }
+    case 'SET_DENSITY':
+      localStorage.setItem('glp_density', action.density)
+      return { ...state, density: action.density }
     default:
       return state
   }
@@ -47,11 +58,38 @@ const initialState = {
   toast: null,
   modal: null,
   modalPayload: null,
+  theme: localStorage.getItem('glp_theme') || 'dark',
+  userColors: {
+    flavio: localStorage.getItem('glp_color_flavio') || '#ffca28',
+    simona: localStorage.getItem('glp_color_simona') || '#d05ce3',
+  },
+  correctPin: null,
+  density: localStorage.getItem('glp_density') || 'normal',
 }
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const toastTimer = useRef(null)
+
+  // Load PIN from Firestore on mount
+  useEffect(() => {
+    async function initPin() {
+      const ref = doc(db, 'config', 'security')
+      try {
+        const snap = await getDoc(ref)
+        if (snap.exists()) {
+          dispatch({ type: 'SET_PIN', pin: snap.data().pin || '0811' })
+        } else {
+          await setDoc(ref, { pin: '0811' })
+          dispatch({ type: 'SET_PIN', pin: '0811' })
+        }
+      } catch (e) {
+        console.error('PIN load error:', e)
+        dispatch({ type: 'SET_PIN', pin: '0811' })
+      }
+    }
+    initPin()
+  }, [])
 
   // Firebase listeners for both users
   useEffect(() => {
@@ -95,6 +133,12 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SWITCH_USER', user: u })
       actions.vibrate('light')
     },
+    setTheme(themeId) {
+      dispatch({ type: 'SET_THEME', theme: themeId })
+    },
+    setUserColor(user, color) {
+      dispatch({ type: 'SET_USER_COLOR', user, color })
+    },
     setViewDate(dateStr) {
       dispatch({ type: 'SET_VIEW_DATE', date: dateStr })
     },
@@ -103,6 +147,48 @@ export function AppProvider({ children }) {
     },
     closeModal() {
       dispatch({ type: 'CLOSE_MODAL' })
+    },
+
+    // --- DENSITY ---
+    setDensity(d) { dispatch({ type: 'SET_DENSITY', density: d }) },
+
+    // --- PIN ---
+    async saveNewPin(newPin) {
+      try {
+        await setDoc(doc(db, 'config', 'security'), { pin: newPin })
+        dispatch({ type: 'SET_PIN', pin: newPin })
+        actions._addActivityLog('pin_changed', 'PIN aggiornato')
+        actions.showToast('PIN aggiornato!', '🔒')
+      } catch (e) {
+        console.error('Save PIN error:', e)
+        actions.showToast('Errore salvataggio PIN', '❌')
+      }
+    },
+
+    // --- REORDER ---
+    async reorderHabits(activeId, overId) {
+      const { currentUser, globalData } = state
+      const habits = [...(globalData.habits || [])]
+      const oldIndex = habits.findIndex(h => h.id === activeId)
+      const newIndex = habits.findIndex(h => h.id === overId)
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+      // arrayMove inline
+      const reordered = [...habits]
+      const [removed] = reordered.splice(oldIndex, 1)
+      reordered.splice(newIndex, 0, removed)
+      await updateDoc(doc(db, 'users', currentUser), { habits: reordered })
+    },
+
+    // --- HABIT NOTES ---
+    async saveHabitNote(habitId, note, dateStr) {
+      const { currentUser, globalData } = state
+      const ref = doc(db, 'users', currentUser)
+      const dailyLogs = { ...(globalData.dailyLogs || {}) }
+      let raw = dailyLogs[dateStr] || {}
+      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+      const habitNotes = { ...(raw.habitNotes || {}), [habitId]: note }
+      dailyLogs[dateStr] = { ...raw, habitNotes }
+      await updateDoc(ref, { dailyLogs })
     },
 
     // --- HABIT ACTIONS ---
@@ -226,8 +312,10 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', currentUser)
       if (itemType === 'habit') {
         await updateDoc(ref, { habits: arrayUnion(itemData) })
+        actions._addActivityLog('habit_created', `Abitudine creata: "${itemData.name}"`, { punti: itemData.reward })
       } else {
         await updateDoc(ref, { rewards: arrayUnion(itemData) })
+        actions._addActivityLog('reward_created', `Premio creato: "${itemData.name}"`, { costo: itemData.reward })
       }
       actions.vibrate('light')
       actions.showToast('Salvato!', '💾')
@@ -237,11 +325,21 @@ export function AppProvider({ children }) {
       const { currentUser, globalData } = state
       const ref = doc(db, 'users', currentUser)
       if (itemType === 'habit') {
+        const prev = globalData.habits.find(h => h.id === updatedItem.id)
         const habits = globalData.habits.map(h => h.id === updatedItem.id ? updatedItem : h)
         await updateDoc(ref, { habits })
+        const details = {}
+        if (prev && prev.name !== updatedItem.name) details['nome'] = `${prev.name} → ${updatedItem.name}`
+        if (prev && prev.reward !== updatedItem.reward) details['punti'] = `${prev.reward} → ${updatedItem.reward}`
+        actions._addActivityLog('habit_modified', `Abitudine modificata: "${updatedItem.name}"`, details)
       } else {
+        const prev = globalData.rewards.find(r => r.id === updatedItem.id)
         const rewards = globalData.rewards.map(r => r.id === updatedItem.id ? updatedItem : r)
         await updateDoc(ref, { rewards })
+        const details = {}
+        if (prev && prev.name !== updatedItem.name) details['nome'] = `${prev.name} → ${updatedItem.name}`
+        if (prev && prev.reward !== updatedItem.reward) details['costo'] = `${prev.reward} → ${updatedItem.reward}`
+        actions._addActivityLog('reward_modified', `Premio modificato: "${updatedItem.name}"`, details)
       }
       actions.showToast('Salvato!', '✏️')
     },
@@ -250,11 +348,15 @@ export function AppProvider({ children }) {
       const { currentUser, globalData } = state
       const ref = doc(db, 'users', currentUser)
       if (itemType === 'habit') {
+        const item = globalData.habits.find(h => h.id === id)
         const habits = globalData.habits.filter(h => h.id !== id)
         await updateDoc(ref, { habits })
+        if (item) actions._addActivityLog('habit_deleted', `Abitudine eliminata: "${item.name}"`)
       } else {
+        const item = globalData.rewards.find(r => r.id === id)
         const rewards = globalData.rewards.filter(r => r.id !== id)
         await updateDoc(ref, { rewards })
+        if (item) actions._addActivityLog('reward_deleted', `Premio eliminato: "${item.name}"`)
       }
       actions.showToast('Eliminato', '🗑️')
     },
@@ -263,15 +365,43 @@ export function AppProvider({ children }) {
       const { currentUser, globalData } = state
       const ref = doc(db, 'users', currentUser)
       const listKey = itemType === 'habit' ? 'habits' : 'rewards'
+      const item = globalData[listKey].find(i => i.id === id)
       const list = globalData[listKey].map(i => i.id === id ? { ...i, archivedAt: dateStr } : i)
       await updateDoc(ref, { [listKey]: list })
+      if (item) {
+        const logType = itemType === 'habit' ? 'habit_archived' : 'reward_deleted'
+        actions._addActivityLog(logType, `${itemType === 'habit' ? 'Abitudine' : 'Premio'} archiviato: "${item.name}"`, { data: dateStr })
+      }
       actions.showToast('Archiviato', '📦')
     },
 
     async saveTags(tags) {
-      const { currentUser } = state
+      const { currentUser, globalData } = state
+      const prevTags = globalData.tags || []
       await updateDoc(doc(db, 'users', currentUser), { tags })
+      // Detect what changed
+      tags.forEach(t => {
+        const prev = prevTags.find(p => p.id === t.id)
+        if (!prev) actions._addActivityLog('tag_created', `Tag creato: "${t.name}"`)
+        else if (prev.name !== t.name || prev.color !== t.color) actions._addActivityLog('tag_modified', `Tag modificato: "${t.name}"`)
+      })
+      prevTags.forEach(p => {
+        if (!tags.find(t => t.id === p.id)) actions._addActivityLog('tag_deleted', `Tag eliminato: "${p.name}"`)
+      })
       actions.showToast('Tag salvato', '🏷️')
+    },
+
+    async saveRewardCategories(categories) {
+      const { currentUser, globalData } = state
+      const prev = globalData.rewardCategories || []
+      await updateDoc(doc(db, 'users', currentUser), { rewardCategories: categories })
+      categories.forEach(c => {
+        if (!prev.find(p => p.id === c.id)) actions._addActivityLog('category_created', `Categoria creata: "${c.name}"`)
+      })
+      prev.forEach(p => {
+        if (!categories.find(c => c.id === p.id)) actions._addActivityLog('category_deleted', `Categoria eliminata: "${p.name}"`)
+      })
+      actions.showToast('Categorie salvate', '🏷️')
     },
 
     async exportData() {
@@ -287,6 +417,7 @@ export function AppProvider({ children }) {
         a.download = `GLP_Backup_${toDateString(new Date())}.json`
         a.click()
         URL.revokeObjectURL(url)
+        actions._addActivityLog('backup_done', 'Backup JSON eseguito')
         actions.showToast('Backup completato!', '✅')
       } catch (e) {
         console.error(e)
@@ -305,6 +436,7 @@ export function AppProvider({ children }) {
             await setDoc(doc(db, 'users', userId), backup[userId])
           }
         }
+        actions._addActivityLog('restore_done', 'Ripristino da backup JSON eseguito')
         actions.showToast('Fatto!', '✅')
         setTimeout(() => window.location.reload(), 1500)
       } catch (e) {
@@ -330,6 +462,32 @@ export function AppProvider({ children }) {
         hist.push({ date: new Date().toISOString(), score })
         if (hist.length > 500) hist.shift()
         await updateDoc(ref, { history: hist })
+      } catch (e) { /* non-critical */ }
+    },
+
+    async _addActivityLog(type, description, details = {}) {
+      const { currentUser } = state
+      try {
+        const ref = doc(db, 'users', currentUser)
+        const snap = await getDoc(ref)
+        if (!snap.exists()) return
+        const log = [...(snap.data().activityLog || [])]
+        log.unshift({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          timestamp: Date.now(),
+          user: currentUser,
+          type,
+          description,
+          details,
+        })
+        if (log.length > 500) log.pop()
+        await updateDoc(ref, { activityLog: log })
+      } catch (e) { /* non-critical */ }
+    },
+
+    async clearActivityLog(user) {
+      try {
+        await updateDoc(doc(db, 'users', user), { activityLog: [] })
       } catch (e) { /* non-critical */ }
     },
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
+import RewardCategoryPicker from './RewardCategoryPicker'
 
 export default function EditModal() {
   const { state, actions } = useApp()
@@ -28,6 +29,7 @@ export default function EditModal() {
       rewardMin: item.rewardMin || 0,
       isMulti: item.isMulti || false,
       cost: item.cost || 0,
+      categoryId: item.categoryId || '',
     })
     setShowArchive(false)
   }, [modal, modalPayload])
@@ -40,12 +42,19 @@ export default function EditModal() {
     const { item, type } = f
     if (!f.editDate) { alert('Data obbligatoria'); return }
 
+    // FIX 3: include tag (and all other fields) in the change log comparison
+    const tags = globalData?.tags || []
+    const getTagName = id => tags.find(t => t.id === id)?.name || 'Nessuno'
+
     let logs = []
     if (item.name !== f.name) logs.push(`Nome: ${item.name} → ${f.name}`)
+    if ((item.tagId || '') !== (f.tagId || '')) logs.push(`Tag: ${getTagName(item.tagId)} → ${getTagName(f.tagId)}`)
+    if ((item.description || '') !== (f.desc || '')) logs.push('Descrizione aggiornata')
     if (type === 'habit') {
       if (item.reward !== parseInt(f.reward)) logs.push(`Max: ${item.reward} → ${f.reward}`)
       if (item.penalty !== parseInt(f.penalty)) logs.push(`Penalty: ${item.penalty} → ${f.penalty}`)
       if ((item.rewardMin || 0) !== parseInt(f.rewardMin)) logs.push(`Min: ${item.rewardMin || 0} → ${f.rewardMin}`)
+      if ((item.isMulti || false) !== f.isMulti) logs.push(`MultiLevel: ${item.isMulti ? 'Sì' : 'No'} → ${f.isMulti ? 'Sì' : 'No'}`)
     } else {
       if (item.cost !== parseInt(f.cost)) logs.push(`Costo: ${item.cost} → ${f.cost}`)
     }
@@ -73,7 +82,9 @@ export default function EditModal() {
       tagId: f.tagId,
       description: f.desc,
       changes,
-      ...(type === 'habit' ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti } : { cost: parseInt(f.cost) || 0 }),
+      ...(type === 'habit'
+        ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti }
+        : { cost: parseInt(f.cost) || 0, categoryId: f.categoryId || '' }),
     }
     await actions.saveEdit(updated, type)
     actions.closeModal()
@@ -130,7 +141,14 @@ export default function EditModal() {
         )}
 
         {f.type === 'reward' && (
-          <div className="input-group"><label>Costo</label><input type="number" value={f.cost} onChange={e => set('cost', e.target.value)} /></div>
+          <>
+            <div className="input-group"><label>Costo</label><input type="number" value={f.cost} onChange={e => set('cost', e.target.value)} /></div>
+            <RewardCategoryPicker
+              categories={globalData?.rewardCategories || []}
+              value={f.categoryId || ''}
+              onChange={v => set('categoryId', v)}
+            />
+          </>
         )}
 
         <div className="input-group">

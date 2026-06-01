@@ -7,7 +7,6 @@ import { getLevel } from './lib/levels'
 import Header from './components/Header'
 import ProgressCircle from './components/ProgressCircle'
 import ScoreBoard from './components/ScoreBoard'
-import MiniChart from './components/MiniChart'
 import DateNav from './components/DateNav'
 import SortableHabitList from './components/SortableHabitList'
 import ReminderBanner from './components/ReminderBanner'
@@ -23,7 +22,6 @@ import TrendRow from './components/TrendRow'
 import GoalSection from './components/GoalSection'
 import HabitSearch from './components/HabitSearch'
 import EnergyBanner from './components/EnergyBanner'
-import MomentumBar from './components/MomentumBar'
 
 import AddModal from './modals/AddModal'
 import EditModal from './modals/EditModal'
@@ -252,7 +250,6 @@ export default function App() {
         <ScoreBoard />
       </div>
 
-      <MiniChart allUsersData={allUsersData} />
       <DateNav />
 
       <div className="daily-summary">
@@ -275,7 +272,6 @@ export default function App() {
       </div>
 
       <TrendRow userData={globalData} />
-      <MomentumBar userData={globalData} />
 
       {/* Mood + Journal + Insight (today only, not read-only) */}
       {isToday && !isReadOnly && (

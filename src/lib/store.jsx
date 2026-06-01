@@ -596,35 +596,39 @@ export function AppProvider({ children }) {
     },
 
     // ─── Weight ──────────────────────────────────────────────────────────────
-    async loadWeightData() {
-      try {
-        const snap = await getDoc(doc(db, 'users', 'flavio', 'private', 'weight'))
-        return snap.exists() ? snap.data() : { log: {}, goal: null }
-      } catch { return { log: {}, goal: null } }
+    // weightLog and weightGoal live in users/flavio (main doc) — already in allUsersData
+    getWeightData() {
+      const d = state.allUsersData?.flavio
+      return { log: d?.weightLog || {}, goal: d?.weightGoal ?? null }
     },
     async saveWeight(dateStr, value) {
       if (state.authUserId !== 'flavio') return
+      const ref = doc(db, 'users', 'flavio')
+      const num = parseFloat(value)
+      console.log('[saveWeight]', dateStr, value, '->', num)
+      if (!dateStr || isNaN(num) || num < 10 || num > 500) {
+        actions.showToast('Valore non valido', '⚠️'); return
+      }
       try {
-        const ref = doc(db, 'users', 'flavio', 'private', 'weight')
-        const snap = await getDoc(ref)
-        const prev = snap.exists() ? (snap.data().log || {}) : {}
-        const log = { ...prev }
-        const goalVal = snap.exists() ? (snap.data().goal ?? null) : null
-        if (value === null || value === '' || isNaN(parseFloat(value))) {
-          delete log[dateStr]
-        } else {
-          log[dateStr] = Math.round(parseFloat(value) * 10) / 10
-        }
-        await setDoc(ref, { log, goal: goalVal })
+        await updateDoc(ref, { [`weightLog.${dateStr}`]: Math.round(num * 10) / 10 })
         actions.showToast('Peso salvato!', '⚖️')
-      } catch (e) { console.error(e); actions.showToast('Errore salvataggio', '❌') }
+      } catch (e) { console.error('[saveWeight error]', e); actions.showToast('Errore salvataggio', '❌') }
+    },
+    async deleteWeight(dateStr) {
+      if (state.authUserId !== 'flavio') return
+      try {
+        const { deleteField } = await import('firebase/firestore')
+        await updateDoc(doc(db, 'users', 'flavio'), { [`weightLog.${dateStr}`]: deleteField() })
+        actions.showToast('Misurazione eliminata', '🗑️')
+      } catch (e) { console.error(e) }
     },
     async saveWeightGoal(goal) {
       if (state.authUserId !== 'flavio') return
+      const parsed = (goal !== null && goal !== '' && !isNaN(parseFloat(goal)))
+        ? Math.round(parseFloat(goal) * 10) / 10
+        : null
       try {
-        const ref = doc(db, 'users', 'flavio', 'private', 'weight')
-        const parsed = goal !== null && goal !== '' ? Math.round(parseFloat(goal) * 10) / 10 : null
-        await setDoc(ref, { goal: parsed }, { merge: true })
+        await updateDoc(doc(db, 'users', 'flavio'), { weightGoal: parsed })
         actions.showToast('Obiettivo aggiornato!', '🎯')
       } catch (e) { console.error(e); actions.showToast('Errore', '❌') }
     },

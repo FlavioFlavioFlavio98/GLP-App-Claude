@@ -63,7 +63,7 @@ export default function EditModal() {
     }
     const autoNote = logs.length > 0 && !f.note ? 'Modifica: ' + logs.join(', ') : f.note
 
-    const newChange = { date: f.editDate, note: autoNote || undefined }
+    const newChange = { date: f.editDate, note: autoNote || null }
     if (type === 'habit') {
       newChange.reward = parseInt(f.reward) || 0
       newChange.penalty = parseInt(f.penalty) || 0
@@ -81,17 +81,18 @@ export default function EditModal() {
 
     const updated = {
       ...item,
-      name: f.name,
-      tagId: f.tagId,
-      description: f.desc,
+      name: f.name || item.name,
+      tagId: f.tagId || '',
+      description: f.desc || '',
       importance: f.importance || 'medium',
-      timeSlot: f.timeSlot || undefined,
-      why: f.why?.trim() || undefined,
+      timeSlot: f.timeSlot || null,
+      why: f.why?.trim() || null,
       changes,
       ...(type === 'habit'
         ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti }
         : { cost: parseInt(f.cost) || 0, categoryId: f.categoryId || '' }),
     }
+    console.log('[EditModal] saving', type, updated)
     await actions.saveEdit(updated, type)
     actions.closeModal()
   }

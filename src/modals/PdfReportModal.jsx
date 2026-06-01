@@ -17,10 +17,10 @@ export default function PdfReportModal() {
   async function handleExport() {
     setLoading(true)
     try {
-      // Load weight data for Flavio only
+      // Load weight data for Flavio only (sync — already in store state)
       let weightData = null
       if (currentUser === 'flavio' && authUserId === 'flavio') {
-        weightData = await actions.loadWeightData()
+        weightData = actions.getWeightData()
       }
       await generatePdfReport({ userData: globalData, currentUser, themeId: theme, year, month, weightData })
       actions.showToast('PDF scaricato!', '📄')

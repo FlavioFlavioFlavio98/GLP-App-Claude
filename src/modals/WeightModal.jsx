@@ -71,15 +71,14 @@ export default function WeightModal() {
   const { modal, authUserId } = state
 
   if (modal !== 'weight' || authUserId !== 'flavio') return null
-  return <WeightModalInner actions={actions} />
+  return <WeightModalInner actions={actions} state={state} />
 }
 
-function WeightModalInner({ actions }) {
-  const [log, setLog] = useState({})        // { dateStr: kg }
-  const [goal, setGoal] = useState(null)    // number | null
-  const [loading, setLoading] = useState(true)
-  const [period, setPeriod] = useState(30)  // 7 | 30 | 90 | 'all'
+function WeightModalInner({ actions, state }) {
+  // Read live from store — updates automatically via Firestore onSnapshot
+  const { log, goal } = actions.getWeightData()
 
+  const [period, setPeriod] = useState(30)  // 7 | 30 | 90 | 'all'
   const [inputDate, setInputDate] = useState(today())
   const [inputVal, setInputVal] = useState('')
   const [editingGoal, setEditingGoal] = useState(false)
@@ -89,23 +88,9 @@ function WeightModalInner({ actions }) {
   const canvasRef = useRef(null)
   const chartRef = useRef(null)
 
-  // Load weight data on mount
+  // Pre-fill input when date or log changes
   useEffect(() => {
-    setLoading(true)
-    actions.loadWeightData().then(data => {
-      setLog(data.log || {})
-      setGoal(data.goal ?? null)
-      setLoading(false)
-    })
-  }, [])
-
-  // Pre-fill input when date changes
-  useEffect(() => {
-    if (log[inputDate] !== undefined) {
-      setInputVal(String(log[inputDate]))
-    } else {
-      setInputVal('')
-    }
+    setInputVal(log[inputDate] !== undefined ? String(log[inputDate]) : '')
   }, [inputDate, log])
 
   const entries = getFilteredEntries(log, period)
@@ -178,28 +163,24 @@ function WeightModalInner({ actions }) {
   }, [entries, goal, period])
 
   async function handleSave() {
-    if (!inputVal || isNaN(parseFloat(inputVal))) {
-      actions.showToast('Inserisci un valore valido', '⚠️'); return
+    const num = parseFloat(inputVal)
+    if (!inputVal || isNaN(num) || num < 10 || num > 500) {
+      actions.showToast('Inserisci un valore valido (es. 78.5)', '⚠️'); return
     }
     setSaving(true)
     await actions.saveWeight(inputDate, inputVal)
-    // Reload
-    const data = await actions.loadWeightData()
-    setLog(data.log || {}); setGoal(data.goal ?? null)
+    // State updates automatically via onSnapshot — no reload needed
     setSaving(false)
   }
 
   async function handleSaveGoal() {
     await actions.saveWeightGoal(goalInput !== '' ? goalInput : null)
-    const data = await actions.loadWeightData()
-    setLog(data.log || {}); setGoal(data.goal ?? null)
     setEditingGoal(false); setGoalInput('')
   }
 
   async function handleDeleteGoal() {
     if (!window.confirm('Rimuovere obiettivo peso?')) return
     await actions.saveWeightGoal(null)
-    setGoal(null)
   }
 
   // Goal progress
@@ -226,50 +207,54 @@ function WeightModalInner({ actions }) {
       </div>
 
       <div className="single-habit-body">
-        {loading ? (
-          <div className="empty-state">Caricamento...</div>
-        ) : (
-          <>
-            {/* ── INPUT ── */}
-            <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: 16, marginBottom: 16 }}>
-              <div style={{ fontSize: '0.72em', color: '#888', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 12 }}>
-                Registra Peso
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                <input
-                  type="date"
-                  value={inputDate}
-                  max={today()}
-                  onChange={e => setInputDate(e.target.value)}
-                  style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: '0.9em' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="number"
-                  step="0.1"
-                  inputMode="decimal"
-                  placeholder="es. 78.5"
-                  value={inputVal}
-                  onChange={e => setInputVal(e.target.value)}
-                  style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontSize: '1.1em', fontWeight: 700 }}
-                />
-                <span style={{ color: '#888', fontSize: '0.9em', flexShrink: 0 }}>kg</span>
-                <button
-                  className="btn-main"
-                  style={{ flexShrink: 0, padding: '10px 18px', margin: 0 }}
-                  onClick={handleSave}
-                  disabled={saving || !inputVal}
-                >
-                  {saving ? '...' : log[inputDate] !== undefined ? '✏️ Aggiorna' : '💾 Salva'}
-                </button>
-              </div>
-              {log[inputDate] !== undefined && (
-                <div style={{ fontSize: '0.72em', color: '#EF9F27', marginTop: 6 }}>
-                  ⚠️ Stai modificando il peso del {fmtDate(inputDate)} (attuale: {log[inputDate]} kg)
-                </div>
-              )}
+        <>
+          {/* ── INPUT ── */}
+          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: '0.72em', color: '#888', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 12 }}>
+              Registra Peso
             </div>
+
+            {/* Riga 1: data intera */}
+            <input
+              type="date"
+              value={inputDate}
+              max={today()}
+              onChange={e => setInputDate(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontSize: '0.95em' }}
+            />
+
+            {/* Riga 2: peso + kg */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+              <input
+                type="number"
+                step="0.1"
+                min="30"
+                max="300"
+                inputMode="decimal"
+                placeholder="Es. 78.5"
+                value={inputVal}
+                onChange={e => setInputVal(e.target.value)}
+                style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, padding: '12px 14px', color: 'var(--text)', fontSize: '1.3em', fontWeight: 800 }}
+              />
+              <span style={{ color: '#888', fontSize: '1em', fontWeight: 600, flexShrink: 0, minWidth: 28 }}>kg</span>
+            </div>
+
+            {/* Riga 3: bottone salva intero */}
+            <button
+              className="btn-main"
+              style={{ width: '100%', padding: '13px', margin: 0, fontSize: '1em' }}
+              onClick={handleSave}
+              disabled={saving || !inputVal}
+            >
+              {saving ? '⏳ Salvataggio...' : log[inputDate] !== undefined ? '✏️ Aggiorna' : '💾 Salva'}
+            </button>
+
+            {log[inputDate] !== undefined && (
+              <div style={{ fontSize: '0.72em', color: '#EF9F27', marginTop: 8 }}>
+                ⚠️ Modifica del {fmtDate(inputDate)} — valore attuale: {log[inputDate]} kg
+              </div>
+            )}
+          </div>
 
             {/* ── GRAFICO ── */}
             {entries.length === 0 ? (
@@ -420,8 +405,7 @@ function WeightModalInner({ actions }) {
               </div>
             )}
           </>
-        )}
-      </div>
+        </div>
     </div>
   )
 }

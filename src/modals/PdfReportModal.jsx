@@ -6,7 +6,7 @@ const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio'
 
 export default function PdfReportModal() {
   const { state, actions } = useApp()
-  const { modal, globalData, currentUser, theme } = state
+  const { modal, globalData, currentUser, theme, authUserId } = state
   const today = new Date()
   const [month, setMonth] = useState(today.getMonth())
   const [year, setYear] = useState(today.getFullYear())
@@ -17,7 +17,12 @@ export default function PdfReportModal() {
   async function handleExport() {
     setLoading(true)
     try {
-      await generatePdfReport({ userData: globalData, currentUser, themeId: theme, year, month })
+      // Load weight data for Flavio only
+      let weightData = null
+      if (currentUser === 'flavio' && authUserId === 'flavio') {
+        weightData = await actions.loadWeightData()
+      }
+      await generatePdfReport({ userData: globalData, currentUser, themeId: theme, year, month, weightData })
       actions.showToast('PDF scaricato!', '📄')
       actions.closeModal()
     } catch (e) {
@@ -58,6 +63,7 @@ export default function PdfReportModal() {
           <div style={{ marginTop: 6, lineHeight: 1.8 }}>
             📊 Copertina · Riepilogo · Grafico giornaliero<br/>
             🏷️ Analisi categorie · Lista abitudini · Storico acquisti
+            {currentUser === 'flavio' && <><br/>⚖️ Grafico peso del mese (se disponibile)</>}
           </div>
         </div>
 

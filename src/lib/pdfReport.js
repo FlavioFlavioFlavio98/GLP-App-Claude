@@ -86,7 +86,7 @@ export function buildMonthData(userData, year, month) {
   }
 }
 
-async function renderChartToImage(type, labels, datasets, width = 760, height = 280, lightTheme = true) {
+async function renderChartToImage(type, labels, datasets, width = 760, height = 280, lightTheme = true, extraScaleOpts = {}) {
   const canvas = document.createElement('canvas')
   canvas.width = width; canvas.height = height
   document.body.appendChild(canvas)
@@ -105,9 +105,9 @@ async function renderChartToImage(type, labels, datasets, width = 760, height = 
     data: { labels, datasets },
     options: {
       responsive: false, animation: false,
-      plugins: { legend: { display: type === 'doughnut', labels: { color: '#333', font: { size: 11 } } }, bg: undefined },
+      plugins: { legend: { display: datasets.length > 1 || type === 'doughnut', labels: { color: '#333', font: { size: 11 } } }, bg: undefined },
       scales: type !== 'doughnut' ? {
-        y: { grid: { color: '#eee' }, ticks: { color: '#666', font: { size: 10 } } },
+        y: { grid: { color: '#eee' }, ticks: { color: '#666', font: { size: 10 } }, ...(extraScaleOpts.yMin !== undefined ? { min: extraScaleOpts.yMin } : {}), ...(extraScaleOpts.yMax !== undefined ? { max: extraScaleOpts.yMax } : {}) },
         x: { grid: { display: false }, ticks: { color: '#666', font: { size: 9 } } },
       } : undefined,
     },
@@ -121,7 +121,7 @@ async function renderChartToImage(type, labels, datasets, width = 760, height = 
   return img
 }
 
-export async function generatePdfReport({ userData, currentUser, themeId, year, month }) {
+export async function generatePdfReport({ userData, currentUser, themeId, year, month, weightData }) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -350,6 +350,54 @@ export async function generatePdfReport({ userData, currentUser, themeId, year, 
     doc.text('Totale speso:', MARGIN, y)
     doc.setTextColor(200, 0, 0)
     doc.text(`-${data.totalSpent}`, W - MARGIN, y, { align: 'right' })
+  }
+
+  // ---- PAGE 7 (optional): WEIGHT CHART — only for Flavio ----
+  if (currentUser === 'flavio' && weightData?.log) {
+    const mm = String(month + 1).padStart(2, '0')
+    const prefix = `${year}-${mm}`
+    const monthWeightEntries = Object.entries(weightData.log)
+      .filter(([d]) => d.startsWith(prefix))
+      .sort(([a], [b]) => a.localeCompare(b))
+
+    if (monthWeightEntries.length >= 2) {
+      doc.addPage()
+      header('Pagina 7 — Andamento Peso')
+      y = 24; y = sectionTitle('Peso Corporeo', y); y += 4
+
+      const wLabels = monthWeightEntries.map(([d]) => d.split('-')[2])
+      const wData = monthWeightEntries.map(([, w]) => w)
+      const wMin = Math.min(...wData), wMax = Math.max(...wData)
+
+      const weightImg = await renderChartToImage('line', wLabels, [
+        {
+          label: 'Peso (kg)',
+          data: wData,
+          borderColor: '#ffca28',
+          backgroundColor: 'rgba(255,202,40,0.15)',
+          borderWidth: 2, pointRadius: 4, fill: true, tension: 0.3,
+        },
+        ...(weightData.goal ? [{
+          label: `Obiettivo (${weightData.goal} kg)`,
+          data: wData.map(() => weightData.goal),
+          borderColor: '#4caf50',
+          borderDash: [5, 4],
+          borderWidth: 1.5, pointRadius: 0, fill: false,
+        }] : []),
+      ], 760, 240, true, { yMin: Math.max(0, wMin - 2), yMax: wMax + 2 })
+
+      doc.addImage(weightImg, 'PNG', MARGIN, y, COL_W, 70)
+      y += 78
+
+      // Stats
+      const wAvg = Math.round((wData.reduce((a, b) => a + b, 0) / wData.length) * 10) / 10
+      const wVariation = Math.round((wData[wData.length - 1] - wData[0]) * 10) / 10
+      y = kv('Peso iniziale', `${wData[0]} kg`, y)
+      y = kv('Peso finale', `${wData[wData.length - 1]} kg`, y)
+      y = kv('Media mensile', `${wAvg} kg`, y)
+      y = kv('Variazione', `${wVariation > 0 ? '+' : ''}${wVariation} kg`, y, wVariation < 0 ? [0, 150, 0] : wVariation > 0 ? [200, 0, 0] : [100, 100, 100])
+      if (weightData.goal) y = kv('Obiettivo', `${weightData.goal} kg`, y)
+    }
   }
 
   // Save

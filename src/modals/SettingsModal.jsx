@@ -122,6 +122,17 @@ export default function SettingsModal() {
           </button>
         </div>
 
+        {/* PESO — solo Flavio */}
+        {authUserId === 'flavio' && (
+          <div className="settings-section">
+            <div className="settings-section-title">Salute</div>
+            <button className="btn-backup" onClick={() => openAfter('weight')}>
+              <span style={{ fontSize: '1.1em' }}>⚖️</span>
+              Tracciamento Peso
+            </button>
+          </div>
+        )}
+
         {/* STORICO */}
         <div className="settings-section">
           <div className="settings-section-title">Storico</div>

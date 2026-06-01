@@ -595,6 +595,40 @@ export function AppProvider({ children }) {
       if (gc.completedAt || newValue < target) actions.vibrate('light')
     },
 
+    // ─── Weight ──────────────────────────────────────────────────────────────
+    async loadWeightData() {
+      try {
+        const snap = await getDoc(doc(db, 'users', 'flavio', 'private', 'weight'))
+        return snap.exists() ? snap.data() : { log: {}, goal: null }
+      } catch { return { log: {}, goal: null } }
+    },
+    async saveWeight(dateStr, value) {
+      if (state.authUserId !== 'flavio') return
+      try {
+        const ref = doc(db, 'users', 'flavio', 'private', 'weight')
+        const snap = await getDoc(ref)
+        const prev = snap.exists() ? (snap.data().log || {}) : {}
+        const log = { ...prev }
+        const goalVal = snap.exists() ? (snap.data().goal ?? null) : null
+        if (value === null || value === '' || isNaN(parseFloat(value))) {
+          delete log[dateStr]
+        } else {
+          log[dateStr] = Math.round(parseFloat(value) * 10) / 10
+        }
+        await setDoc(ref, { log, goal: goalVal })
+        actions.showToast('Peso salvato!', '⚖️')
+      } catch (e) { console.error(e); actions.showToast('Errore salvataggio', '❌') }
+    },
+    async saveWeightGoal(goal) {
+      if (state.authUserId !== 'flavio') return
+      try {
+        const ref = doc(db, 'users', 'flavio', 'private', 'weight')
+        const parsed = goal !== null && goal !== '' ? Math.round(parseFloat(goal) * 10) / 10 : null
+        await setDoc(ref, { goal: parsed }, { merge: true })
+        actions.showToast('Obiettivo aggiornato!', '🎯')
+      } catch (e) { console.error(e); actions.showToast('Errore', '❌') }
+    },
+
     // ─── Journal ──────────────────────────────────────────────────────────────
     async saveJournalEntry(dateStr, entry) {
       if (isReadOnly()) return

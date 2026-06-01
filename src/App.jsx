@@ -3,6 +3,7 @@ import { useApp } from './lib/store'
 import { parseEntry, getItemValueAtDate, isHabitVisible, toDateString } from './lib/habitLogic'
 import { applyTheme, applyUserColors } from './lib/themes'
 import { getLevel } from './lib/levels'
+import { TIME_SLOT_OPTS } from './lib/timeSlots'
 
 import Header from './components/Header'
 import ProgressCircle from './components/ProgressCircle'
@@ -442,23 +443,7 @@ function JournalButton({ globalData, onOpen }) {
   )
 }
 
-// Slot icons: Material Icons Round per coerenza con il resto dell'app
-export const TIME_SLOT_OPTS = [
-  { v: null,        icon: null,          label: 'Nessuna',   color: '#666' },
-  { v: 'morning',   icon: 'wb_twilight', label: 'Mattina',   color: '#EF9F27' },
-  { v: 'afternoon', icon: 'light_mode',  label: 'Pomeriggio',color: '#FFD600' },
-  { v: 'evening',   icon: 'bedtime',     label: 'Sera',      color: '#7986cb' },
-]
-
-export function SlotIcon({ slot, style = {} }) {
-  const opt = TIME_SLOT_OPTS.find(o => o.v === slot)
-  if (!opt?.icon) return null
-  return (
-    <span className="material-icons-round" style={{ fontSize: 14, color: opt.color, verticalAlign: 'middle', ...style }}>
-      {opt.icon}
-    </span>
-  )
-}
+// TIME_SLOT_OPTS imported from lib/timeSlots — no longer defined here
 
 function TimeSlotFilter({ value, onChange }) {
   const slots = [

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 import RewardCategoryPicker from './RewardCategoryPicker'
-import { TIME_SLOT_OPTS } from '../App'
+import { TIME_SLOT_OPTS } from '../lib/timeSlots'
 
 export default function EditModal() {
   const { state, actions } = useApp()

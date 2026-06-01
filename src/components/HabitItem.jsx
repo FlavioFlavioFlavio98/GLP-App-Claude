@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useApp } from '../lib/store'
 import { getItemValueAtDate, calculateStreak, calcNumericPoints } from '../lib/habitLogic'
 import { calcQualityScore } from '../lib/statsLogic'
-import { TIME_SLOT_OPTS } from '../App'
+import { TIME_SLOT_OPTS } from '../lib/timeSlots'
 
 // ---- Widget per abitudini numeriche ----
 function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {

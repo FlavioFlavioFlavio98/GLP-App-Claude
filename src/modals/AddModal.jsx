@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 import RewardCategoryPicker from './RewardCategoryPicker'
-import { TIME_SLOT_OPTS } from '../App'
+import { TIME_SLOT_OPTS } from '../lib/timeSlots'
 
 const today = () => toDateString(new Date())
 

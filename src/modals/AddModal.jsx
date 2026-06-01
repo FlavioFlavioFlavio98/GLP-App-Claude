@@ -105,9 +105,10 @@ export default function AddModal() {
       const isGoal = f.habitMode === 'goal'
       if (isGoal) {
         const habit = {
-          id, name: f.name, tagId: f.tagId, description: f.desc,
+          id, name: f.name, tagId: f.tagId || '', description: f.desc || '',
           type: 'goal',
           reward: 0, penalty: 0, isMulti: false, rewardMin: 0,
+          timeSlot: null, why: null, numericType: null, numericConfig: null,
           goalConfig: {
             targetValue: parseFloat(f.goalTarget) || 1,
             currentValue: 0,
@@ -140,20 +141,20 @@ export default function AddModal() {
         pointsPerUnit: parseFloat(f.pointsPerUnit) || 0,
         unitSize: parseFloat(f.unitSize) || 1000,
         cap: parseFloat(f.cap) || null,
-      } : undefined
+      } : null
 
       const habit = {
-        id, name: f.name, tagId: f.tagId,
+        id, name: f.name, tagId: f.tagId || '',
         reward: isNumeric ? 0 : r,
         penalty: isNumeric ? 0 : p,
         type: f.recurMode,
         isMulti: isMulti,
         rewardMin: isMulti ? rMin : 0,
-        description: f.desc,
+        description: f.desc || '',
         importance: f.importance || 'medium',
-        timeSlot: f.timeSlot || undefined,
-        why: f.why?.trim() || undefined,
-        numericType: isNumeric || undefined,
+        timeSlot: f.timeSlot || null,
+        why: f.why?.trim() || null,
+        numericType: isNumeric || null,
         numericConfig,
         changes: [{
           date: startDate,

@@ -1,11 +1,10 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useApp } from '../lib/store'
 import { APP_VERSION, APP_UPDATED } from '../version'
 
 export default function SettingsModal() {
   const { state, actions } = useApp()
   const { modal, userColors, density, authUserId, allUsersData } = state
-  const fileRef = useRef(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   if (modal !== 'settings') return null
@@ -163,28 +162,14 @@ export default function SettingsModal() {
           </button>
         </div>
 
-        {/* DATI */}
+        {/* BACKUP & DATI */}
         <div className="settings-section">
           <div className="settings-section-title">Dati</div>
-          <button className="btn-backup" onClick={actions.exportData}>
-            <span className="material-icons-round" style={{ fontSize: 18 }}>download</span>
-            Backup JSON
+          <button className="btn-backup" onClick={() => openAfter('backup')}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>folder_zip</span>
+            📦 Backup e Dati
           </button>
-          <button className="btn-backup" onClick={() => actions.exportCsv(null, state.allUsersData, 'all')}>
-            <span className="material-icons-round" style={{ fontSize: 18 }}>table_chart</span>
-            Esporta CSV (ZIP)
-          </button>
-          <button className="btn-backup" onClick={() => fileRef.current.click()}>
-            <span className="material-icons-round" style={{ fontSize: 18 }}>upload</span>
-            Ripristina da File
-          </button>
-          <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }}
-            onChange={e => { if (e.target.files[0]) actions.importData(e.target.files[0]); e.target.value = '' }} />
         </div>
-
-        <button className="btn-danger" style={{ fontSize: '0.85em', marginTop: 4 }} onClick={actions.hardReset}>
-          Reset Account
-        </button>
 
         {/* LOGOUT */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>

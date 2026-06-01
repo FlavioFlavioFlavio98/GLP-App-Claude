@@ -7,7 +7,7 @@ import {
   doc, onSnapshot, updateDoc, setDoc, getDoc, deleteDoc,
   arrayUnion, collection, getDocs,
 } from 'firebase/firestore'
-import { toDateString, getItemValueAtDate, calcNumericPoints } from './habitLogic'
+import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 
@@ -708,7 +708,9 @@ export function AppProvider({ children }) {
     async exportCsv(userData, allUsersData, dateRange = 'all') {
       actions.showToast('Generazione CSV...', '⏳')
       try {
-        const JSZip = (await import('jszip')).default
+        console.log('[exportCsv] start, dateRange:', dateRange)
+        const JSZipModule = await import('jszip')
+        const JSZip = JSZipModule.default || JSZipModule
         const zip = new JSZip()
         const users = ['flavio', 'simona']
         const today = toDateString(new Date())
@@ -721,50 +723,67 @@ export function AppProvider({ children }) {
           return true
         }
 
+        // Build tags map for all users
         const tagsAll = {}
-        users.forEach(u => { (allUsersData[u]?.tags || []).forEach(t => { tagsAll[t.id] = t.name }) })
+        users.forEach(u => { (allUsersData?.[u]?.tags || []).forEach(t => { if (t?.id) tagsAll[t.id] = t.name || '' }) })
 
+        // CSV 1: daily summary
         let ds = 'data,utente,punti_guadagnati,punti_spesi,penalita,punti_netti,mood,nota_mood,abitudini_completate,abitudini_fallite,acquisti_totali\n'
         users.forEach(u => {
-          const ud = allUsersData[u]; if (!ud) return
-          const { parseEntry: pe } = require('./habitLogic')
+          const ud = allUsersData?.[u]
+          if (!ud) return
           Object.keys(ud.dailyLogs || {}).filter(d => inRange(d)).sort().forEach(dateStr => {
-            const entry = pe(ud.dailyLogs[dateStr])
-            let earned = 0, spent = 0, penalty = 0
-            entry.habits.forEach(hId => {
-              const h = ud.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
-              if (h) earned += getItemValueAtDate(h, 'reward', dateStr)
-            })
-            entry.failedHabits.forEach(hId => {
-              const h = ud.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
-              if (h) { const p = getItemValueAtDate(h, 'penalty', dateStr); penalty += p; spent += p }
-            })
-            spent += (entry.purchases || []).reduce((a, p) => a + parseInt(p.cost || 0), 0)
-            const mood = entry.mood?.[u]
-            ds += `${dateStr},${u},${earned},${spent},${penalty},${earned - spent},${mood?.value || ''},${(mood?.note || '').replace(/,/g, ';')},${entry.habits.length},${entry.failedHabits.length},${(entry.purchases || []).length}\n`
+            try {
+              const entry = parseEntry(ud.dailyLogs[dateStr])
+              let earned = 0, spent = 0, penalty = 0
+              ;(entry.habits || []).forEach(hId => {
+                const h = (ud.habits || []).find(x => (x?.id || x?.name?.replace(/[^a-zA-Z0-9]/g, '')) === hId)
+                if (h) earned += getItemValueAtDate(h, 'reward', dateStr) || 0
+              })
+              ;(entry.failedHabits || []).forEach(hId => {
+                const h = (ud.habits || []).find(x => (x?.id || x?.name?.replace(/[^a-zA-Z0-9]/g, '')) === hId)
+                if (h) { const p = getItemValueAtDate(h, 'penalty', dateStr) || 0; penalty += p; spent += p }
+              })
+              spent += (entry.purchases || []).reduce((a, p) => a + (parseInt(p?.cost) || 0), 0)
+              const mood = entry.mood?.[u]
+              const moodVal = mood?.value ?? ''
+              const moodNote = (mood?.note || '').replace(/,/g, ';').replace(/\n/g, ' ')
+              ds += `${dateStr},${u},${earned},${spent},${penalty},${earned - spent},${moodVal},${moodNote},${(entry.habits || []).length},${(entry.failedHabits || []).length},${(entry.purchases || []).length}\n`
+            } catch (rowErr) {
+              console.warn('[exportCsv] skipping row', dateStr, u, rowErr)
+            }
           })
         })
         zip.file('daily_summary.csv', ds)
 
+        // CSV 2: habits config
         let hc = 'abitudine_id,utente,nome,tipo,tag,reward,penalty,importanza,why,data_creazione\n'
         users.forEach(u => {
-          const ud = allUsersData[u]; if (!ud) return
+          const ud = allUsersData?.[u]
+          if (!ud) return
           ;(ud.habits || []).forEach(h => {
+            if (!h) return
             const created = h.changes?.[0]?.date || ''
-            hc += `${h.id},${u},${h.name.replace(/,/g, ';')},${h.type},${tagsAll[h.tagId] || ''},${h.reward || 0},${h.penalty || 0},${h.importance || 'medium'},${(h.why || '').replace(/,/g, ';')},${created}\n`
+            const name = (h.name || '').replace(/,/g, ';').replace(/\n/g, ' ')
+            const why = (h.why || '').replace(/,/g, ';').replace(/\n/g, ' ')
+            hc += `${h.id || ''},${u},${name},${h.type || ''},${tagsAll[h.tagId] || ''},${h.reward || 0},${h.penalty || 0},${h.importance || 'medium'},${why},${created}\n`
           })
         })
         zip.file('habits_config.csv', hc)
 
+        // CSV 3: achievements
         let ac = 'utente,achievement_id,data_sblocco\n'
         users.forEach(u => {
-          const ud = allUsersData[u]
-          ;(ud?.achievements || []).filter(a => a.unlockedAt).forEach(a => {
-            ac += `${u},${a.id},${new Date(a.unlockedAt).toISOString().split('T')[0]}\n`
+          const ud = allUsersData?.[u]
+          ;(ud?.achievements || []).filter(a => a?.unlockedAt).forEach(a => {
+            try {
+              ac += `${u},${a.id || ''},${new Date(a.unlockedAt).toISOString().split('T')[0]}\n`
+            } catch { /* skip malformed */ }
           })
         })
         zip.file('achievements.csv', ac)
 
+        console.log('[exportCsv] generating zip...')
         const blob = await zip.generateAsync({ type: 'blob' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -772,8 +791,8 @@ export function AppProvider({ children }) {
         URL.revokeObjectURL(url)
         actions.showToast('Export completato!', '✅')
       } catch (e) {
-        console.error(e)
-        actions.showToast('Errore export CSV', '❌')
+        console.error('[exportCsv] ERRORE:', e)
+        actions.showToast(`Errore CSV: ${e.message || e}`, '❌')
       }
     },
 

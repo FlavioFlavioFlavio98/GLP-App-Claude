@@ -80,7 +80,7 @@ function WeightModalInner({ actions, state }) {
 
   const [period, setPeriod] = useState(30)  // 7 | 30 | 90 | 'all'
   const [inputDate, setInputDate] = useState(today())
-  const [inputVal, setInputVal] = useState('')
+  const [inputVal, setInputVal] = useState('')  // fully independent — never overwritten by effects
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState('')
   const [saving, setSaving] = useState(false)
@@ -88,10 +88,12 @@ function WeightModalInner({ actions, state }) {
   const canvasRef = useRef(null)
   const chartRef = useRef(null)
 
-  // Pre-fill input when date or log changes
-  useEffect(() => {
-    setInputVal(log[inputDate] !== undefined ? String(log[inputDate]) : '')
-  }, [inputDate, log])
+  // Pre-fill ONLY when the user explicitly changes the date picker
+  function handleDateChange(newDate) {
+    setInputDate(newDate)
+    // Pre-fill with saved value for that date, or clear
+    setInputVal(log[newDate] !== undefined ? String(log[newDate]) : '')
+  }
 
   const entries = getFilteredEntries(log, period)
   const stats = calcStats(entries)
@@ -163,13 +165,15 @@ function WeightModalInner({ actions, state }) {
   }, [entries, goal, period])
 
   async function handleSave() {
-    const num = parseFloat(inputVal)
-    if (!inputVal || isNaN(num) || num < 10 || num > 500) {
-      actions.showToast('Inserisci un valore valido (es. 78.5)', '⚠️'); return
+    const val = parseFloat(inputVal)
+    console.log('[WeightModal] handleSave', inputDate, inputVal, '->', val)
+    if (!inputVal || isNaN(val) || val < 30 || val > 300) {
+      actions.showToast('Inserisci un valore valido tra 30 e 300 kg', '⚠️'); return
     }
     setSaving(true)
-    await actions.saveWeight(inputDate, inputVal)
-    // State updates automatically via onSnapshot — no reload needed
+    await actions.saveWeight(inputDate, val)
+    // onSnapshot aggiorna il grafico automaticamente; non resettare inputVal
+    // così l'utente vede cosa ha appena salvato
     setSaving(false)
   }
 
@@ -219,7 +223,7 @@ function WeightModalInner({ actions, state }) {
               type="date"
               value={inputDate}
               max={today()}
-              onChange={e => setInputDate(e.target.value)}
+              onChange={e => handleDateChange(e.target.value)}
               style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontSize: '0.95em' }}
             />
 
@@ -394,7 +398,7 @@ function WeightModalInner({ actions, state }) {
                   {[...allEntries].reverse().map(e => (
                     <div
                       key={e.date}
-                      onClick={() => { setInputDate(e.date); setInputVal(String(e.weight)) }}
+                      onClick={() => { setInputDate(e.date); setInputVal(String(e.weight)) }}  // storico: imposta direttamente
                       style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, cursor: 'pointer' }}
                     >
                       <span style={{ fontSize: '0.82em', color: '#888' }}>{e.date}</span>

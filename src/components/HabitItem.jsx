@@ -93,7 +93,7 @@ function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
 }
 
 function TagIcon({ tag }) {
-  if (!tag) return <span className="tag-pill tag-pill-none">Nessuna categoria</span>
+  if (!tag) return null
   const icon = tag.emoji
     ? <span style={{ fontSize: '0.9em' }}>{tag.emoji}</span>
     : tag.icon
@@ -298,13 +298,8 @@ export default function HabitItem({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="item-name-row">
               <h3>
-                <span
-                  style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: importanceDot, marginRight: 5, verticalAlign: 'middle', flexShrink: 0 }}
-                  title={`Importanza: ${importance}`}
-                />
                 {habit.name}
                 {tsIcon && <span style={{ fontSize: '0.7em', marginLeft: 4, opacity: 0.6 }}>{tsIcon}</span>}
-                {qualityScore !== null && <span className={`quality-dot ${qDotClass}`} title={`Qualità: ${qualityScore}/100`} />}
               </h3>
               <TagIcon tag={tag} />
               {streak > 1 && (

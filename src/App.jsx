@@ -50,6 +50,7 @@ import JournalViewModal from './modals/JournalViewModal'
 import { AchievementQueue } from './components/AchievementOverlay'
 import { trackThemeUsed } from './lib/achievementLogic'
 import AvatarModal from './modals/AvatarModal'
+import BackupModal from './modals/BackupModal'
 import WeightModal from './modals/WeightModal'
 
 // Focus mode: persists per-day in localStorage
@@ -382,6 +383,7 @@ export default function App() {
       {!isReadOnly && <JournalModal />}
       {!isReadOnly && <JournalViewModal />}
       <AvatarModal />
+      <BackupModal />
       {authUserId === 'flavio' && <WeightModal />}
       <UpdateBanner />
 

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 import RewardCategoryPicker from './RewardCategoryPicker'
+import { TIME_SLOT_OPTS } from '../App'
 
 const today = () => toDateString(new Date())
 
@@ -330,14 +331,12 @@ export default function AddModal() {
           <div className="input-group" style={{ marginTop: 12 }}>
             <label>Fascia oraria (opzionale)</label>
             <div className="switch-group" style={{ marginTop: 4, flexWrap: 'wrap' }}>
-              {[
-                { v: null, icon: '⬜', label: 'Nessuna' },
-                { v: 'morning', icon: '🌅', label: 'Mattina' },
-                { v: 'afternoon', icon: '☀️', label: 'Pomeriggio' },
-                { v: 'evening', icon: '🌙', label: 'Sera' },
-              ].map(opt => (
+              {TIME_SLOT_OPTS.map(opt => (
                 <div key={String(opt.v)} className={`switch-opt${f.timeSlot === opt.v ? ' active' : ''}`} onClick={() => set('timeSlot', opt.v)}>
-                  {opt.icon} {opt.label}
+                  {opt.icon
+                    ? <span className="material-icons-round" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 3, color: opt.color }}>{opt.icon}</span>
+                    : <span style={{ marginRight: 3 }}>⬜</span>}
+                  {opt.label}
                 </div>
               ))}
             </div>

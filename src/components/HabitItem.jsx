@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useApp } from '../lib/store'
 import { getItemValueAtDate, calculateStreak, calcNumericPoints } from '../lib/habitLogic'
 import { calcQualityScore } from '../lib/statsLogic'
+import { TIME_SLOT_OPTS } from '../App'
 
 // ---- Widget per abitudini numeriche ----
 function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
@@ -132,8 +133,7 @@ export default function HabitItem({
   const isIf = habit.type === 'if'
   const isNumeric = Boolean(habit.numericType && habit.numericConfig)
   const importance = habit.importance || 'medium'
-  const TS_ICONS = { morning: '🌅', afternoon: '☀️', evening: '🌙' }
-  const tsIcon = habit.timeSlot ? TS_ICONS[habit.timeSlot] : null
+  const tsOpt = habit.timeSlot ? TIME_SLOT_OPTS.find(o => o.v === habit.timeSlot) : null
   const importanceDot = importance === 'high' ? '#E24B4A' : importance === 'medium' ? '#EF9F27' : '#4fc3f7'
   const isHighFailed = importance === 'high' && isFailed
 
@@ -299,7 +299,9 @@ export default function HabitItem({
             <div className="item-name-row">
               <h3>
                 {habit.name}
-                {tsIcon && <span style={{ fontSize: '0.7em', marginLeft: 4, opacity: 0.6 }}>{tsIcon}</span>}
+                {tsOpt?.icon && (
+                  <span className="material-icons-round" style={{ fontSize: 13, marginLeft: 5, verticalAlign: 'middle', color: tsOpt.color, opacity: 0.75 }}>{tsOpt.icon}</span>
+                )}
               </h3>
               <TagIcon tag={tag} />
               {streak > 1 && (

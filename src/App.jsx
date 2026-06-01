@@ -346,7 +346,7 @@ export default function App() {
       <div className="section-title" style={{ marginTop: 30 }}>Acquisti del Giorno</div>
       <PurchasedList />
 
-      <Accordion label="🛍️ Negozio Premi" defaultOpen={false}>
+      <Accordion label={<><span className="material-icons-round" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>redeem</span>Negozio Premi</>} defaultOpen={false}>
         <ShopList />
       </Accordion>
 
@@ -442,12 +442,28 @@ function JournalButton({ globalData, onOpen }) {
   )
 }
 
+// Slot icons: Material Icons Round per coerenza con il resto dell'app
+export const TIME_SLOT_OPTS = [
+  { v: null,        icon: null,          label: 'Nessuna',   color: '#666' },
+  { v: 'morning',   icon: 'wb_twilight', label: 'Mattina',   color: '#EF9F27' },
+  { v: 'afternoon', icon: 'light_mode',  label: 'Pomeriggio',color: '#FFD600' },
+  { v: 'evening',   icon: 'bedtime',     label: 'Sera',      color: '#7986cb' },
+]
+
+export function SlotIcon({ slot, style = {} }) {
+  const opt = TIME_SLOT_OPTS.find(o => o.v === slot)
+  if (!opt?.icon) return null
+  return (
+    <span className="material-icons-round" style={{ fontSize: 14, color: opt.color, verticalAlign: 'middle', ...style }}>
+      {opt.icon}
+    </span>
+  )
+}
+
 function TimeSlotFilter({ value, onChange }) {
   const slots = [
-    { v: 'all', label: 'Tutte' },
-    { v: 'morning', label: '🌅 Mattina' },
-    { v: 'afternoon', label: '☀️ Pomeriggio' },
-    { v: 'evening', label: '🌙 Sera' },
+    { v: 'all', icon: null, label: 'Tutte' },
+    ...TIME_SLOT_OPTS.filter(o => o.v !== null),
   ]
   return (
     <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -462,7 +478,10 @@ function TimeSlotFilter({ value, onChange }) {
             color: value === s.v ? 'var(--theme-color)' : '#666',
             fontWeight: value === s.v ? 700 : 400,
           }}
-        >{s.label}</button>
+        >
+          {s.icon && <span className="material-icons-round" style={{ fontSize: 13, verticalAlign: 'middle', marginRight: 3, color: value === s.v ? 'var(--theme-color)' : s.color }}>{s.icon}</span>}
+          {s.label}
+        </button>
       ))}
     </div>
   )

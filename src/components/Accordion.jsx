@@ -5,7 +5,7 @@ export default function Accordion({ label, children, defaultOpen = false }) {
   return (
     <>
       <button className={`accordion-btn${open ? ' open' : ''}`} onClick={() => setOpen(v => !v)}>
-        <span>{label}</span>
+        <span style={{ display: 'flex', alignItems: 'center' }}>{label}</span>
         <span className="material-icons-round" style={{ transition: '0.3s', transform: open ? 'rotate(180deg)' : 'none' }}>
           expand_more
         </span>

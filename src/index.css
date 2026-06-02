@@ -84,6 +84,10 @@ body {
   0%, 100% { filter: drop-shadow(0 0 4px var(--theme-color)); }
   50%       { filter: drop-shadow(0 0 10px var(--theme-color)); }
 }
+@keyframes typingPulse {
+  0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); }
+  30%            { opacity: 1;   transform: scale(1.1); }
+}
 
 /* =============================================
    HEADER / IDENTITY BAR

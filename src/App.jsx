@@ -55,6 +55,7 @@ import BackupModal from './modals/BackupModal'
 import QuickExerciseModal from './modals/QuickExerciseModal'
 import ExerciseStatsModal from './modals/ExerciseStatsModal'
 import WeightModal from './modals/WeightModal'
+import CoachPage from './modals/CoachPage'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -284,6 +285,16 @@ export default function App() {
 
       <TrendRow userData={globalData} />
 
+      {/* Coach card — solo Flavio, non in read-only */}
+      {authUserId === 'flavio' && !isReadOnly && (
+        <CoachCard globalData={globalData} onOpen={() => actions.openModal('coach')} />
+      )}
+
+      {/* Coach monday banner — solo Flavio */}
+      {authUserId === 'flavio' && !isReadOnly && (
+        <CoachMondayBanner onOpen={() => actions.openModal('coach', { autoGenerate: true })} />
+      )}
+
       {/* Mood + Journal + Insight (today only, not read-only) */}
       {isToday && !isReadOnly && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -402,6 +413,7 @@ export default function App() {
       <QuickExerciseModal />
       <ExerciseStatsModal />
       {authUserId === 'flavio' && <WeightModal />}
+      {authUserId === 'flavio' && <CoachPage />}
       <UpdateBanner />
 
       <AchievementQueue
@@ -520,6 +532,95 @@ function TimeSlotFilter({ value, onChange }) {
           {s.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+function CoachCard({ globalData, onOpen }) {
+  const weekKey = (() => {
+    const now = new Date()
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+    const dayN = d.getUTCDay() || 7
+    d.setUTCDate(d.getUTCDate() + 4 - dayN)
+    const wk = Math.ceil(((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
+    return `${d.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`
+  })()
+
+  const report = (() => {
+    try { return JSON.parse(localStorage.getItem(`glp_coach_report_${weekKey}`) || 'null') } catch { return null }
+  })()
+
+  const preview = report?.content?.split('\n').filter(l => l.trim()).slice(0, 2).join(' ').slice(0, 110)
+
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 14, padding: '12px 16px', marginBottom: 14, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 12,
+        transition: 'background 0.15s',
+      }}
+    >
+      <span style={{ fontSize: '1.4em', flexShrink: 0 }}>🤖</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: '0.85em', marginBottom: 2 }}>Coach</div>
+        <div style={{ fontSize: '0.75em', color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {report ? (preview || 'Report disponibile') : 'Genera il tuo primo report settimanale'}
+        </div>
+      </div>
+      <span style={{ color: '#555', fontSize: '1em', flexShrink: 0 }}>→</span>
+    </div>
+  )
+}
+
+function CoachMondayBanner({ onOpen }) {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const now = new Date()
+    if (now.getDay() !== 1) return
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+    const dayN = d.getUTCDay() || 7
+    d.setUTCDate(d.getUTCDate() + 4 - dayN)
+    const wk = Math.ceil(((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
+    const weekKey = `${d.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`
+    const hasReport = Boolean(localStorage.getItem(`glp_coach_report_${weekKey}`))
+    const dismissed = Boolean(localStorage.getItem(`glp_coach_banner_${weekKey}`))
+    if (!hasReport && !dismissed) setVisible(true)
+  }, [])
+
+  if (!visible) return null
+
+  return (
+    <div style={{
+      background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)',
+      borderRadius: 12, padding: '10px 14px', marginBottom: 14,
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <span>📊</span>
+      <span style={{ flex: 1, fontSize: '0.82em', color: '#EF9F27' }}>
+        Nuovo report settimanale disponibile — tocca per generarlo
+      </span>
+      <button
+        onClick={onOpen}
+        style={{ background: 'var(--theme-color)', color: '#000', border: 'none', borderRadius: 8, padding: '5px 12px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78em' }}
+      >
+        Genera
+      </button>
+      <button
+        onClick={() => {
+          const now = new Date()
+          const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+          const dayN = d.getUTCDay() || 7
+          d.setUTCDate(d.getUTCDate() + 4 - dayN)
+          const wk = Math.ceil(((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
+          const weekKey = `${d.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`
+          localStorage.setItem(`glp_coach_banner_${weekKey}`, '1')
+          setVisible(false)
+        }}
+        style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1em', padding: '0 4px' }}
+      >✕</button>
     </div>
   )
 }

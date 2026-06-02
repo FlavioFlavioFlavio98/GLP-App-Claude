@@ -556,20 +556,23 @@ function CoachCard({ globalData, onOpen }) {
     <div
       onClick={onOpen}
       style={{
-        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--theme-glow)',
+        border: '1px solid var(--theme-color)',
         borderRadius: 14, padding: '12px 16px', marginBottom: 14, cursor: 'pointer',
         display: 'flex', alignItems: 'center', gap: 12,
-        transition: 'background 0.15s',
+        transition: 'opacity 0.15s',
       }}
     >
-      <span style={{ fontSize: '1.4em', flexShrink: 0 }}>🤖</span>
+      <span style={{ fontSize: '1.5em', flexShrink: 0 }}>🤖</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: '0.85em', marginBottom: 2 }}>Coach</div>
-        <div style={{ fontSize: '0.75em', color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {report ? (preview || 'Report disponibile') : 'Genera il tuo primo report settimanale'}
+        <div style={{ fontWeight: 800, fontSize: '0.88em', color: 'var(--theme-color)', marginBottom: 2 }}>
+          Coach AI
+        </div>
+        <div style={{ fontSize: '0.75em', color: 'var(--text-sec)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {report ? (preview || 'Report settimanale disponibile') : 'Genera il tuo primo report settimanale'}
         </div>
       </div>
-      <span style={{ color: '#555', fontSize: '1em', flexShrink: 0 }}>→</span>
+      <span style={{ color: 'var(--theme-color)', fontSize: '1em', flexShrink: 0 }}>→</span>
     </div>
   )
 }

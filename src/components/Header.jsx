@@ -46,6 +46,12 @@ export default function Header({ isReadOnly }) {
         </div>
       </div>
       <div className="header-actions">
+        {/* Coach — solo Flavio, solo non read-only */}
+        {authUserId === 'flavio' && !isReadOnly && (
+          <button className="icon-btn" onClick={() => actions.openModal('coach')} title="Coach AI">
+            <span style={{ fontSize: 18 }}>🤖</span>
+          </button>
+        )}
         {!isReadOnly && (
           <button className="icon-btn" onClick={() => actions.openModal('journalView')} title="Il mio diario">
             <span style={{ fontSize: 18 }}>📔</span>

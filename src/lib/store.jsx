@@ -5,7 +5,7 @@ import { app } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   doc, onSnapshot, updateDoc, setDoc, getDoc, deleteDoc,
-  arrayUnion, collection, getDocs,
+  arrayUnion, collection, getDocs, increment,
 } from 'firebase/firestore'
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
@@ -633,6 +633,105 @@ export function AppProvider({ children }) {
       } catch (e) { console.error(e); actions.showToast('Errore', '❌') }
     },
 
+    // ─── Exercises ───────────────────────────────────────────────────────────
+    // Ensure the default "Flessioni" exercise exists for Flavio
+    async ensureDefaultExercise() {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      if ((gd.quickExercises || []).length > 0) return
+      const def = [{
+        id: 'flex_001', name: 'Flessioni', emoji: '💪',
+        pointsPerRep: 0.1, active: true,
+        changes: [{ date: toDateString(new Date()), pointsPerRep: 0.1 }],
+      }]
+      try { await updateDoc(doc(db, 'users', 'flavio'), { quickExercises: def }) } catch { /* ignore */ }
+    },
+
+    async addExerciseSession(exerciseId, reps) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const ex = (gd.quickExercises || []).find(e => e.id === exerciseId)
+      if (!ex) return
+
+      // pointsPerRep valid for today
+      const today = toDateString(new Date())
+      const ppr = _getPPR(ex, today)
+      const pts = Math.round(reps * ppr * 100) / 100
+      const logEntry = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        exerciseId, reps, pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      console.log('[addExerciseSession]', logEntry, 'pts', pts)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, {
+        score: increment(pts),
+        [`exerciseLog.${today}`]: arrayUnion(logEntry),
+      })
+      await actions._logHistory('flavio', (gd.score || 0) + pts)
+      actions.vibrate('light')
+      actions.showToast(`+${pts} pt 💪`, '💪')
+    },
+
+    async deleteExerciseSession(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.exerciseLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, {
+        score: increment(-entry.pts),
+        [`exerciseLog.${dateStr}`]: newLog,
+      })
+      await actions._logHistory('flavio', (gd.score || 0) - entry.pts)
+      actions.showToast(`-${entry.pts} pt annullato`, '↩️')
+    },
+
+    async saveExercise(exercise) {
+      // Add or update an exercise definition
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const existing = (gd.quickExercises || [])
+      const today = toDateString(new Date())
+      let updated
+      const idx = existing.findIndex(e => e.id === exercise.id)
+      if (idx === -1) {
+        // New exercise
+        const newEx = {
+          id: Date.now().toString(36),
+          name: exercise.name, emoji: exercise.emoji || '💪',
+          pointsPerRep: parseFloat(exercise.pointsPerRep) || 0.1,
+          active: true,
+          changes: [{ date: today, pointsPerRep: parseFloat(exercise.pointsPerRep) || 0.1 }],
+        }
+        updated = [...existing, newEx]
+      } else {
+        // Edit — append change only if ppr changed
+        const prev = existing[idx]
+        const newPPR = parseFloat(exercise.pointsPerRep) || prev.pointsPerRep
+        const changes = prev.changes ? [...prev.changes] : [{ date: '2020-01-01', pointsPerRep: prev.pointsPerRep }]
+        if (newPPR !== prev.pointsPerRep) changes.push({ date: today, pointsPerRep: newPPR })
+        updated = existing.map((e, i) => i === idx ? { ...e, name: exercise.name, emoji: exercise.emoji || e.emoji, pointsPerRep: newPPR, changes } : e)
+      }
+      await updateDoc(doc(db, 'users', 'flavio'), { quickExercises: updated })
+      actions.showToast('Esercizio salvato', '💪')
+    },
+
+    async archiveExercise(exerciseId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const updated = (gd.quickExercises || []).map(e => e.id === exerciseId ? { ...e, active: false } : e)
+      await updateDoc(doc(db, 'users', 'flavio'), { quickExercises: updated })
+      actions.showToast('Esercizio archiviato', '📦')
+    },
+
     // ─── Journal ──────────────────────────────────────────────────────────────
     async saveJournalEntry(dateStr, entry) {
       if (isReadOnly()) return
@@ -870,6 +969,20 @@ export function AppProvider({ children }) {
       </DispatchContext.Provider>
     </AppContext.Provider>
   )
+}
+
+// ─── Exercise helper (module-level, no store access needed) ─────────────────
+export function _getPPR(exercise, dateStr) {
+  // Returns the pointsPerRep valid on a given date using changes[] history
+  const changes = exercise?.changes
+  if (!changes || changes.length === 0) return exercise?.pointsPerRep ?? 0.1
+  const sorted = [...changes].sort((a, b) => a.date.localeCompare(b.date))
+  let valid = sorted[0]
+  for (const ch of sorted) {
+    if (ch.date <= dateStr) valid = ch
+    else break
+  }
+  return valid?.pointsPerRep ?? exercise.pointsPerRep ?? 0.1
 }
 
 export function useApp() {

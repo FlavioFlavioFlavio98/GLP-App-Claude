@@ -52,6 +52,8 @@ import { AchievementQueue } from './components/AchievementOverlay'
 import { trackThemeUsed } from './lib/achievementLogic'
 import AvatarModal from './modals/AvatarModal'
 import BackupModal from './modals/BackupModal'
+import QuickExerciseModal from './modals/QuickExerciseModal'
+import ExerciseStatsModal from './modals/ExerciseStatsModal'
 import WeightModal from './modals/WeightModal'
 
 // Focus mode: persists per-day in localStorage
@@ -113,6 +115,13 @@ export default function App() {
     fcmInitialized.current = true
     setTimeout(() => { actions.initFcmToken(authUserId) }, 3000)
   }, [authStatus, authUserId])
+
+  // Ensure default exercise for Flavio when data loads
+  useEffect(() => {
+    if (authUserId === 'flavio' && globalData && !(globalData.quickExercises?.length > 0)) {
+      actions.ensureDefaultExercise()
+    }
+  }, [authUserId, globalData?.quickExercises?.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth state routing ──
   if (authStatus === 'loading') {
@@ -357,6 +366,11 @@ export default function App() {
         </button>
       )}
 
+      {/* FAB secondario esercizi — solo Flavio, solo non-readOnly */}
+      {authUserId === 'flavio' && !isReadOnly && (
+        <ExerciseFab actions={actions} />
+      )}
+
       <Toast />
 
       {/* Modals */}
@@ -385,6 +399,8 @@ export default function App() {
       {!isReadOnly && <JournalViewModal />}
       <AvatarModal />
       <BackupModal />
+      <QuickExerciseModal />
+      <ExerciseStatsModal />
       {authUserId === 'flavio' && <WeightModal />}
       <UpdateBanner />
 
@@ -444,6 +460,42 @@ function JournalButton({ globalData, onOpen }) {
 }
 
 // TIME_SLOT_OPTS imported from lib/timeSlots — no longer defined here
+
+// ── Exercise FAB (secondary, Flavio only) ─────────────────────────────────────
+function ExerciseFab({ actions }) {
+  const longPressTimer = useRef(null)
+  const didLongPress = useRef(false)
+
+  function onPointerDown() {
+    didLongPress.current = false
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true
+      actions.openModal('exerciseStats')
+      navigator.vibrate?.([30, 20, 30])
+    }, 500)
+  }
+
+  function onPointerUp() {
+    clearTimeout(longPressTimer.current)
+    if (!didLongPress.current) actions.openModal('quickExercise')
+  }
+
+  function onPointerLeave() {
+    clearTimeout(longPressTimer.current)
+  }
+
+  return (
+    <button
+      className="fab fab-secondary"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      title="Tap: inserisci esercizio · Tieni premuto: statistiche"
+    >
+      <span style={{ fontSize: '1.4em', lineHeight: 1 }}>💪</span>
+    </button>
+  )
+}
 
 function TimeSlotFilter({ value, onChange }) {
   const slots = [

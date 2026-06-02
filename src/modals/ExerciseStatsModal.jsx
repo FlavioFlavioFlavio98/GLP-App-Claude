@@ -92,6 +92,7 @@ export default function ExerciseStatsModal() {
   const { modal, allUsersData, authUserId } = state
 
   // ALL hooks before any return
+  const [tab, setTab] = useState('stats')   // 'stats' | 'manage'
   const [selExId, setSelExId] = useState(null)
   const [chartDays, setChartDays] = useState(30)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -190,7 +191,7 @@ export default function ExerciseStatsModal() {
         <button className="btn-icon" onClick={() => actions.closeModal()}>
           <span className="material-icons-round" style={{ fontSize: 28 }}>arrow_back</span>
         </button>
-        <h1 style={{ margin: 0, fontSize: '1.15em', color: 'var(--theme-color)', flex: 1 }}>Esercizi Rapidi 💪</h1>
+        <h1 style={{ margin: 0, fontSize: '1.15em', color: 'var(--theme-color)', flex: 1 }}>Esercizi 💪</h1>
         <button
           className="btn-icon"
           onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('quickExercise'), 60) }}
@@ -200,9 +201,26 @@ export default function ExerciseStatsModal() {
         </button>
       </div>
 
+      {/* Main tab nav: Statistiche | Gestione */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #222', background: 'var(--card)' }}>
+        {[
+          { id: 'stats',  label: '📊 Statistiche' },
+          { id: 'manage', label: '⚙️ Gestisci' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            flex: 1, padding: '12px 8px', border: 'none', background: 'transparent', cursor: 'pointer',
+            color: tab === t.id ? 'var(--theme-color)' : '#555',
+            borderBottom: tab === t.id ? '2px solid var(--theme-color)' : '2px solid transparent',
+            fontWeight: tab === t.id ? 700 : 400, fontSize: '0.85em',
+            transition: 'all 0.15s',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
       <div className="single-habit-body">
 
-        {/* Tab esercizi */}
+      {tab === 'stats' && (<>
+        {/* Exercise selector chips (stats tab) */}
         {activeEx.length > 1 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
             {activeEx.map(ex => (
@@ -290,6 +308,10 @@ export default function ExerciseStatsModal() {
         )}
 
         {/* ── STORICO ── */}
+        {allSessions.length === 0 && !stats && (
+          <div className="empty-state">Nessuna sessione registrata</div>
+        )}
+
         {allSessions.length > 0 && (
           <>
             <SectionTitle>Storico Sessioni</SectionTitle>
@@ -326,77 +348,126 @@ export default function ExerciseStatsModal() {
           </>
         )}
 
-        {/* ── GESTIONE ESERCIZI ── */}
-        <SectionTitle>I Miei Esercizi</SectionTitle>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-          {exercises.map(ex => (
-            <div key={ex.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${ex.active === false ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 12, opacity: ex.active === false ? 0.5 : 1 }}>
-              <span style={{ fontSize: '1.3em' }}>{ex.emoji}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.88em' }}>{ex.name}</div>
-                <div style={{ fontSize: '0.65em', color: '#555' }}>{ex.pointsPerRep} pt/rep</div>
-                {ex.changes && ex.changes.length > 1 && (
-                  <div style={{ fontSize: '0.6em', color: '#444', marginTop: 2 }}>
-                    {ex.changes.map((c, i) => `Dal ${c.date}: ${c.pointsPerRep}pt/rep`).join(' → ')}
-                  </div>
-                )}
-              </div>
-              <button className="btn-icon" onClick={() => openEdit(ex)} title="Modifica">
-                <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
-              </button>
-              {ex.active !== false && (
-                <button className="btn-icon" onClick={() => { if (window.confirm(`Archiviare "${ex.name}"?`)) actions.archiveExercise(ex.id) }} title="Archivia">
-                  <span className="material-icons-round" style={{ fontSize: 18, color: '#555' }}>archive</span>
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+      </>)}  {/* end tab === 'stats' */}
 
-        {/* Add/Edit form */}
-        {showAddForm ? (
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, marginBottom: 12 }}>
-            <div style={{ fontSize: '0.72em', color: '#888', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 12 }}>
-              {editEx ? 'Modifica Esercizio' : 'Nuovo Esercizio'}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-              <input
-                type="text" placeholder="Emoji" value={form.emoji} maxLength={4}
-                onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))}
-                style={{ width: 52, textAlign: 'center', fontSize: '1.4em', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: 6, color: 'var(--text)' }}
-              />
-              <input
-                type="text" placeholder="Nome (es. Addominali)" value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: '0.9em' }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
-              <input
-                type="number" step="0.01" min="0.01" placeholder="0.1" value={form.pointsPerRep}
-                onChange={e => setForm(f => ({ ...f, pointsPerRep: e.target.value }))}
-                style={{ width: 80, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: '0.9em' }}
-              />
-              <span style={{ color: '#666', fontSize: '0.82em' }}>punti per ripetizione</span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-main" style={{ flex: 1, padding: '10px', margin: 0 }} onClick={handleSaveExercise} disabled={saving || !form.name.trim()}>
-                {saving ? '...' : 'Salva'}
-              </button>
-              <button className="btn-sec" style={{ padding: '10px 16px' }} onClick={() => { setShowAddForm(false); setEditEx(null) }}>Annulla</button>
-            </div>
-          </div>
-        ) : (
-          <button
-            className="btn-sec"
-            style={{ width: '100%' }}
-            onClick={() => { setForm({ name: '', emoji: '💪', pointsPerRep: '0.1' }); setEditEx(null); setShowAddForm(true) }}
-          >
-            + Nuovo Esercizio
-          </button>
-        )}
+      {tab === 'manage' && (
+        <ManageExercisesTab
+          exercises={exercises}
+          showAddForm={showAddForm} setShowAddForm={setShowAddForm}
+          editEx={editEx} setEditEx={setEditEx}
+          form={form} setForm={setForm}
+          saving={saving}
+          onSave={handleSaveExercise}
+          onArchive={id => { if (window.confirm('Archiviare?')) actions.archiveExercise(id) }}
+          openEdit={openEdit}
+        />
+      )}
 
       </div>
     </div>
+  )
+}
+
+// ─── Manage tab extracted for clarity ────────────────────────────────────────
+function ManageExercisesTab({ exercises, showAddForm, setShowAddForm, editEx, setEditEx, form, setForm, saving, onSave, onArchive, openEdit }) {
+  const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontSize: '0.9em', width: '100%', boxSizing: 'border-box' }
+
+  return (
+    <>
+      {/* Exercise list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+        {exercises.length === 0 && (
+          <div style={{ textAlign: 'center', color: '#555', fontSize: '0.85em', padding: '20px 0' }}>Nessun esercizio — creane uno!</div>
+        )}
+        {exercises.map(ex => (
+          <div key={ex.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, opacity: ex.active === false ? 0.5 : 1 }}>
+            <span style={{ fontSize: '1.5em', flexShrink: 0 }}>{ex.emoji}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: '0.92em' }}>{ex.name}</div>
+              <div style={{ fontSize: '0.72em', color: 'var(--theme-color)', fontWeight: 600, marginTop: 2 }}>
+                {parseFloat(ex.pointsPerRep)} pt / rep
+              </div>
+              {(ex.changes || []).length > 1 && (
+                <div style={{ fontSize: '0.6em', color: '#444', marginTop: 4, lineHeight: 1.6 }}>
+                  {ex.changes.map(c => `${c.date}: ${c.pointsPerRep}pt/rep`).join(' → ')}
+                </div>
+              )}
+            </div>
+            <button className="btn-icon" onClick={() => openEdit(ex)} title="Modifica">
+              <span className="material-icons-round" style={{ fontSize: 20 }}>edit</span>
+            </button>
+            {ex.active !== false && (
+              <button className="btn-icon" onClick={() => onArchive(ex.id)} title="Archivia">
+                <span className="material-icons-round" style={{ fontSize: 18, color: '#555' }}>archive</span>
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add / Edit form */}
+      {showAddForm ? (
+        <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--theme-color)', borderRadius: 14, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, color: 'var(--theme-color)', marginBottom: 14, fontSize: '0.9em' }}>
+            {editEx ? `✏️ Modifica: ${editEx.name}` : '+ Nuovo Esercizio'}
+          </div>
+
+          {/* Emoji + name row */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <input
+              type="text" placeholder="💪" value={form.emoji} maxLength={4}
+              onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))}
+              style={{ ...inputStyle, width: 52, textAlign: 'center', fontSize: '1.5em', padding: '6px 4px' }}
+            />
+            <input
+              type="text" placeholder="Nome esercizio (es. Addominali)" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+
+          {/* Points per rep */}
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ fontSize: '0.72em', color: '#888', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
+              Punti per ripetizione
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="number" step="0.01" min="0.01" max="10" placeholder="0.1"
+                value={form.pointsPerRep}
+                onChange={e => setForm(f => ({ ...f, pointsPerRep: e.target.value }))}
+                style={{ ...inputStyle, width: 90, fontSize: '1.1em', fontWeight: 700 }}
+              />
+              <span style={{ color: '#666', fontSize: '0.82em' }}>pt / rep</span>
+              <span style={{ color: '#444', fontSize: '0.72em' }}>
+                (es. 15 reps = +{parseFloat((15 * (parseFloat(form.pointsPerRep) || 0.1)).toFixed(2))} pt)
+              </span>
+            </div>
+            {editEx && parseFloat(form.pointsPerRep) !== parseFloat(editEx.pointsPerRep) && (
+              <div style={{ fontSize: '0.68em', color: '#EF9F27', marginTop: 6 }}>
+                ⚠️ Cambio da {editEx.pointsPerRep} → {form.pointsPerRep} pt/rep. Verrà salvato con data odierna nei cambiamenti.
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            <button className="btn-main" style={{ flex: 1, padding: '11px', margin: 0 }} onClick={onSave} disabled={saving || !form.name.trim()}>
+              {saving ? '⏳' : '💾 Salva'}
+            </button>
+            <button className="btn-sec" style={{ padding: '11px 16px' }} onClick={() => { setShowAddForm(false); setEditEx(null) }}>
+              Annulla
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="btn-main"
+          style={{ width: '100%' }}
+          onClick={() => { setForm({ name: '', emoji: '💪', pointsPerRep: '0.1' }); setEditEx(null); setShowAddForm(true) }}
+        >
+          + Nuovo Esercizio
+        </button>
+      )}
+    </>
   )
 }

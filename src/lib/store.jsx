@@ -634,37 +634,62 @@ export function AppProvider({ children }) {
     },
 
     // ─── Exercises ───────────────────────────────────────────────────────────
-    // Ensure the default "Flessioni" exercise exists for Flavio
     async ensureDefaultExercise() {
       if (state.authUserId !== 'flavio') return
       const gd = state.allUsersData?.flavio
       if (!gd) return
       if ((gd.quickExercises || []).length > 0) return
       const def = [{
-        id: 'flex_001', name: 'Flessioni', emoji: '💪',
-        pointsPerRep: 0.1, active: true,
-        changes: [{ date: toDateString(new Date()), pointsPerRep: 0.1 }],
+        id: 'flex_001',
+        name: 'Flessioni',
+        emoji: '💪',
+        pointsPerRep: 0.1,   // always number, never string
+        active: true,
+        changes: [{ date: '2026-01-01', pointsPerRep: 0.1 }],
       }]
-      try { await updateDoc(doc(db, 'users', 'flavio'), { quickExercises: def }) } catch { /* ignore */ }
+      console.log('[ensureDefaultExercise] creating default exercise')
+      try {
+        await updateDoc(doc(db, 'users', 'flavio'), { quickExercises: def })
+      } catch (e) { console.error('[ensureDefaultExercise]', e) }
     },
 
     async addExerciseSession(exerciseId, reps) {
       if (state.authUserId !== 'flavio') return
       const gd = state.allUsersData?.flavio
-      if (!gd) return
-      const ex = (gd.quickExercises || []).find(e => e.id === exerciseId)
-      if (!ex) return
+      if (!gd) { console.error('[addExerciseSession] no gd'); return }
 
-      // pointsPerRep valid for today
+      // Re-read from Firestore in case snapshot is stale
+      let ex = (gd.quickExercises || []).find(e => e.id === exerciseId)
+      if (!ex) {
+        // Fallback: read directly from Firestore
+        console.warn('[addExerciseSession] exercise not in store, reading from Firestore')
+        try {
+          const snap = await getDoc(doc(db, 'users', 'flavio'))
+          ex = (snap.data()?.quickExercises || []).find(e => e.id === exerciseId)
+        } catch (e) { console.error(e) }
+      }
+      if (!ex) { actions.showToast('Esercizio non trovato', '❌'); return }
+
       const today = toDateString(new Date())
       const ppr = _getPPR(ex, today)
-      const pts = Math.round(reps * ppr * 100) / 100
+      const numReps = parseInt(reps) || 0
+      const pts = parseFloat((numReps * ppr).toFixed(2))
+
+      console.log('[addExerciseSession]', { exerciseId, ex, reps: numReps, ppr, pts })
+
+      if (!pts || pts <= 0) {
+        actions.showToast('Errore nel calcolo punti — controlla ppr', '❌')
+        console.error('[addExerciseSession] pts is 0 or negative', { ppr, numReps })
+        return
+      }
+
       const logEntry = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-        exerciseId, reps, pts,
+        id: Date.now().toString(),
+        exerciseId,
+        reps: numReps,
+        pts,
         time: new Date().toTimeString().slice(0, 8),
       }
-      console.log('[addExerciseSession]', logEntry, 'pts', pts)
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, {
         score: increment(pts),

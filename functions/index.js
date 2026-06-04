@@ -10,7 +10,7 @@ const ALLOWED_EMAIL = 'flavio.rossi94@gmail.com'
 const REGION = 'europe-west1'
 
 exports.coachChat = onCall(
-  { region: REGION, secrets: [anthropicKey] },
+  { region: REGION, secrets: [anthropicKey], invoker: 'public' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login richiesto')
     if (request.auth.token.email !== ALLOWED_EMAIL) throw new HttpsError('permission-denied', 'Non autorizzato')
@@ -20,7 +20,7 @@ exports.coachChat = onCall(
       throw new HttpsError('invalid-argument', 'messages è obbligatorio')
     }
 
-    const anthropic = new Anthropic.default({ apiKey: anthropicKey.value() })
+    const anthropic = new Anthropic.default({ apiKey: anthropicKey.value().trim() })
 
     const response = await anthropic.messages.create({
       model: 'claude-opus-4-6',
@@ -34,7 +34,7 @@ exports.coachChat = onCall(
 )
 
 exports.coachWeeklyReport = onCall(
-  { region: REGION, secrets: [anthropicKey] },
+  { region: REGION, secrets: [anthropicKey], invoker: 'public' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login richiesto')
     if (request.auth.token.email !== ALLOWED_EMAIL) throw new HttpsError('permission-denied', 'Non autorizzato')
@@ -42,7 +42,7 @@ exports.coachWeeklyReport = onCall(
     const { coachContext, systemPrompt } = request.data
     if (!coachContext) throw new HttpsError('invalid-argument', 'coachContext è obbligatorio')
 
-    const anthropic = new Anthropic.default({ apiKey: anthropicKey.value() })
+    const anthropic = new Anthropic.default({ apiKey: anthropicKey.value().trim() })
 
     const response = await anthropic.messages.create({
       model: 'claude-opus-4-6',

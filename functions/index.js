@@ -20,10 +20,13 @@ exports.coachChat = onCall(
       throw new HttpsError('invalid-argument', 'messages è obbligatorio')
     }
 
-    const anthropic = new Anthropic.default({ apiKey: anthropicKey.value().trim() })
+    const apiKey = anthropicKey.value().trim()
+    console.log('[coachChat] apiKey length:', apiKey.length, 'starts:', apiKey.slice(0, 14))
+
+    const anthropic = new Anthropic.default({ apiKey })
 
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
+      model: 'claude-opus-4-5',
       max_tokens: 2048,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages,
@@ -42,10 +45,13 @@ exports.coachWeeklyReport = onCall(
     const { coachContext, systemPrompt } = request.data
     if (!coachContext) throw new HttpsError('invalid-argument', 'coachContext è obbligatorio')
 
-    const anthropic = new Anthropic.default({ apiKey: anthropicKey.value().trim() })
+    const apiKey = anthropicKey.value().trim()
+    console.log('[coachWeeklyReport] apiKey length:', apiKey.length, 'starts:', apiKey.slice(0, 14))
+
+    const anthropic = new Anthropic.default({ apiKey })
 
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
+      model: 'claude-opus-4-5',
       max_tokens: 1024,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages: [{

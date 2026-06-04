@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../lib/store'
 import { useCoach } from '../hooks/useCoach'
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { db, auth } from '../lib/firebase'
 import { toDateString } from '../lib/habitLogic'
 
 const QUICK_QUESTIONS = [
@@ -111,11 +111,15 @@ export default function CoachPage() {
     setLoading(true)
 
     try {
+      console.log('[CoachPage] handleSend — currentUser:', auth.currentUser?.email)
       const reply = await sendMessage(newMessages.map(m => ({ role: m.role, content: m.content })))
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
     } catch (e) {
-      console.error('[CoachPage] sendMessage error:', e)
-      setError('Il Coach non è disponibile al momento. Riprova tra poco.')
+      console.error('[CoachPage] sendMessage FULL ERROR:', {
+        code: e.code, message: e.message, details: e.details,
+        name: e.name, stack: e.stack?.slice(0, 300),
+      })
+      setError(`Errore: ${e.code || e.message || 'sconosciuto'}`)
     } finally {
       setLoading(false)
     }
@@ -142,8 +146,11 @@ export default function CoachPage() {
         )
       } catch (e) { console.warn('[CoachPage] Firestore save failed:', e) }
     } catch (e) {
-      console.error('[CoachPage] generateWeeklyReport error:', e)
-      setError('Il Coach non è disponibile al momento. Riprova tra poco.')
+      console.error('[CoachPage] generateWeeklyReport FULL ERROR:', {
+        code: e.code, message: e.message, details: e.details,
+        name: e.name, stack: e.stack?.slice(0, 300),
+      })
+      setError(`Errore: ${e.code || e.message || 'sconosciuto'}`)
     } finally {
       setReportLoading(false)
     }

@@ -121,13 +121,17 @@ export default function SettingsModal() {
           </button>
         </div>
 
-        {/* PESO — solo Flavio */}
+        {/* PESO + USO APP — solo Flavio */}
         {authUserId === 'flavio' && (
           <div className="settings-section">
-            <div className="settings-section-title">Salute</div>
+            <div className="settings-section-title">Salute & Statistiche Personali</div>
             <button className="btn-backup" onClick={() => openAfter('weight')}>
               <span style={{ fontSize: '1.1em' }}>⚖️</span>
               Tracciamento Peso
+            </button>
+            <button className="btn-backup" onClick={() => openAfter('appUsage')}>
+              <span style={{ fontSize: '1.1em' }}>📱</span>
+              Statistiche Uso App
             </button>
           </div>
         )}

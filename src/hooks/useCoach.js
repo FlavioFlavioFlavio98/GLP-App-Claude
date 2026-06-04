@@ -1,42 +1,44 @@
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { getApp } from 'firebase/app'
 import { buildCoachContext } from '../lib/coachContext'
-import { buildSystemPrompt } from '../lib/coachPrompt'
+import { buildSystemPrompt, buildInsightSystemPrompt } from '../lib/coachPrompt'
+
+const functions = getFunctions(getApp(), 'europe-west1')
+const coachChatFn        = httpsCallable(functions, 'coachChat',              { timeout: 60000 })
+const coachReportFn      = httpsCallable(functions, 'coachWeeklyReport',      { timeout: 90000 })
+const summarizeFn        = httpsCallable(functions, 'summarizeConversation',   { timeout: 60000 })
+const dailyInsightFn     = httpsCallable(functions, 'generateDailyInsight',   { timeout: 60000 })
 
 export function useCoach(userData, dailyLogs, tags) {
-  // Usa getApp() per essere sicuro di prendere l'istanza già inizializzata
-  const functions = getFunctions(getApp(), 'europe-west1')
+  const coachMemory = userData?.coachMemory?.conversations || []
+  const coachGoals  = userData?.coachGoals || []
+  const recentTones = coachMemory.slice(-5).filter(c => c.toneScore)
 
-  const coachChatFn = httpsCallable(functions, 'coachChat')
-  const coachReportFn = httpsCallable(functions, 'coachWeeklyReport')
-
-  const sendMessage = async (conversationMessages) => {
+  async function sendMessage(conversationMessages) {
     const context = buildCoachContext(userData, dailyLogs, tags)
-    const systemPrompt = buildSystemPrompt(context)
-
-    console.log('[useCoach] functions app name:', functions.app?.name)
-    console.log('[useCoach] coachChatFn type:', typeof coachChatFn)
-
-    const result = await coachChatFn({
-      messages: conversationMessages,
-      systemPrompt,
-    })
+    const systemPrompt = buildSystemPrompt(context, coachMemory, coachGoals, recentTones)
+    const result = await coachChatFn({ messages: conversationMessages, systemPrompt })
     return result.data.content
   }
 
-  const generateWeeklyReport = async () => {
+  async function generateWeeklyReport() {
     const context = buildCoachContext(userData, dailyLogs, tags)
-    const systemPrompt = buildSystemPrompt(context)
-
-    console.log('[useCoach] functions app name:', functions.app?.name)
-    console.log('[useCoach] coachReportFn type:', typeof coachReportFn)
-
-    const result = await coachReportFn({
-      coachContext: context,
-      systemPrompt,
-    })
+    const systemPrompt = buildSystemPrompt(context, coachMemory, coachGoals, recentTones)
+    const result = await coachReportFn({ coachContext: context, systemPrompt })
     return result.data.content
   }
 
-  return { sendMessage, generateWeeklyReport }
+  async function summarizeConversation(messages) {
+    const result = await summarizeFn({ messages })
+    return result.data // { summary, tone, toneScore }
+  }
+
+  async function generateDailyInsight() {
+    const context = buildCoachContext(userData, dailyLogs, tags)
+    const systemPrompt = buildInsightSystemPrompt(context)
+    const result = await dailyInsightFn({ coachContext: context, systemPrompt })
+    return result.data.content
+  }
+
+  return { sendMessage, generateWeeklyReport, summarizeConversation, generateDailyInsight }
 }

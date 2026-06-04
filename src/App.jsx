@@ -56,6 +56,9 @@ import QuickExerciseModal from './modals/QuickExerciseModal'
 import ExerciseStatsModal from './modals/ExerciseStatsModal'
 import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
+import AppUsageModal from './modals/AppUsageModal'
+import DailyInsightCard from './components/DailyInsightCard'
+import { trackAppOpen } from './lib/trackAppOpen'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -123,6 +126,13 @@ export default function App() {
       actions.ensureDefaultExercise()
     }
   }, [authUserId, globalData?.quickExercises?.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Traccia apertura app — solo Flavio, solo quando autenticato e dati caricati
+  useEffect(() => {
+    if (authUserId === 'flavio' && authStatus === 'authenticated') {
+      trackAppOpen('flavio')
+    }
+  }, [authUserId, authStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth state routing ──
   if (authStatus === 'loading') {
@@ -285,6 +295,16 @@ export default function App() {
 
       <TrendRow userData={globalData} />
 
+      {/* Daily Insight Card — solo Flavio */}
+      {authUserId === 'flavio' && !isReadOnly && (
+        <DailyInsightCard
+          userData={globalData}
+          dailyLogs={globalData.dailyLogs || {}}
+          tags={globalData.tags || []}
+          onOpenCoach={(insightText) => actions.openModal('coach', { prefill: insightText })}
+        />
+      )}
+
       {/* Coach card — solo Flavio, non in read-only */}
       {authUserId === 'flavio' && !isReadOnly && (
         <CoachCard globalData={globalData} onOpen={() => actions.openModal('coach')} />
@@ -414,6 +434,7 @@ export default function App() {
       <ExerciseStatsModal />
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
+      {authUserId === 'flavio' && <AppUsageModal />}
       <UpdateBanner />
 
       <AchievementQueue

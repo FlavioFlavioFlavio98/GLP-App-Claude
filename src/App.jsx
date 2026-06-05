@@ -193,7 +193,14 @@ export default function App() {
 
   const purchaseCost = entry.purchases.reduce((acc, p) => acc + parseInt(p.cost || 0), 0)
   dailySpent += purchaseCost
-  const net = dailyEarned - dailySpent
+
+  // Punti extra: esercizi rapidi del giorno corrente
+  const extraPts = Math.round(
+    ((globalData.exerciseLog || {})[viewDate] || [])
+      .reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) * 10
+  ) / 10
+
+  const net = dailyEarned + extraPts - dailySpent
 
   function isFullyComplete(h) {
     const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
@@ -276,9 +283,15 @@ export default function App() {
 
       <div className="daily-summary">
         <div className="sum-item">
-          <div className="sum-label">Guadagnati</div>
+          <div className="sum-label">Abitudini</div>
           <AnimatedNumber value={dailyEarned} className="sum-val sum-earn" prefix="+" />
         </div>
+        {extraPts > 0 && (
+          <div className="sum-item">
+            <div className="sum-label">Extra 💪</div>
+            <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
+          </div>
+        )}
         <div className="sum-item">
           <div className="sum-label">Spesi/Pen</div>
           <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />

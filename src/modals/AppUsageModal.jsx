@@ -74,13 +74,38 @@ function getHeatmapColor(val) {
 export default function AppUsageModal() {
   const { state, actions } = useApp()
   const { modal, authUserId, allUsersData } = state
+
+  // ── TUTTI gli hook PRIMA di qualsiasi return condizionale ──
   const [period, setPeriod] = useState(7)
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear())
 
+  // appUsage prima degli hook che dipendono da esso
+  const appUsage = allUsersData?.flavio?.appUsage || {}
+
+  // ── Heatmap (useMemo deve stare PRIMA dei return) ─────────────────────────
+  const heatmapWeeks = useMemo(() => {
+    const jan1 = new Date(heatmapYear, 0, 1)
+    // Find Monday of week containing Jan 1
+    const startDow = jan1.getDay() || 7
+    const start = new Date(jan1)
+    start.setDate(jan1.getDate() - (startDow - 1))
+    const weeks = []
+    for (let w = 0; w < 53; w++) {
+      const week = []
+      for (let d = 0; d < 7; d++) {
+        const cur = new Date(start)
+        cur.setDate(start.getDate() + w * 7 + d)
+        const key = toDateString(cur)
+        week.push({ key, val: appUsage[key] || 0, inYear: cur.getFullYear() === heatmapYear })
+      }
+      weeks.push(week)
+    }
+    return weeks
+  }, [heatmapYear, appUsage])
+
+  // ── Early returns DOPO tutti gli hook ────────────────────────────────────
   if (modal !== 'appUsage') return null
   if (authUserId !== 'flavio') return null
-
-  const appUsage = allUsersData?.flavio?.appUsage || {}
 
   // ── Stats cards ────────────────────────────────────────────────────────────
   const today = toDateString(new Date())
@@ -136,28 +161,6 @@ export default function AppUsageModal() {
   const orderedWeekday = [1, 2, 3, 4, 5, 6, 0].map(i => weekdayStats[i])
   const maxAvg = Math.max(...orderedWeekday.map(d => d.avg), 1)
   const peakDayIdx = orderedWeekday.findIndex(d => d.avg === maxAvg)
-
-  // ── Heatmap ────────────────────────────────────────────────────────────────
-  // Build 52 weeks × 7 days for given year
-  const heatmapWeeks = useMemo(() => {
-    const jan1 = new Date(heatmapYear, 0, 1)
-    // Find Monday of week containing Jan 1
-    const startDow = jan1.getDay() || 7
-    const start = new Date(jan1)
-    start.setDate(jan1.getDate() - (startDow - 1))
-    const weeks = []
-    for (let w = 0; w < 53; w++) {
-      const week = []
-      for (let d = 0; d < 7; d++) {
-        const cur = new Date(start)
-        cur.setDate(start.getDate() + w * 7 + d)
-        const key = toDateString(cur)
-        week.push({ key, val: appUsage[key] || 0, inYear: cur.getFullYear() === heatmapYear })
-      }
-      weeks.push(week)
-    }
-    return weeks
-  }, [heatmapYear, appUsage])
 
   const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 

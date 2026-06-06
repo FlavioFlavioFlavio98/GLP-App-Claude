@@ -69,6 +69,12 @@ function reducer(state, action) {
     case 'SET_DENSITY':
       localStorage.setItem('glp_density', action.density)
       return { ...state, density: action.density }
+    case 'SET_MINIMAL_MODE':
+      localStorage.setItem('glp_minimal_mode', String(action.value))
+      return { ...state, minimalMode: action.value }
+    case 'SET_WAKE_LOCK':
+      localStorage.setItem('glp_wake_lock', String(action.value))
+      return { ...state, wakeLockEnabled: action.value }
     case 'PUSH_ACHIEVEMENTS':
       return { ...state, pendingAchievements: [...(state.pendingAchievements || []), ...action.defs] }
     case 'CLEAR_ACHIEVEMENT_QUEUE':
@@ -98,6 +104,8 @@ const initialState = {
     simona: localStorage.getItem('glp_color_simona') || '#d05ce3',
   },
   density: localStorage.getItem('glp_density') || 'normal',
+  minimalMode: localStorage.getItem('glp_minimal_mode') === 'true',
+  wakeLockEnabled: localStorage.getItem('glp_wake_lock') === 'true',
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -202,6 +210,8 @@ export function AppProvider({ children }) {
     openModal(name, payload) { dispatch({ type: 'SET_MODAL', name, payload }) },
     closeModal() { dispatch({ type: 'CLOSE_MODAL' }) },
     setDensity(d) { dispatch({ type: 'SET_DENSITY', density: d }) },
+    setMinimalMode(v) { dispatch({ type: 'SET_MINIMAL_MODE', value: v }) },
+    setWakeLockEnabled(v) { dispatch({ type: 'SET_WAKE_LOCK', value: v }) },
     clearAchievementQueue() { dispatch({ type: 'CLEAR_ACHIEVEMENT_QUEUE' }) },
 
     // ─── REWARD CATEGORIES ───────────────────────────────────────────────────

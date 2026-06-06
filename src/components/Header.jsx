@@ -52,19 +52,8 @@ export default function Header({ isReadOnly }) {
             <span style={{ fontSize: 18 }}>🤖</span>
           </button>
         )}
-        {!isReadOnly && (
-          <button className="icon-btn" onClick={() => actions.openModal('journalView')} title="Il mio diario">
-            <span style={{ fontSize: 18 }}>📔</span>
-          </button>
-        )}
         <button className="icon-btn" onClick={() => actions.openModal('weeklyView')} title="Dashboard Settimanale">
           <span className="material-icons-round" style={{ fontSize: 20 }}>calendar_view_week</span>
-        </button>
-        <button className="icon-btn" onClick={() => { trackEvent('glp_stats_opens'); actions.openModal('statsPage') }} title="Statistiche">
-          <span className="material-icons-round" style={{ fontSize: 20 }}>bar_chart</span>
-        </button>
-        <button className="icon-btn" onClick={() => actions.openModal('purchaseHistory')} title="Storico acquisti">
-          <span className="material-icons-round" style={{ fontSize: 20 }}>receipt_long</span>
         </button>
         <button className="icon-btn" onClick={() => actions.openModal('settings')}>
           <span className="material-icons-round" style={{ fontSize: 20 }}>settings</span>

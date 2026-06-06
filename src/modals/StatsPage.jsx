@@ -51,6 +51,7 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
     { id: 'causeffect', icon: 'insights', label: 'Cause-Effetto' },
     { id: 'bubbles', icon: 'bubble_chart', label: 'Bolle' },
     { id: 'energy', icon: 'bolt', label: 'Energia' },
+    { id: 'tasks', icon: 'assignment_turned_in', label: 'Task' },
   ]
 
   return (
@@ -94,6 +95,7 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
         {section === 'causeffect' && <CauseEffectSection userData={userData} currentUser={currentUser} />}
         {section === 'bubbles' && <BubblesSection userData={userData} onHabitClick={id => { onClose(); setTimeout(() => actions.openModal('singleHabit', id), 60) }} />}
         {section === 'energy' && <EnergySection userData={userData} currentUser={currentUser} />}
+        {section === 'tasks' && <TaskStatsSection userData={userData} />}
       </div>
     </div>
   )
@@ -1547,4 +1549,146 @@ function TagDetailOverlay({ tId, label, color, userData, onClose }) {
       </div>
     </div>
   )
+}
+
+/* ---- SEZIONE TASK ---- */
+const PRIO_COLORS = { high: '#e53935', medium: '#ff7043', low: '#42a5f5' }
+const PRIO_LABELS = { high: 'Alta', medium: 'Media', low: 'Bassa' }
+
+function TaskStatsSection({ userData }) {
+  const tasks = userData?.tasks || []
+  const [months, setMonths] = useState(6)
+
+  const completed = tasks.filter(t => t.status === 'completed')
+  const expired = tasks.filter(t => t.status === 'expired')
+  const total = completed.length + expired.length
+  const winRate = total > 0 ? Math.round(completed.length / total * 100) : null
+
+  const avgDays = (() => {
+    const valid = completed.filter(t => t.completedAt && t.createdAt)
+    if (!valid.length) return null
+    return (valid.reduce((s, t) => s + Math.max(0, (new Date(t.completedAt) - new Date(t.createdAt)) / 86400000), 0) / valid.length).toFixed(1)
+  })()
+
+  const totalPenalties = expired.filter(t => t.penaltyApplied).reduce((s, t) => s + (parseInt(t.penalty) || 0), 0)
+  const totalRewards = completed.reduce((s, t) => s + (parseInt(t.reward) || 0), 0)
+
+  const monthlyData = (() => {
+    const now = new Date()
+    return Array.from({ length: months }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      return {
+        label: MONTH_NAMES[d.getMonth()],
+        completedCount: completed.filter(t => t.completedAt?.startsWith(key)).length,
+        expiredCount: expired.filter(t => t.expiredAt?.startsWith(key)).length,
+      }
+    })
+  })()
+
+  const priorityStats = ['high', 'medium', 'low'].map(p => {
+    const comp = completed.filter(t => (t.priority || 'medium') === p)
+    const exp = expired.filter(t => (t.priority || 'medium') === p)
+    const wr = (comp.length + exp.length) > 0 ? Math.round(comp.length / (comp.length + exp.length) * 100) : null
+    const valid = comp.filter(t => t.completedAt && t.createdAt)
+    const avg = valid.length > 0 ? (valid.reduce((s, t) => s + Math.max(0, (new Date(t.completedAt) - new Date(t.createdAt)) / 86400000), 0) / valid.length).toFixed(1) : null
+    return { p, comp: comp.length, exp: exp.length, wr, avg }
+  })
+
+  const now = new Date()
+  const thisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const lastD = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastKey = `${lastD.getFullYear()}-${String(lastD.getMonth() + 1).padStart(2, '0')}`
+  const thisComp = completed.filter(t => t.completedAt?.startsWith(thisKey)).length
+  const lastComp = completed.filter(t => t.completedAt?.startsWith(lastKey)).length
+
+  if (tasks.length === 0) return (
+    <div className="empty-state" style={{ marginTop: 40 }}>
+      <div style={{ fontSize: '2em', marginBottom: 8 }}>📋</div>
+      <div>Nessuna task registrata</div>
+    </div>
+  )
+
+  return (
+    <div style={{ padding: '0 16px 24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16, marginBottom: 20 }}>
+        {[
+          { v: completed.length, l: 'Completate totali', c: 'var(--success)' },
+          { v: expired.length, l: 'Scadute totali', c: 'var(--danger)' },
+          { v: winRate !== null ? `${winRate}%` : '—', l: 'Win rate', c: winRate >= 70 ? 'var(--success)' : winRate >= 40 ? '#EF9F27' : 'var(--danger)' },
+          { v: avgDays !== null ? `${avgDays}gg` : '—', l: 'Media giorni', c: 'var(--theme-color)' },
+          { v: totalPenalties > 0 ? `-${totalPenalties}pt` : '0', l: 'Penalità totali', c: 'var(--danger)' },
+          { v: `+${totalRewards}pt`, l: 'Reward totali', c: 'var(--success)' },
+        ].map(({ v, l, c }) => (
+          <div key={l} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
+            <div style={{ fontSize: '1.5em', fontWeight: 800, color: c }}>{v}</div>
+            <div style={{ fontSize: '0.65em', color: '#666', marginTop: 2 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, fontSize: '0.82em', marginBottom: 16 }}>
+        Questo mese: <strong style={{ color: 'var(--theme-color)' }}>{thisComp} completate</strong>{' '}
+        {thisComp >= lastComp
+          ? <span style={{ color: 'var(--success)' }}>▲ meglio del mese scorso ({lastComp})</span>
+          : <span style={{ color: 'var(--danger)' }}>▼ peggio del mese scorso ({lastComp})</span>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {[3, 6, 12].map(m => (
+          <button key={m} onClick={() => setMonths(m)} style={{
+            padding: '3px 10px', borderRadius: 12, cursor: 'pointer', fontSize: '0.7em', border: 'none',
+            background: months === m ? 'var(--theme-glow)' : 'rgba(255,255,255,0.05)',
+            color: months === m ? 'var(--theme-color)' : '#666',
+            outline: `1px solid ${months === m ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)'}`,
+          }}>{m} mesi</button>
+        ))}
+      </div>
+      <TaskMonthlyChart data={monthlyData} />
+
+      <div style={{ fontSize: '0.65em', color: '#888', textTransform: 'uppercase', letterSpacing: 1, margin: '16px 0 8px', fontWeight: 600 }}>Breakdown per priorità</div>
+      {priorityStats.map(({ p, comp, exp: expCount, wr, avg }) => (
+        <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 12px' }}>
+          <span style={{ fontSize: '0.82em', color: PRIO_COLORS[p], fontWeight: 700, minWidth: 44 }}>{PRIO_LABELS[p]}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', gap: 10, fontSize: '0.72em' }}>
+              <span style={{ color: 'var(--success)' }}>✓ {comp}</span>
+              <span style={{ color: 'var(--danger)' }}>✗ {expCount}</span>
+              {wr !== null && <span style={{ color: wr >= 70 ? 'var(--success)' : wr >= 40 ? '#EF9F27' : 'var(--danger)', fontWeight: 700 }}>Win {wr}%</span>}
+            </div>
+            {avg && <div style={{ fontSize: '0.68em', color: '#555', marginTop: 2 }}>Media: {avg}gg per completare</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TaskMonthlyChart({ data }) {
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+  useEffect(() => {
+    if (!canvasRef.current) return
+    if (chartRef.current) chartRef.current.destroy()
+    chartRef.current = new Chart(canvasRef.current, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => d.label),
+        datasets: [
+          { label: 'Completate', data: data.map(d => d.completedCount), backgroundColor: 'rgba(76,175,80,0.55)', borderColor: '#4caf50', borderWidth: 1, borderRadius: 3 },
+          { label: 'Scadute', data: data.map(d => d.expiredCount), backgroundColor: 'rgba(229,57,53,0.45)', borderColor: '#e53935', borderWidth: 1, borderRadius: 3 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { labels: { color: '#888', boxWidth: 10, font: { size: 10 } } } },
+        scales: {
+          y: { grid: { color: '#2a2a2a' }, ticks: { color: '#666', stepSize: 1 }, beginAtZero: true },
+          x: { grid: { display: false }, ticks: { color: '#666', font: { size: 9 } } },
+        },
+      },
+    })
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, [data])
+  return <div style={{ height: 150, position: 'relative' }}><canvas ref={canvasRef} /></div>
 }

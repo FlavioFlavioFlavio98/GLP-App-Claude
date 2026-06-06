@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 
@@ -26,10 +26,11 @@ function formatDeadline(deadline) {
 const PRIORITY_LABELS = { high: 'ALTA', medium: 'MEDIA', low: 'BASSA' }
 const PRIORITY_COLORS = { high: '#e53935', medium: '#ff7043', low: '#42a5f5' }
 
-export default function TaskSection() {
+export default function TaskSection({ minimalMode }) {
   const { state, actions } = useApp()
   const { globalData, authUserId } = state
   const isReadOnly = state.viewUserId !== state.authUserId
+  const [expanded, setExpanded] = useState(() => localStorage.getItem('glp_tasks_expanded') !== 'false')
 
   if (authUserId !== 'flavio' || isReadOnly) return null
 
@@ -48,12 +49,25 @@ export default function TaskSection() {
     .filter(t => t.status === 'completed' && t.completedAt?.startsWith(todayStr))
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''))
 
-  const hasAny = activeTasks.length > 0 || completedToday.length > 0
+  const totalCount = activeTasks.length + completedToday.length
+  const hasAny = totalCount > 0
+
+  function toggle() {
+    const next = !expanded
+    setExpanded(next)
+    localStorage.setItem('glp_tasks_expanded', String(next))
+  }
 
   return (
     <div style={{ marginTop: 28, marginBottom: 8 }}>
       <div className="section-header" style={{ marginBottom: 10 }}>
-        <div className="section-title" style={{ margin: 0 }}>📋 Task</div>
+        <button
+          onClick={toggle}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text)' }}
+        >
+          <div className="section-title" style={{ margin: 0 }}>📋 Task ({activeTasks.length}/{totalCount})</div>
+          <span className="material-icons-round" style={{ fontSize: 18, color: '#666' }}>{expanded ? 'expand_less' : 'expand_more'}</span>
+        </button>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn-icon" onClick={() => actions.openModal('taskHistory')} title="Storico task">
             <span className="material-icons-round" style={{ fontSize: 18 }}>history</span>
@@ -64,31 +78,33 @@ export default function TaskSection() {
         </div>
       </div>
 
-      {!hasAny ? (
-        <div className="empty-state" style={{ fontSize: '0.82em' }}>
-          Nessuna task attiva — aggiungine una con +
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {activeTasks.map(task => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              completed={false}
-              onComplete={() => actions.confirmCompleteTask(task)}
-              onEdit={() => actions.openModal('taskEdit', { task })}
-            />
-          ))}
-          {completedToday.map(task => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              completed={true}
-              onComplete={null}
-              onEdit={null}
-            />
-          ))}
-        </div>
+      {expanded && (
+        !hasAny ? (
+          <div className="empty-state" style={{ fontSize: '0.82em' }}>
+            Nessuna task attiva — aggiungine una con +
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {activeTasks.map(task => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                completed={false}
+                onComplete={() => actions.confirmCompleteTask(task)}
+                onEdit={() => actions.openModal('taskEdit', { task })}
+              />
+            ))}
+            {!minimalMode && completedToday.map(task => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                completed={true}
+                onComplete={null}
+                onEdit={null}
+              />
+            ))}
+          </div>
+        )
       )}
     </div>
   )

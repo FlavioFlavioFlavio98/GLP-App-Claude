@@ -83,7 +83,7 @@ function useFocusMode(viewDate) {
 
 export default function App() {
   const { state, actions } = useApp()
-  const { authStatus, authUserId, viewUserId, currentUser, globalData, allUsersData, viewDate, theme, userColors, density, pendingAchievements } = state
+  const { authStatus, authUserId, viewUserId, currentUser, globalData, allUsersData, viewDate, theme, userColors, density, pendingAchievements, minimalMode, wakeLockEnabled } = state
   const isReadOnly = viewUserId !== authUserId
 
   const [focusMode, toggleFocusMode] = useFocusMode(viewDate)
@@ -93,9 +93,27 @@ export default function App() {
   const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
   const [bonusExpanded, setBonusExpanded] = useState(() => localStorage.getItem('glp_bonus_expanded') === 'true')
   const fcmInitialized = useRef(false)
+  const wakeLockRef = useRef(null)
 
   // Sort mode si chiude automaticamente al cambio data
   useEffect(() => { setHabitSortMode(false) }, [viewDate])
+
+  // Wake Lock
+  useEffect(() => {
+    if (!('wakeLock' in navigator)) return
+    async function enable() {
+      try { wakeLockRef.current = await navigator.wakeLock.request('screen') } catch (e) { /* ignore */ }
+    }
+    async function disable() {
+      if (wakeLockRef.current) { try { await wakeLockRef.current.release() } catch(e){} wakeLockRef.current = null }
+    }
+    if (wakeLockEnabled) enable(); else disable()
+    async function onVisibility() {
+      if (wakeLockEnabled && document.visibilityState === 'visible') await enable()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { document.removeEventListener('visibilitychange', onVisibility); disable() }
+  }, [wakeLockEnabled])
 
   // Apply theme CSS vars + track for Versatile achievement
   useEffect(() => { applyTheme(theme); trackThemeUsed(theme) }, [theme])
@@ -221,7 +239,18 @@ export default function App() {
         .reduce((sum, t) => sum + (parseInt(t.reward) || 0), 0)
     : 0
 
-  const net = dailyEarned + taskPts + extraPts - dailySpent
+  // Penalità task scadute nel viewDate (solo Flavio)
+  const expiredTaskCost = authUserId === 'flavio'
+    ? (globalData.tasks || [])
+        .filter(t => {
+          if (!t.expiredAt || !t.penaltyApplied) return false
+          const d = new Date(t.expiredAt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+          return d === viewDate
+        })
+        .reduce((sum, t) => sum + (parseInt(t.penalty) || 0), 0)
+    : 0
+
+  const net = dailyEarned + taskPts + extraPts - dailySpent - expiredTaskCost
 
   function isFullyComplete(h) {
     const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
@@ -251,8 +280,8 @@ export default function App() {
     return h.timeSlot === timeSlotFilter
   }
 
-  const filteredRegular = (focusMode ? sortedRegular.filter(h => !isFullyComplete(h)) : sortedRegular).filter(matchesTimeSlot)
-  const filteredBonus   = (focusMode ? sortedBonus.filter(h => !isFullyComplete(h))   : sortedBonus).filter(matchesTimeSlot)
+  const filteredRegular = ((focusMode || minimalMode) ? sortedRegular.filter(h => !isFullyComplete(h)) : sortedRegular).filter(matchesTimeSlot)
+  const filteredBonus   = (focusMode ? sortedBonus.filter(h => !isFullyComplete(h)) : sortedBonus).filter(matchesTimeSlot)
 
   const pendingCount = isToday
     ? regular.filter(h => {
@@ -300,10 +329,19 @@ export default function App() {
 
       <Header isReadOnly={isReadOnly} />
 
-      <div className="dashboard-top">
-        <ProgressCircle earned={dailyEarned} total={dailyTotalPot} />
-        <ScoreBoard />
-      </div>
+      {/* Compact mood strip — always at top, today only */}
+      {isToday && !isReadOnly && (
+        <CompactMoodStrip globalData={globalData} authUserId={authUserId} actions={actions} />
+      )}
+
+      {/* Minimal mode banner */}
+      {minimalMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 12px', background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 10, fontSize: '0.75em', color: '#EF9F27' }}>
+          <span className="material-icons-round" style={{ fontSize: 14 }}>filter_list</span>
+          <span style={{ flex: 1 }}>Modalità minimalista attiva</span>
+          <button onClick={() => actions.setMinimalMode(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF9F27', fontWeight: 700, fontSize: '0.9em', padding: 0 }}>Mostra tutto</button>
+        </div>
+      )}
 
       <DateNav />
 
@@ -324,18 +362,25 @@ export default function App() {
               <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#e53935', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>🔴 Costi</div>
               {purchaseCost > 0 && <DailySumRow label="Premi" value={`-${purchaseCost}`} color="#e53935" />}
               {penaltyCost > 0 && <DailySumRow label="Penalità" value={`-${penaltyCost}`} color="#e53935" />}
+              <DailySumRow label="Task scad." value={`-${expiredTaskCost}`} color={expiredTaskCost > 0 ? '#e53935' : '#3a3a3a'} />
               {trackedItems.filter(ti => ti.cost > 0).map(ti => (
                 <DailySumRow key={ti.id} label={ti.name} value={`-${ti.cost}`} color="#e53935" />
               ))}
-              {dailySpent === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun costo</div>}
               <div style={{ borderTop: '1px solid rgba(229,57,53,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`-${dailySpent}`} color="#e53935" bold />
+                <DailySumRow label="Totale" value={`-${dailySpent + expiredTaskCost}`} color="#e53935" bold />
               </div>
             </div>
           </div>
-          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: '0.85em', color: '#666', fontWeight: 600 }}>
-            NETTO&nbsp;
-            <span className={net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'} style={{ fontWeight: 800, fontSize: '1.15em' }}>
+          <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
+            <div style={{ fontSize: '0.58em', color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 2 }}>NETTO OGGI</div>
+            <span
+              key={net}
+              className="netto-animated"
+              style={{
+                fontWeight: 800, fontSize: '2.2em',
+                color: net < 0 ? '#e53935' : net === 0 ? '#EF9F27' : '#4caf50',
+              }}
+            >
               {net > 0 ? '+' : ''}{net}pt
             </span>
           </div>
@@ -379,10 +424,9 @@ export default function App() {
         />
       )}
 
-      {/* Mood + Journal + Insight (today only, not read-only) */}
+      {/* Journal + Insight (today only, not read-only) */}
       {isToday && !isReadOnly && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <MoodButton globalData={globalData} currentUser={authUserId} onOpen={() => actions.openModal('mood')} />
           <JournalButton globalData={globalData} onOpen={() => actions.openModal('journal')} />
           <button
             onClick={() => actions.openModal('insights')}
@@ -392,9 +436,6 @@ export default function App() {
           </button>
         </div>
       )}
-
-      {/* Energy banner (only today, own data) */}
-      {isToday && !isReadOnly && <EnergyBanner />}
 
       <GoalSection habits={globalData.habits} />
 
@@ -468,7 +509,7 @@ export default function App() {
               <SortableHabitList habits={habitSortMode ? regular : filteredRegular} itemProps={{ ...itemProps, sortMode: habitSortMode }} sortMode={habitSortMode} />
             )}
 
-            {!habitSortMode && (
+            {!habitSortMode && !minimalMode && (
               <div>
                 <button
                   onClick={() => { const next = !bonusExpanded; setBonusExpanded(next); localStorage.setItem('glp_bonus_expanded', String(next)) }}
@@ -489,14 +530,17 @@ export default function App() {
       )}
 
       {/* Task section — solo Flavio, non read-only */}
-      {authUserId === 'flavio' && !isReadOnly && <TaskSection />}
+      {authUserId === 'flavio' && !isReadOnly && <TaskSection minimalMode={minimalMode} />}
 
-      <div className="section-title" style={{ marginTop: 30 }}>Acquisti del Giorno</div>
-      <PurchasedList />
-
-      <Accordion label={<><span className="material-icons-round" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>redeem</span>Negozio Premi</>} defaultOpen={false}>
-        <ShopList />
-      </Accordion>
+      {!minimalMode && (
+        <>
+          <div className="section-title" style={{ marginTop: 30 }}>Acquisti del Giorno</div>
+          <PurchasedList />
+          <Accordion label={<><span className="material-icons-round" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>redeem</span>Negozio Premi</>} defaultOpen={false}>
+            <ShopList />
+          </Accordion>
+        </>
+      )}
 
       {!isReadOnly && (
         <button className="fab" onClick={() => actions.openModal('add')}>
@@ -711,14 +755,55 @@ function TimeSlotFilter({ value, onChange }) {
   )
 }
 
-function MoodButton({ globalData, currentUser, onOpen }) {
+function MoodButton({ globalData, currentUser, onOpen, compact }) {
   const today = toDateString(new Date())
   const existing = globalData?.dailyLogs?.[today]?.mood?.[currentUser]
+  if (compact) {
+    return (
+      <button onClick={onOpen} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 8 }}>
+        {existing
+          ? <><span style={{ fontSize: '1.2em' }}>{existing.emoji}</span><span style={{ fontSize: '0.65em', color: '#555' }}>✏️</span></>
+          : <span style={{ fontSize: '0.8em', color: '#555' }}>😊</span>}
+      </button>
+    )
+  }
   return (
     <button onClick={onOpen} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, background: existing ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.04)', border: `1px solid ${existing ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 20, padding: '6px 12px', cursor: 'pointer', fontSize: '0.75em', color: existing ? 'var(--text)' : '#666' }}>
       {existing
         ? <><span style={{ fontSize: '1.1em' }}>{existing.emoji}</span> {['', 'Pessima', 'Difficile', 'Norma', 'Buona', 'Fantastica'][existing.value]}</>
         : <>😶 Come è andata?</>}
+    </button>
+  )
+}
+
+function CompactMoodStrip({ globalData, authUserId, actions }) {
+  const today = toDateString(new Date())
+  const mood = globalData?.dailyLogs?.[today]?.mood?.[authUserId]
+  const energy = globalData?.dailyLogs?.[today]?.energy?.[authUserId] || {}
+  const ENERGY_EMOJI = { 1: '⚡', 2: '🔋', 3: '⚡⚡' }
+  const session = (() => { const h = new Date().getHours(); if (h >= 5 && h < 12) return 'morning'; if (h >= 18 && h <= 23) return 'evening'; return null })()
+  const energyVal = session ? energy[session] : null
+
+  const hasMood = Boolean(mood)
+  const hasEnergy = energyVal !== null && energyVal !== undefined
+
+  if (hasMood || hasEnergy) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '5px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 20 }}>
+        {hasMood && <span style={{ fontSize: '1.1em' }}>{mood.emoji}</span>}
+        {hasEnergy && <span style={{ fontSize: '0.95em' }}>{ENERGY_EMOJI[energyVal]}</span>}
+        <span style={{ flex: 1 }} />
+        <button onClick={() => actions.openModal('mood')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#555', fontSize: '0.7em' }}>✏️</button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => actions.openModal('mood')}
+      style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 8, padding: '6px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 20, cursor: 'pointer', fontSize: '0.78em', color: '#555' }}
+    >
+      <span>Come ti senti? 😊⚡</span>
     </button>
   )
 }

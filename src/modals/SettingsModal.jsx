@@ -4,7 +4,8 @@ import { APP_VERSION, APP_UPDATED } from '../version'
 
 export default function SettingsModal() {
   const { state, actions } = useApp()
-  const { modal, userColors, density, authUserId, allUsersData } = state
+  const { modal, userColors, density, authUserId, allUsersData, currentUser, minimalMode, wakeLockEnabled } = state
+  const supportsWakeLock = 'wakeLock' in navigator
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   if (modal !== 'settings') return null
@@ -45,6 +46,31 @@ export default function SettingsModal() {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && actions.closeModal()}>
       <div className="modal-box">
         <h3>⚙️ Impostazioni</h3>
+
+        {/* UTENTE ATTIVO */}
+        <div className="settings-section">
+          <div className="settings-section-title">Utente attivo</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['flavio', 'simona'].map(u => (
+              <button
+                key={u}
+                onClick={() => actions.switchUser(u)}
+                style={{
+                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                  background: currentUser === u ? `${userColors[u]}22` : 'rgba(255,255,255,0.04)',
+                  border: `2px solid ${currentUser === u ? userColors[u] : 'rgba(255,255,255,0.08)'}`,
+                  color: currentUser === u ? userColors[u] : '#666',
+                  fontWeight: currentUser === u ? 700 : 400,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ fontSize: '1.3em', marginBottom: 2 }}>{u === 'flavio' ? '🔥' : '⭐'}</div>
+                <div style={{ fontSize: '0.82em' }}>{u === 'flavio' ? 'Flavio' : 'Simona'}</div>
+                <div style={{ fontSize: '0.68em', opacity: 0.7 }}>{allUsersData[u]?.score ?? '--'} pt</div>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* PROFILO */}
         <div className="settings-section">
@@ -136,9 +162,38 @@ export default function SettingsModal() {
           </div>
         )}
 
+        {/* MODALITÀ */}
+        <div className="settings-section">
+          <div className="settings-section-title">Modalità</div>
+          <ToggleRow
+            label="Modalità minimalista"
+            sublabel="Mostra solo abitudini e task non completate"
+            icon="filter_list"
+            value={minimalMode}
+            onChange={v => actions.setMinimalMode(v)}
+          />
+          {supportsWakeLock && (
+            <ToggleRow
+              label="🔆 Schermo sempre acceso"
+              sublabel="Mantiene lo schermo attivo mentre usi l'app"
+              icon={null}
+              value={wakeLockEnabled}
+              onChange={v => actions.setWakeLockEnabled(v)}
+            />
+          )}
+        </div>
+
         {/* STORICO */}
         <div className="settings-section">
-          <div className="settings-section-title">Storico</div>
+          <div className="settings-section-title">Storico & Diari</div>
+          <button className="btn-backup" onClick={() => openAfter('purchaseHistory')}>
+            <span style={{ fontSize: '1em' }}>🛍️</span>
+            Storico acquisti
+          </button>
+          <button className="btn-backup" onClick={() => openAfter('journalView')}>
+            <span style={{ fontSize: '1em' }}>📔</span>
+            Il mio diario
+          </button>
           <button className="btn-backup" onClick={() => openAfter('activityLog')}>
             <span className="material-icons-round" style={{ fontSize: 18 }}>history</span>
             Storico Modifiche
@@ -150,7 +205,7 @@ export default function SettingsModal() {
           <div className="settings-section-title">Statistiche</div>
           <button className="btn-backup" onClick={() => openAfter('statsPage')}>
             <span className="material-icons-round" style={{ fontSize: 18 }}>bar_chart</span>
-            Statistiche Complete
+            📊 Statistiche Complete
           </button>
           <button className="btn-backup" onClick={() => openAfter('analytics')}>
             <span className="material-icons-round" style={{ fontSize: 18 }}>show_chart</span>
@@ -219,6 +274,32 @@ function UserColorRow({ name, color, onChange }) {
       <div className="user-color-dot" style={{ background: color }}>{name[0]}</div>
       <span className="user-color-name">{name}</span>
       <input type="color" className="user-color-picker" value={color} onChange={e => onChange(e.target.value)} title={`Colore di ${name}`} />
+    </div>
+  )
+}
+
+function ToggleRow({ label, sublabel, icon, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 6 }}>
+      {icon && <span className="material-icons-round" style={{ fontSize: 20, color: '#666', width: 24, textAlign: 'center' }}>{icon}</span>}
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '0.85em', fontWeight: 600 }}>{label}</div>
+        {sublabel && <div style={{ fontSize: '0.68em', color: '#555' }}>{sublabel}</div>}
+      </div>
+      <button
+        onClick={() => onChange(!value)}
+        style={{
+          width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+          background: value ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)',
+          position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+        }}
+      >
+        <div style={{
+          width: 18, height: 18, borderRadius: '50%', background: '#fff',
+          position: 'absolute', top: 3, transition: 'left 0.2s',
+          left: value ? 23 : 3,
+        }} />
+      </button>
     </div>
   )
 }

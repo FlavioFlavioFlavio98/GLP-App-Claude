@@ -187,13 +187,14 @@ function TrackedSection({ rewards, globalData, actions, viewDate }) {
                   {reward.costPerThreshold}pt / {reward.threshold} {reward.unit}
                 </span>
               </div>
-              <button
-                className="btn-icon"
-                onClick={() => actions.openModal('singleReward', reward.id)}
-                style={{ padding: 2 }}
-              >
-                <span className="material-icons-round" style={{ fontSize: 16 }}>insights</span>
-              </button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className="btn-icon" onClick={() => actions.openModal('singleReward', reward.id)} style={{ padding: 2 }}>
+                  <span className="material-icons-round" style={{ fontSize: 16 }}>insights</span>
+                </button>
+                <button className="btn-icon" onClick={() => actions.openModal('edit', { id: reward.id, type: 'reward' })} style={{ padding: 2 }}>
+                  <span className="material-icons-round" style={{ fontSize: 16 }}>edit</span>
+                </button>
+              </div>
             </div>
 
             {alreadySaved && !isModified ? (

@@ -426,23 +426,23 @@ body.offline .offline-badge { display: block; }
 
 /* FAB */
 .fab {
-  position: fixed; bottom: 30px; right: 24px;
-  width: 62px; height: 62px;
+  position: fixed; bottom: 50px; right: 24px;
+  width: 50px; height: 50px;
   background: var(--theme-color); color: #000;
   border-radius: 50%; border: none;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 6px 24px var(--theme-glow);
+  box-shadow: 0 4px 16px var(--theme-glow);
   cursor: pointer; z-index: 100;
   transition: all var(--transition);
   animation: glowPulse 3s ease-in-out infinite;
 }
 .fab:hover { transform: scale(1.08); }
 .fab:active { transform: scale(0.93); }
-.fab .material-icons-round { font-size: 28px; }
+.fab .material-icons-round { font-size: 22px; }
 
-/* Secondary FAB — positioned above the main FAB */
+/* Secondary FAB — workout, positioned above main */
 .fab-secondary {
-  bottom: 104px;                   /* above main fab (30 + 62 + 12) */
+  bottom: 112px;                   /* above main fab (50 + 50 + 12) */
   width: 50px; height: 50px;
   background: rgba(30,30,30,0.92);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
@@ -451,9 +451,9 @@ body.offline .offline-badge { display: block; }
 .fab-secondary:hover { transform: scale(1.1); }
 .fab-secondary:active { transform: scale(0.9); }
 
-/* Tertiary FAB — positioned above the secondary FAB */
+/* Tertiary FAB — task, positioned above secondary */
 .fab-tertiary {
-  bottom: 166px;                   /* above secondary fab (104 + 50 + 12) */
+  bottom: 174px;                   /* above secondary fab (112 + 50 + 12) */
   width: 50px; height: 50px;
   background: rgba(30,30,30,0.92);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.12);
@@ -461,6 +461,16 @@ body.offline .offline-badge { display: block; }
 }
 .fab-tertiary:hover { transform: scale(1.1); }
 .fab-tertiary:active { transform: scale(0.9); }
+
+/* Netto animated value */
+@keyframes nettoPulse {
+  0% { transform: scale(1.25); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.netto-animated {
+  display: inline-block;
+  animation: nettoPulse 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 
 /* =============================================
    ACCORDION

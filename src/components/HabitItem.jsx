@@ -112,7 +112,7 @@ const SWIPE_THRESHOLD = 80
 
 export default function HabitItem({
   habit, viewDate, doneHabits, failedHabits, habitLevels, habitNotes, habitValues, tagsMap, isToday,
-  dragHandleProps, isDragOverlay, globalData,
+  dragHandleProps, isDragOverlay, globalData, sortMode,
 }) {
   const { actions } = useApp()
   // Quality dot — compute only for non-numeric, non-if habits
@@ -326,7 +326,7 @@ export default function HabitItem({
             )}
           </div>
 
-          <div className="actions-group">
+          <div className="actions-group" style={sortMode ? { opacity: 0.25, pointerEvents: 'none' } : {}}>
             <button className="btn-icon" onClick={() => actions.openModal('singleHabit', habit.id)}>
               <span className="material-icons-round" style={{ fontSize: 18 }}>insights</span>
             </button>

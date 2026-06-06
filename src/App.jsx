@@ -86,7 +86,11 @@ export default function App() {
   const [focusMode, toggleFocusMode] = useFocusMode(viewDate)
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [timeSlotFilter, setTimeSlotFilter] = useState(() => localStorage.getItem('glp_timeslot_filter') || 'all')
+  const [habitSortMode, setHabitSortMode] = useState(false)
   const fcmInitialized = useRef(false)
+
+  // Sort mode si chiude automaticamente al cambio data
+  useEffect(() => { setHabitSortMode(false) }, [viewDate])
 
   // Apply theme CSS vars + track for Versatile achievement
   useEffect(() => { applyTheme(theme); trackThemeUsed(theme) }, [theme])
@@ -318,16 +322,6 @@ export default function App() {
         />
       )}
 
-      {/* Coach card — solo Flavio, non in read-only */}
-      {authUserId === 'flavio' && !isReadOnly && (
-        <CoachCard globalData={globalData} onOpen={() => actions.openModal('coach')} />
-      )}
-
-      {/* Coach monday banner — solo Flavio */}
-      {authUserId === 'flavio' && !isReadOnly && (
-        <CoachMondayBanner onOpen={() => actions.openModal('coach', { autoGenerate: true })} />
-      )}
-
       {/* Mood + Journal + Insight (today only, not read-only) */}
       {isToday && !isReadOnly && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -356,13 +350,23 @@ export default function App() {
           <div className="section-title" style={{ margin: 0 }}>Abitudini del Giorno</div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          {isToday && !isReadOnly && (
+          {!isReadOnly && (
+            <button
+              className={`focus-toggle${habitSortMode ? ' active' : ''}`}
+              onClick={() => setHabitSortMode(v => !v)}
+              title={habitSortMode ? 'Esci dalla modalità ordinamento' : 'Ordina abitudini'}
+            >
+              <span className="material-icons-round">swap_vert</span>
+              {habitSortMode ? 'Fine' : 'Ordina'}
+            </button>
+          )}
+          {isToday && !isReadOnly && !habitSortMode && (
             <button className="review-btn" onClick={() => actions.openModal('eveningReview')} title="Revisione Serale">
               <span className="material-icons-round">nightlight</span>
               Revisione
             </button>
           )}
-          {isToday && (
+          {isToday && !habitSortMode && (
             <button
               className={`focus-toggle${focusMode ? ' active' : ''}`}
               onClick={toggleFocusMode}
@@ -375,26 +379,40 @@ export default function App() {
         </div>
       </div>
 
-      {isToday && !isReadOnly && <ReminderBanner pendingCount={pendingCount} />}
+      {/* Sort mode banner */}
+      {habitSortMode && (
+        <div style={{
+          background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)',
+          borderRadius: 10, padding: '8px 14px', marginBottom: 10,
+          fontSize: '0.78em', color: '#EF9F27', display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span className="material-icons-round" style={{ fontSize: 16 }}>swap_vert</span>
+          Modalità ordinamento attiva — trascina per riordinare
+        </div>
+      )}
 
-      {/* Time slot filter chips */}
-      <TimeSlotFilter value={timeSlotFilter} onChange={v => { setTimeSlotFilter(v); localStorage.setItem('glp_timeslot_filter', v) }} />
+      {isToday && !isReadOnly && !habitSortMode && <ReminderBanner pendingCount={pendingCount} />}
+
+      {/* Time slot filter chips — nascosto in sort mode */}
+      {!habitSortMode && <TimeSlotFilter value={timeSlotFilter} onChange={v => { setTimeSlotFilter(v); localStorage.setItem('glp_timeslot_filter', v) }} />}
 
       <div className={`habit-density-${density}`}>
-        {allRegularDone ? (
+        {allRegularDone && !habitSortMode ? (
           <div className="focus-complete">Tutto completato oggi! 🎉</div>
         ) : filteredRegular.length === 0 && regular.length === 0 ? (
           <div className="empty-state">Nessuna attività attiva oggi 🎉</div>
         ) : (
-          <SortableHabitList habits={filteredRegular} itemProps={itemProps} />
+          <SortableHabitList habits={habitSortMode ? sortedRegular : filteredRegular} itemProps={{ ...itemProps, sortMode: habitSortMode }} sortMode={habitSortMode} />
         )}
 
-        <Accordion label="🤷‍♂️ Abitudini Se/If (Bonus)">
-          {filteredBonus.length === 0
-            ? <div className="empty-state">{focusMode && bonus.length > 0 ? 'Tutti i bonus completati! 🎉' : 'Nessun bonus oggi'}</div>
-            : <SortableHabitList habits={filteredBonus} itemProps={itemProps} />
-          }
-        </Accordion>
+        {!habitSortMode && (
+          <Accordion label="🤷‍♂️ Abitudini Se/If (Bonus)">
+            {filteredBonus.length === 0
+              ? <div className="empty-state">{focusMode && bonus.length > 0 ? 'Tutti i bonus completati! 🎉' : 'Nessun bonus oggi'}</div>
+              : <SortableHabitList habits={filteredBonus} itemProps={itemProps} sortMode={false} />
+            }
+          </Accordion>
+        )}
       </div>
 
       <div className="section-title" style={{ marginTop: 30 }}>Acquisti del Giorno</div>
@@ -566,98 +584,6 @@ function TimeSlotFilter({ value, onChange }) {
           {s.label}
         </button>
       ))}
-    </div>
-  )
-}
-
-function CoachCard({ globalData, onOpen }) {
-  const weekKey = (() => {
-    const now = new Date()
-    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
-    const dayN = d.getUTCDay() || 7
-    d.setUTCDate(d.getUTCDate() + 4 - dayN)
-    const wk = Math.ceil(((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
-    return `${d.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`
-  })()
-
-  const report = (() => {
-    try { return JSON.parse(localStorage.getItem(`glp_coach_report_${weekKey}`) || 'null') } catch { return null }
-  })()
-
-  const preview = report?.content?.split('\n').filter(l => l.trim()).slice(0, 2).join(' ').slice(0, 110)
-
-  return (
-    <div
-      onClick={onOpen}
-      style={{
-        background: 'var(--theme-glow)',
-        border: '1px solid var(--theme-color)',
-        borderRadius: 14, padding: '12px 16px', marginBottom: 14, cursor: 'pointer',
-        display: 'flex', alignItems: 'center', gap: 12,
-        transition: 'opacity 0.15s',
-      }}
-    >
-      <span style={{ fontSize: '1.5em', flexShrink: 0 }}>🤖</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 800, fontSize: '0.88em', color: 'var(--theme-color)', marginBottom: 2 }}>
-          Coach AI
-        </div>
-        <div style={{ fontSize: '0.75em', color: 'var(--text-sec)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {report ? (preview || 'Report settimanale disponibile') : 'Genera il tuo primo report settimanale'}
-        </div>
-      </div>
-      <span style={{ color: 'var(--theme-color)', fontSize: '1em', flexShrink: 0 }}>→</span>
-    </div>
-  )
-}
-
-function CoachMondayBanner({ onOpen }) {
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    const now = new Date()
-    if (now.getDay() !== 1) return
-    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
-    const dayN = d.getUTCDay() || 7
-    d.setUTCDate(d.getUTCDate() + 4 - dayN)
-    const wk = Math.ceil(((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
-    const weekKey = `${d.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`
-    const hasReport = Boolean(localStorage.getItem(`glp_coach_report_${weekKey}`))
-    const dismissed = Boolean(localStorage.getItem(`glp_coach_banner_${weekKey}`))
-    if (!hasReport && !dismissed) setVisible(true)
-  }, [])
-
-  if (!visible) return null
-
-  return (
-    <div style={{
-      background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)',
-      borderRadius: 12, padding: '10px 14px', marginBottom: 14,
-      display: 'flex', alignItems: 'center', gap: 10,
-    }}>
-      <span>📊</span>
-      <span style={{ flex: 1, fontSize: '0.82em', color: '#EF9F27' }}>
-        Nuovo report settimanale disponibile — tocca per generarlo
-      </span>
-      <button
-        onClick={onOpen}
-        style={{ background: 'var(--theme-color)', color: '#000', border: 'none', borderRadius: 8, padding: '5px 12px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78em' }}
-      >
-        Genera
-      </button>
-      <button
-        onClick={() => {
-          const now = new Date()
-          const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
-          const dayN = d.getUTCDay() || 7
-          d.setUTCDate(d.getUTCDate() + 4 - dayN)
-          const wk = Math.ceil(((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
-          const weekKey = `${d.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`
-          localStorage.setItem(`glp_coach_banner_${weekKey}`, '1')
-          setVisible(false)
-        }}
-        style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1em', padding: '0 4px' }}
-      >✕</button>
     </div>
   )
 }

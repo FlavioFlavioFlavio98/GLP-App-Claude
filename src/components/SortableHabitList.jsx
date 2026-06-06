@@ -19,16 +19,17 @@ import { CSS } from '@dnd-kit/utilities'
 import { useApp } from '../lib/store'
 import HabitItem from './HabitItem'
 
-export default function SortableHabitList({ habits, itemProps }) {
+export default function SortableHabitList({ habits, itemProps, sortMode = false }) {
   const { actions } = useApp()
   const [activeId, setActiveId] = useState(null)
 
+  // Sensori attivi solo in sort mode — quando sortMode=false, nessun drag è possibile
   const sensors = useSensors(
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 180, tolerance: 6 },
+      activationConstraint: sortMode ? { delay: 150, tolerance: 5 } : { delay: 99999, tolerance: 0 },
     }),
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
+      activationConstraint: sortMode ? { distance: 5 } : { distance: 99999 },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -38,19 +39,17 @@ export default function SortableHabitList({ habits, itemProps }) {
   const activeHabit = activeId ? habits.find(h => h.id === activeId) : null
 
   function handleDragStart(event) {
+    if (!sortMode) return
     setActiveId(event.active.id)
   }
 
   function handleDragEnd(event) {
     const { active, over } = event
     setActiveId(null)
+    if (!sortMode) return
     if (active.id && over?.id && active.id !== over.id) {
       actions.reorderHabits(active.id, over.id)
     }
-  }
-
-  function handleDragCancel() {
-    setActiveId(null)
   }
 
   return (
@@ -59,19 +58,24 @@ export default function SortableHabitList({ habits, itemProps }) {
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
+      onDragCancel={() => setActiveId(null)}
     >
       <SortableContext items={habits.map(h => h.id)} strategy={verticalListSortingStrategy}>
         {habits.map(h => (
-          <SortableHabitItem key={h.id} habit={h} itemProps={itemProps} isBeingDragged={activeId === h.id} />
+          <SortableHabitItem
+            key={h.id}
+            habit={h}
+            itemProps={itemProps}
+            isBeingDragged={activeId === h.id}
+            sortMode={sortMode}
+          />
         ))}
       </SortableContext>
 
-      {/* Floating card during drag */}
       <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18,0.67,0.6,1.22)' }}>
-        {activeHabit ? (
+        {activeHabit && sortMode ? (
           <div style={{ opacity: 0.95, transform: 'scale(1.03)', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-            <HabitItem habit={activeHabit} {...itemProps} isDragOverlay />
+            <HabitItem habit={activeHabit} {...itemProps} isDragOverlay sortMode={sortMode} />
           </div>
         ) : null}
       </DragOverlay>
@@ -79,7 +83,7 @@ export default function SortableHabitList({ habits, itemProps }) {
   )
 }
 
-function SortableHabitItem({ habit, itemProps, isBeingDragged }) {
+function SortableHabitItem({ habit, itemProps, isBeingDragged, sortMode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: habit.id,
   })
@@ -92,12 +96,16 @@ function SortableHabitItem({ habit, itemProps, isBeingDragged }) {
     position: 'relative',
   }
 
+  // Passa dragHandleProps solo se in sort mode — altrimenti l'handle non è visibile né attivo
+  const dragHandleProps = sortMode ? { ...attributes, ...listeners } : undefined
+
   return (
     <div ref={setNodeRef} style={style}>
       <HabitItem
         habit={habit}
         {...itemProps}
-        dragHandleProps={{ ...attributes, ...listeners }}
+        dragHandleProps={dragHandleProps}
+        sortMode={sortMode}
       />
     </div>
   )

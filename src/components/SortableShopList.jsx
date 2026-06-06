@@ -10,9 +10,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { useApp } from '../lib/store'
 import { getItemValueAtDate } from '../lib/habitLogic'
 
-function RewardCard({ reward, globalData, isDragOverlay, dragHandleProps }) {
+function RewardCard({ reward, globalData, isDragOverlay, dragHandleProps, sortMode }) {
   const { actions } = useApp()
-  const { viewDate } = actions ? useApp().state : { viewDate: null }
   const { state } = useApp()
   const vd = state.viewDate
   const cost = getItemValueAtDate(reward, 'cost', vd)
@@ -52,7 +51,10 @@ function RewardCard({ reward, globalData, isDragOverlay, dragHandleProps }) {
         {count > 0 && <span className="shop-count">Acquistato {count} volt{count === 1 ? 'a' : 'e'}</span>}
       </div>
       {!isDragOverlay && (
-        <div className="actions-group" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+        <div
+          className="actions-group"
+          style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 5, ...(sortMode ? { opacity: 0.25, pointerEvents: 'none' } : {}) }}
+        >
           <div className="actions-group">
             <button className="btn-icon" onClick={() => actions.openModal('singleReward', reward.id)}>
               <span className="material-icons-round" style={{ fontSize: 18 }}>insights</span>
@@ -70,7 +72,7 @@ function RewardCard({ reward, globalData, isDragOverlay, dragHandleProps }) {
   )
 }
 
-function SortableRewardItem({ reward, globalData }) {
+function SortableRewardItem({ reward, globalData, sortMode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: reward.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -78,9 +80,10 @@ function SortableRewardItem({ reward, globalData }) {
     opacity: isDragging ? 0.35 : 1,
     position: 'relative',
   }
+  const dragHandleProps = sortMode ? { ...attributes, ...listeners } : undefined
   return (
     <div ref={setNodeRef} style={style}>
-      <RewardCard reward={reward} globalData={globalData} dragHandleProps={{ ...attributes, ...listeners }} />
+      <RewardCard reward={reward} globalData={globalData} dragHandleProps={dragHandleProps} sortMode={sortMode} />
     </div>
   )
 }
@@ -88,39 +91,77 @@ function SortableRewardItem({ reward, globalData }) {
 export default function SortableShopList({ rewards, globalData }) {
   const { actions } = useApp()
   const [activeId, setActiveId] = useState(null)
+  const [sortMode, setSortMode] = useState(false)
 
   const sensors = useSensors(
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: sortMode ? { delay: 150, tolerance: 5 } : { delay: 99999, tolerance: 0 },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: sortMode ? { distance: 5 } : { distance: 99999 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
   const activeReward = activeId ? rewards.find(r => r.id === activeId) : null
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={e => setActiveId(e.active.id)}
-      onDragEnd={e => {
-        const { active, over } = e
-        setActiveId(null)
-        if (active.id && over?.id && active.id !== over.id) {
-          actions.reorderRewards(active.id, over.id)
-        }
-      }}
-      onDragCancel={() => setActiveId(null)}
-    >
-      <SortableContext items={rewards.map(r => r.id)} strategy={verticalListSortingStrategy}>
-        {rewards.map(r => <SortableRewardItem key={r.id} reward={r} globalData={globalData} />)}
-      </SortableContext>
-      <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18,0.67,0.6,1.22)' }}>
-        {activeReward && (
-          <div style={{ opacity: 0.95, transform: 'scale(1.03)', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-            <RewardCard reward={activeReward} globalData={globalData} isDragOverlay />
-          </div>
-        )}
-      </DragOverlay>
-    </DndContext>
+    <>
+      {/* Sort mode toggle */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button
+          onClick={() => setSortMode(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            background: sortMode ? 'var(--theme-glow)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${sortMode ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)'}`,
+            borderRadius: 20, padding: '4px 12px', cursor: 'pointer',
+            fontSize: '0.72em', color: sortMode ? 'var(--theme-color)' : '#666',
+            fontWeight: sortMode ? 700 : 400,
+          }}
+        >
+          <span className="material-icons-round" style={{ fontSize: 14 }}>swap_vert</span>
+          {sortMode ? 'Fine' : 'Ordina'}
+        </button>
+      </div>
+
+      {sortMode && (
+        <div style={{
+          background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)',
+          borderRadius: 10, padding: '7px 12px', marginBottom: 10,
+          fontSize: '0.75em', color: '#EF9F27', display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span className="material-icons-round" style={{ fontSize: 14 }}>swap_vert</span>
+          Modalità ordinamento — trascina per riordinare
+        </div>
+      )}
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={e => { if (sortMode) setActiveId(e.active.id) }}
+        onDragEnd={e => {
+          const { active, over } = e
+          setActiveId(null)
+          if (sortMode && active.id && over?.id && active.id !== over.id) {
+            actions.reorderRewards(active.id, over.id)
+          }
+        }}
+        onDragCancel={() => setActiveId(null)}
+      >
+        <SortableContext items={rewards.map(r => r.id)} strategy={verticalListSortingStrategy}>
+          {rewards.map(r => (
+            <SortableRewardItem key={r.id} reward={r} globalData={globalData} sortMode={sortMode} />
+          ))}
+        </SortableContext>
+        <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18,0.67,0.6,1.22)' }}>
+          {activeReward && sortMode && (
+            <div style={{ opacity: 0.95, transform: 'scale(1.03)', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
+              <RewardCard reward={activeReward} globalData={globalData} isDragOverlay sortMode={sortMode} />
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
+    </>
   )
 }

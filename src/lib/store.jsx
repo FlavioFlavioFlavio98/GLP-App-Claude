@@ -985,6 +985,103 @@ export function AppProvider({ children }) {
         await updateDoc(ref, { history: hist })
       } catch { /* non-critical */ }
     },
+
+    // ─── Tasks ────────────────────────────────────────────────────────────────
+    async addTask(taskData) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const newTask = {
+        id: `task_${Date.now().toString(36)}`,
+        title: taskData.title,
+        description: taskData.description || '',
+        deadline: taskData.deadline,
+        reward: taskData.reward,
+        penalty: taskData.penalty,
+        priority: taskData.priority || 'medium',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        expiredAt: null,
+        rewardApplied: false,
+        penaltyApplied: false,
+      }
+      const tasks = [...(globalData.tasks || []), newTask]
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      actions.showToast('Task creata!', '📋')
+    },
+
+    async editTask(taskData) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const tasks = (globalData.tasks || []).map(t =>
+        t.id === taskData.id ? { ...t, ...taskData } : t
+      )
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      actions.showToast('Task aggiornata!', '✏️')
+    },
+
+    async confirmCompleteTask(task) {
+      if (isReadOnly()) return
+      if (!window.confirm(`Completare "${task.title}"? +${task.reward}pt`)) return
+      const { authUserId, globalData } = state
+      const now = new Date().toISOString()
+      const tasks = (globalData.tasks || []).map(t =>
+        t.id === task.id
+          ? { ...t, status: 'completed', completedAt: now, rewardApplied: true }
+          : t
+      )
+      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(task.reward) })
+      await actions._logHistory(authUserId, (globalData.score || 0) + task.reward)
+      actions.vibrate('light')
+      actions.showToast(`Task completata! +${task.reward}pt 🎉`, '✅')
+      if (task.reward >= 10) {
+        import('canvas-confetti').then(m => m.default({
+          particleCount: 80, spread: 70, origin: { y: 0.7 },
+          colors: ['#ffca28', '#4caf50'],
+        }))
+      }
+      setTimeout(() => {
+        const freshData = { ...globalData, tasks }
+        actions._checkAchievements(freshData, authUserId)
+      }, 500)
+    },
+
+    async uncompleteTask(task) {
+      if (isReadOnly()) return
+      if (!window.confirm(`Annullare il completamento? -${task.reward}pt verranno sottratti`)) return
+      const { authUserId, globalData } = state
+      const tasks = (globalData.tasks || []).map(t =>
+        t.id === task.id
+          ? { ...t, status: 'active', completedAt: null, rewardApplied: false }
+          : t
+      )
+      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(-task.reward) })
+      await actions._logHistory(authUserId, (globalData.score || 0) - task.reward)
+      actions.showToast('Completamento annullato', '↩️')
+    },
+
+    async deleteExpiredTask(taskId) {
+      if (isReadOnly()) return
+      if (!window.confirm('Eliminare definitivamente questa task?')) return
+      const { authUserId, globalData } = state
+      const tasks = (globalData.tasks || []).filter(t => t.id !== taskId)
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      actions.showToast('Task eliminata', '🗑️')
+    },
+
+    async reopenTask(task, newDeadline) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const tasks = (globalData.tasks || []).map(t => {
+        if (t.id !== task.id) return t
+        return { ...t, status: 'active', expiredAt: null, deadline: newDeadline, penaltyApplied: false }
+      })
+      const scoreUpdate = task.penaltyApplied && task.penalty > 0
+        ? { score: increment(task.penalty) }
+        : {}
+      await updateDoc(doc(db, 'users', authUserId), { tasks, ...scoreUpdate })
+      actions.showToast('Task riaperta!', '↩️')
+    },
   }
 
   return (

@@ -169,5 +169,15 @@ export function buildCoachContext(userData, dailyLogs, tags) {
         .reduce((sum, s) => sum + (s.reps || 0), 0),
     },
     weightLog: userData.weightLog || {},
+    activeTasks: (userData.tasks || [])
+      .filter(t => t.status === 'active')
+      .map(t => ({
+        title: t.title,
+        deadline: t.deadline,
+        reward: t.reward,
+        penalty: t.penalty,
+        priority: t.priority,
+        daysLeft: Math.ceil((new Date(t.deadline) - new Date()) / 86400000),
+      })),
   }
 }

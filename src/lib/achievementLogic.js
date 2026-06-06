@@ -165,6 +165,27 @@ export const ACHIEVEMENT_DEFS = [
       current: Math.min((ud?.habits || []).filter(h => h.why?.trim()).length, 5),
       target: 5,
     }) },
+
+  // ── Task ─────────────────────────────────────────────────────────────────────
+  { id: 'task_first', icon: '✅', name: 'Prima quest', cat: 'special',
+    desc: 'Completa la tua prima task',
+    check: (ud) => _totalCompletedTasks(ud) >= 1,
+    progress: (ud) => ({ current: Math.min(_totalCompletedTasks(ud), 1), target: 1 }) },
+
+  { id: 'task_lightning', icon: '⚡', name: 'Fulmine', cat: 'special',
+    desc: 'Completa una task lo stesso giorno in cui l\'hai creata',
+    check: (ud) => _hasTaskSameDay(ud),
+    progress: () => null },
+
+  { id: 'task_hunter_10', icon: '🏆', name: 'Cacciatore di quest', cat: 'special',
+    desc: 'Completa 10 task in totale',
+    check: (ud) => _totalCompletedTasks(ud) >= 10,
+    progress: (ud) => ({ current: Math.min(_totalCompletedTasks(ud), 10), target: 10 }) },
+
+  { id: 'task_no_expire_5', icon: '🛡️', name: 'Mai in ritardo', cat: 'special',
+    desc: 'Completa 5 task consecutive senza scaderne nessuna',
+    check: (ud) => _taskConsecutiveCompleted(ud) >= 5,
+    progress: (ud) => ({ current: Math.min(_taskConsecutiveCompleted(ud), 5), target: 5 }) },
 ]
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
@@ -261,6 +282,35 @@ function _noPenaltyStreak(ud) {
     streak++
   }
   return streak
+}
+
+// ─── Task helpers ─────────────────────────────────────────────────────────────
+
+function _totalCompletedTasks(ud) {
+  return (ud?.tasks || []).filter(t => t.status === 'completed').length
+}
+
+function _hasTaskSameDay(ud) {
+  return (ud?.tasks || []).some(t => {
+    if (t.status !== 'completed' || !t.completedAt || !t.createdAt) return false
+    return t.completedAt.split('T')[0] === t.createdAt.split('T')[0]
+  })
+}
+
+function _taskConsecutiveCompleted(ud) {
+  const resolved = (ud?.tasks || [])
+    .filter(t => t.status === 'completed' || t.status === 'expired')
+    .sort((a, b) => {
+      const da = a.completedAt || a.expiredAt || ''
+      const db2 = b.completedAt || b.expiredAt || ''
+      return da.localeCompare(db2)
+    })
+  let streak = 0, max = 0
+  for (const t of resolved) {
+    if (t.status === 'completed') { streak++; max = Math.max(max, streak) }
+    else streak = 0
+  }
+  return max
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

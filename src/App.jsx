@@ -59,6 +59,9 @@ import CoachPage from './modals/CoachPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
 import { trackAppOpen } from './lib/trackAppOpen'
+import TaskSection from './components/TaskSection'
+import TaskModal from './modals/TaskModal'
+import TaskHistoryModal from './modals/TaskHistoryModal'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -415,6 +418,9 @@ export default function App() {
         )}
       </div>
 
+      {/* Task section — solo Flavio, non read-only */}
+      {authUserId === 'flavio' && !isReadOnly && <TaskSection />}
+
       <div className="section-title" style={{ marginTop: 30 }}>Acquisti del Giorno</div>
       <PurchasedList />
 
@@ -466,6 +472,8 @@ export default function App() {
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
       {authUserId === 'flavio' && <AppUsageModal />}
+      {authUserId === 'flavio' && <TaskModal />}
+      {authUserId === 'flavio' && <TaskHistoryModal />}
       <UpdateBanner />
 
       <AchievementQueue

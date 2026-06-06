@@ -1,4 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
+const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { defineSecret } = require('firebase-functions/params')
 const admin = require('firebase-admin')
 const Anthropic = require('@anthropic-ai/sdk')
@@ -105,6 +106,45 @@ exports.summarizeConversation = onCall(
     } catch { /* usa defaults */ }
 
     return { summary, tone, toneScore }
+  }
+)
+
+// ── expireTasks ───────────────────────────────────────────────────────────────
+exports.expireTasks = onSchedule(
+  { schedule: '1 0 * * *', timeZone: 'Europe/Rome', region: REGION },
+  async () => {
+    const db = admin.firestore()
+    const flavioRef = db.collection('users').doc('flavio')
+    const flavioSnap = await flavioRef.get()
+    if (!flavioSnap.exists) return
+
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+    const tasks = flavioSnap.data()?.tasks || []
+
+    let scoreDeduction = 0
+    let hasChanges = false
+    const updatedTasks = tasks.map(task => {
+      if (task.status === 'active' && task.deadline < today) {
+        scoreDeduction += (task.penalty || 0)
+        hasChanges = true
+        return {
+          ...task,
+          status: 'expired',
+          expiredAt: new Date().toISOString(),
+          penaltyApplied: true,
+        }
+      }
+      return task
+    })
+
+    if (!hasChanges) return
+
+    const update = { tasks: updatedTasks }
+    if (scoreDeduction > 0) {
+      update.score = admin.firestore.FieldValue.increment(-scoreDeduction)
+    }
+    await flavioRef.update(update)
+    console.log(`[expireTasks] expired ${updatedTasks.filter(t => t.status === 'expired').length - tasks.filter(t => t.status === 'expired').length} tasks, deducted ${scoreDeduction} points`)
   }
 )
 

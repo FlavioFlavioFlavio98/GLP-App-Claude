@@ -402,7 +402,7 @@ export default function App() {
         ) : filteredRegular.length === 0 && regular.length === 0 ? (
           <div className="empty-state">Nessuna attività attiva oggi 🎉</div>
         ) : (
-          <SortableHabitList habits={habitSortMode ? sortedRegular : filteredRegular} itemProps={{ ...itemProps, sortMode: habitSortMode }} sortMode={habitSortMode} />
+          <SortableHabitList habits={habitSortMode ? regular : filteredRegular} itemProps={{ ...itemProps, sortMode: habitSortMode }} sortMode={habitSortMode} />
         )}
 
         {!habitSortMode && (

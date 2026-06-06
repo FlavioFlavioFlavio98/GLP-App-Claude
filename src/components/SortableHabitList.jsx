@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -14,6 +14,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useApp } from '../lib/store'
@@ -23,7 +24,12 @@ export default function SortableHabitList({ habits, itemProps, sortMode = false 
   const { actions } = useApp()
   const [activeId, setActiveId] = useState(null)
 
-  // Sensori attivi solo in sort mode — quando sortMode=false, nessun drag è possibile
+  // State locale usato solo in sort mode per aggiornamento visivo immediato
+  // Sincronizzato con la prop quando cambia (nuova snapshot da Firestore)
+  const [localHabits, setLocalHabits] = useState(habits)
+  useEffect(() => { setLocalHabits(habits) }, [habits])
+
+  // Sensori: attivazione impossibile quando sortMode=false (distance: 99999)
   const sensors = useSensors(
     useSensor(TouchSensor, {
       activationConstraint: sortMode ? { delay: 150, tolerance: 5 } : { delay: 99999, tolerance: 0 },
@@ -36,7 +42,10 @@ export default function SortableHabitList({ habits, itemProps, sortMode = false 
     })
   )
 
-  const activeHabit = activeId ? habits.find(h => h.id === activeId) : null
+  // In sort mode mostriamo localHabits (ordine aggiornato istantaneamente),
+  // in modalità normale mostriamo habits (filtrate/ordinate da App.jsx)
+  const displayHabits = sortMode ? localHabits : habits
+  const activeHabit = activeId ? displayHabits.find(h => h.id === activeId) : null
 
   function handleDragStart(event) {
     if (!sortMode) return
@@ -46,10 +55,18 @@ export default function SortableHabitList({ habits, itemProps, sortMode = false 
   function handleDragEnd(event) {
     const { active, over } = event
     setActiveId(null)
-    if (!sortMode) return
-    if (active.id && over?.id && active.id !== over.id) {
-      actions.reorderHabits(active.id, over.id)
-    }
+    if (!sortMode || !over || active.id === over.id) return
+
+    const oldIndex = localHabits.findIndex(h => h.id === active.id)
+    const newIndex = localHabits.findIndex(h => h.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    // 1. Aggiorna stato locale immediatamente → nessun rimbalzo visivo
+    const reordered = arrayMove(localHabits, oldIndex, newIndex)
+    setLocalHabits(reordered)
+
+    // 2. Salva su Firestore (usa l'action esistente che prende activeId/overId)
+    actions.reorderHabits(active.id, over.id)
   }
 
   return (
@@ -60,8 +77,8 @@ export default function SortableHabitList({ habits, itemProps, sortMode = false 
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <SortableContext items={habits.map(h => h.id)} strategy={verticalListSortingStrategy}>
-        {habits.map(h => (
+      <SortableContext items={displayHabits.map(h => h.id)} strategy={verticalListSortingStrategy}>
+        {displayHabits.map(h => (
           <SortableHabitItem
             key={h.id}
             habit={h}
@@ -83,7 +100,7 @@ export default function SortableHabitList({ habits, itemProps, sortMode = false 
   )
 }
 
-function SortableHabitItem({ habit, itemProps, isBeingDragged, sortMode }) {
+function SortableHabitItem({ habit, itemProps, sortMode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: habit.id,
   })
@@ -96,7 +113,7 @@ function SortableHabitItem({ habit, itemProps, isBeingDragged, sortMode }) {
     position: 'relative',
   }
 
-  // Passa dragHandleProps solo se in sort mode — altrimenti l'handle non è visibile né attivo
+  // Handle visibile e attivo solo in sort mode
   const dragHandleProps = sortMode ? { ...attributes, ...listeners } : undefined
 
   return (

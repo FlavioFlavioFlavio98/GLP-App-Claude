@@ -911,7 +911,9 @@ export function AppProvider({ children }) {
           const ud = allUsersData?.[u]
           ;(ud?.achievements || []).filter(a => a?.unlockedAt).forEach(a => {
             try {
-              ac += `${u},${a.id || ''},${new Date(a.unlockedAt).toISOString().split('T')[0]}\n`
+              const _d = new Date(a.unlockedAt)
+              const _ds = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`
+              ac += `${u},${a.id || ''},${_ds}\n`
             } catch { /* skip malformed */ }
           })
         })

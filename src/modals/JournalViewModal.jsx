@@ -94,7 +94,8 @@ export default function JournalViewModal() {
               {(() => {
                 const last30 = Array.from({length: 30}, (_, i) => {
                   const d = new Date(); d.setDate(d.getDate() - i)
-                  return d.toISOString().split('T')[0]
+                  const y = d.getFullYear(), mo = String(d.getMonth()+1).padStart(2,'0'), dy = String(d.getDate()).padStart(2,'0')
+                  return `${y}-${mo}-${dy}`
                 })
                 return `${last30.filter(d => entries[d]?.answer).length}/30`
               })()}

@@ -451,6 +451,17 @@ body.offline .offline-badge { display: block; }
 .fab-secondary:hover { transform: scale(1.1); }
 .fab-secondary:active { transform: scale(0.9); }
 
+/* Tertiary FAB — positioned above the secondary FAB */
+.fab-tertiary {
+  bottom: 166px;                   /* above secondary fab (104 + 50 + 12) */
+  width: 50px; height: 50px;
+  background: rgba(30,30,30,0.92);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.12);
+  animation: none;
+}
+.fab-tertiary:hover { transform: scale(1.1); }
+.fab-tertiary:active { transform: scale(0.9); }
+
 /* =============================================
    ACCORDION
    ============================================= */

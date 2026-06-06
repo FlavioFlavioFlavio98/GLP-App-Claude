@@ -1024,13 +1024,15 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       if (!window.confirm(`Completare "${task.title}"? +${task.reward}pt`)) return
       const { authUserId, globalData } = state
+      const rewardNum = parseInt(task.reward) || 0
+      console.log('completing task, reward:', task.reward, '→ rewardNum:', rewardNum)
       const now = new Date().toISOString()
       const tasks = (globalData.tasks || []).map(t =>
         t.id === task.id
           ? { ...t, status: 'completed', completedAt: now, rewardApplied: true }
           : t
       )
-      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(task.reward) })
+      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(rewardNum) })
       await actions._logHistory(authUserId, (globalData.score || 0) + task.reward)
       actions.vibrate('light')
       actions.showToast(`Task completata! +${task.reward}pt 🎉`, '✅')
@@ -1050,13 +1052,14 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       if (!window.confirm(`Annullare il completamento? -${task.reward}pt verranno sottratti`)) return
       const { authUserId, globalData } = state
+      const rewardNum = parseInt(task.reward) || 0
       const tasks = (globalData.tasks || []).map(t =>
         t.id === task.id
           ? { ...t, status: 'active', completedAt: null, rewardApplied: false }
           : t
       )
-      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(-task.reward) })
-      await actions._logHistory(authUserId, (globalData.score || 0) - task.reward)
+      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(-rewardNum) })
+      await actions._logHistory(authUserId, (globalData.score || 0) - rewardNum)
       actions.showToast('Completamento annullato', '↩️')
     },
 

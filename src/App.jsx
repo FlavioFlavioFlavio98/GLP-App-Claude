@@ -207,7 +207,14 @@ export default function App() {
       .reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) * 10
   ) / 10
 
-  const net = dailyEarned + extraPts - dailySpent
+  // Punti task completate nel viewDate (solo Flavio)
+  const taskPts = authUserId === 'flavio'
+    ? (globalData.tasks || [])
+        .filter(t => t.status === 'completed' && t.completedAt?.startsWith(viewDate))
+        .reduce((sum, t) => sum + (parseInt(t.reward) || 0), 0)
+    : 0
+
+  const net = dailyEarned + taskPts + extraPts - dailySpent
 
   function isFullyComplete(h) {
     const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
@@ -288,30 +295,59 @@ export default function App() {
 
       <DateNav />
 
-      <div className="daily-summary">
-        <div className="sum-item">
-          <div className="sum-label">Abitudini</div>
-          <AnimatedNumber value={dailyEarned} className="sum-val sum-earn" prefix="+" />
-        </div>
-        {extraPts > 0 && (
-          <div className="sum-item">
-            <div className="sum-label">Extra 💪</div>
-            <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
+      {authUserId === 'flavio' ? (
+        <div>
+          <div className="daily-summary">
+            <div className="sum-item">
+              <div className="sum-label">Abitudini</div>
+              <AnimatedNumber value={dailyEarned} className="sum-val sum-earn" prefix="+" />
+            </div>
+            <div className="sum-item">
+              <div className="sum-label">Task 📋</div>
+              <AnimatedNumber value={taskPts} className="sum-val sum-earn" prefix="+" />
+            </div>
+            <div className="sum-item">
+              <div className="sum-label">Extra 💪</div>
+              <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
+            </div>
+            <div className="sum-item">
+              <div className="sum-label">Spesi/Pen</div>
+              <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />
+            </div>
           </div>
-        )}
-        <div className="sum-item">
-          <div className="sum-label">Spesi/Pen</div>
-          <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />
+          <div style={{ textAlign: 'center', marginTop: 6, marginBottom: 4, fontSize: '0.82em', color: '#666', fontWeight: 600 }}>
+            NETTO&nbsp;
+            <span className={net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'} style={{ fontWeight: 800, fontSize: '1.05em' }}>
+              {net > 0 ? '+' : ''}{net}pt
+            </span>
+          </div>
         </div>
-        <div className="sum-item">
-          <div className="sum-label">Netto</div>
-          <AnimatedNumber
-            value={net}
-            className={`sum-val ${net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'}`}
-            prefix={net > 0 ? '+' : ''}
-          />
+      ) : (
+        <div className="daily-summary">
+          <div className="sum-item">
+            <div className="sum-label">Abitudini</div>
+            <AnimatedNumber value={dailyEarned} className="sum-val sum-earn" prefix="+" />
+          </div>
+          {extraPts > 0 && (
+            <div className="sum-item">
+              <div className="sum-label">Extra 💪</div>
+              <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
+            </div>
+          )}
+          <div className="sum-item">
+            <div className="sum-label">Spesi/Pen</div>
+            <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />
+          </div>
+          <div className="sum-item">
+            <div className="sum-label">Netto</div>
+            <AnimatedNumber
+              value={net}
+              className={`sum-val ${net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'}`}
+              prefix={net > 0 ? '+' : ''}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <TrendRow userData={globalData} />
 
@@ -437,6 +473,11 @@ export default function App() {
       {/* FAB secondario esercizi — solo Flavio, solo non-readOnly */}
       {authUserId === 'flavio' && !isReadOnly && (
         <ExerciseFab actions={actions} />
+      )}
+
+      {/* FAB terziario task — solo Flavio, solo non-readOnly */}
+      {authUserId === 'flavio' && !isReadOnly && (
+        <TaskFab actions={actions} />
       )}
 
       <Toast />
@@ -565,6 +606,37 @@ function ExerciseFab({ actions }) {
       title="Tap: inserisci esercizio · Tieni premuto: statistiche"
     >
       <span style={{ fontSize: '1.4em', lineHeight: 1 }}>💪</span>
+    </button>
+  )
+}
+
+function TaskFab({ actions }) {
+  const longPressTimer = useRef(null)
+  const didLongPress = useRef(false)
+
+  function onPointerDown() {
+    didLongPress.current = false
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true
+      actions.showToast('Nuova Task', '📋')
+      navigator.vibrate?.([30])
+    }, 500)
+  }
+  function onPointerUp() {
+    clearTimeout(longPressTimer.current)
+    if (!didLongPress.current) actions.openModal('taskAdd')
+  }
+  function onPointerLeave() { clearTimeout(longPressTimer.current) }
+
+  return (
+    <button
+      className="fab fab-tertiary"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      title="Nuova Task"
+    >
+      <span style={{ fontSize: '1.3em', lineHeight: 1 }}>📋</span>
     </button>
   )
 }

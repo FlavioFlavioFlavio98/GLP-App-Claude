@@ -36,6 +36,7 @@ export default function EditModal() {
       categoryId: item.categoryId || '',
       // tracked reward fields
       rewardType: item.type === 'tracked' ? 'tracked' : 'normal',
+      trackedEmoji: item.emoji || '',
       trackedUnit: item.unit || '',
       trackedCostPerThreshold: item.costPerThreshold ?? 5,
       trackedThreshold: item.threshold ?? 10,
@@ -88,7 +89,7 @@ export default function EditModal() {
     const rewardFields = type === 'habit'
       ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti }
       : f.rewardType === 'tracked'
-        ? { type: 'tracked', unit: f.trackedUnit, costPerThreshold: parseInt(f.trackedCostPerThreshold) || 0, threshold: parseInt(f.trackedThreshold) || 1 }
+        ? { type: 'tracked', emoji: f.trackedEmoji || '', unit: f.trackedUnit, costPerThreshold: parseInt(f.trackedCostPerThreshold) || 0, threshold: parseInt(f.trackedThreshold) || 1 }
         : { cost: parseInt(f.cost) || 0, categoryId: f.categoryId || '' }
 
     const updated = {
@@ -162,6 +163,8 @@ export default function EditModal() {
             {f.rewardType === 'tracked' ? (
               <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, margin: '8px 0' }}>
                 <div style={{ fontSize: '0.7em', color: '#888', marginBottom: 8, fontWeight: 700 }}>📊 Premio Speciale</div>
+                <div className="input-group"><label>Emoji (opzionale)</label>
+                  <input type="text" value={f.trackedEmoji} onChange={e => set('trackedEmoji', e.target.value)} placeholder="Es. 🍺" /></div>
                 <div className="input-group"><label>Unità di misura</label>
                   <input type="text" value={f.trackedUnit} onChange={e => set('trackedUnit', e.target.value)} /></div>
                 <div className="grid-2">

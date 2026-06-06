@@ -90,6 +90,8 @@ export default function App() {
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [timeSlotFilter, setTimeSlotFilter] = useState(() => localStorage.getItem('glp_timeslot_filter') || 'all')
   const [habitSortMode, setHabitSortMode] = useState(false)
+  const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
+  const [bonusExpanded, setBonusExpanded] = useState(() => localStorage.getItem('glp_bonus_expanded') === 'true')
   const fcmInitialized = useRef(false)
 
   // Sort mode si chiude automaticamente al cambio data
@@ -177,7 +179,7 @@ export default function App() {
   ;(globalData.tags || []).forEach(t => { tagsMap[t.id] = t })
 
   const regular = [], bonus = []
-  let dailyTotalPot = 0, dailyEarned = 0, dailySpent = 0
+  let dailyTotalPot = 0, dailyEarned = 0, penaltyCost = 0
 
   ;(globalData.habits || []).forEach(h => {
     if (h.type === 'goal') return
@@ -195,13 +197,16 @@ export default function App() {
     else { regular.push(h); dailyTotalPot += reward }
 
     if (isDone) dailyEarned += isMulti && level === 'min' ? rewardMin : reward
-    if (isFailed) dailySpent += penalty
+    if (isFailed) penaltyCost += penalty
   })
 
   const purchaseCost = entry.purchases.reduce((acc, p) => acc + parseInt(p.cost || 0), 0)
-  dailySpent += purchaseCost
-  const trackedCost = Object.values(entry.trackedRewards || {}).reduce((sum, tr) => sum + (parseInt(tr.cost) || 0), 0)
-  dailySpent += trackedCost
+  const trackedItems = Object.entries(entry.trackedRewards || {}).map(([id, tr]) => {
+    const rw = (globalData.rewards || []).find(r => r.id === id)
+    return { id, name: rw?.name || id, cost: parseInt(tr.cost) || 0 }
+  })
+  const trackedCost = trackedItems.reduce((sum, ti) => sum + ti.cost, 0)
+  const dailySpent = penaltyCost + purchaseCost + trackedCost
 
   // Punti extra: esercizi rapidi del giorno corrente
   const extraPts = Math.round(
@@ -234,6 +239,11 @@ export default function App() {
   const sortedBonus = [...bonus].sort((a, b) =>
     (IMPORTANCE_ORDER[a.importance || 'medium'] - IMPORTANCE_ORDER[b.importance || 'medium'])
   )
+
+  const doneRegularCount = regular.filter(h => {
+    const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
+    return entry.habits.includes(sid)
+  }).length
 
   function matchesTimeSlot(h) {
     if (timeSlotFilter === 'all') return true
@@ -298,28 +308,34 @@ export default function App() {
       <DateNav />
 
       {authUserId === 'flavio' ? (
-        <div>
-          <div className="daily-summary">
-            <div className="sum-item">
-              <div className="sum-label">Abitudini</div>
-              <AnimatedNumber value={dailyEarned} className="sum-val sum-earn" prefix="+" />
+        <div style={{ margin: '8px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
+            <div style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#4caf50', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>💚 Guadagni</div>
+              {dailyEarned > 0 && <DailySumRow label="Abitudini" value={`+${dailyEarned}`} color="#4caf50" />}
+              {taskPts > 0 && <DailySumRow label="Task 📋" value={`+${taskPts}`} color="#4caf50" />}
+              {extraPts > 0 && <DailySumRow label="Extra 💪" value={`+${extraPts}`} color="#4caf50" />}
+              {(dailyEarned + taskPts + extraPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
+              <div style={{ borderTop: '1px solid rgba(76,175,80,0.2)', marginTop: 4, paddingTop: 4 }}>
+                <DailySumRow label="Totale" value={`+${dailyEarned + taskPts + extraPts}`} color="#4caf50" bold />
+              </div>
             </div>
-            <div className="sum-item">
-              <div className="sum-label">Task 📋</div>
-              <AnimatedNumber value={taskPts} className="sum-val sum-earn" prefix="+" />
-            </div>
-            <div className="sum-item">
-              <div className="sum-label">Extra 💪</div>
-              <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
-            </div>
-            <div className="sum-item">
-              <div className="sum-label">Spesi/Pen</div>
-              <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />
+            <div style={{ background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#e53935', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>🔴 Costi</div>
+              {purchaseCost > 0 && <DailySumRow label="Premi" value={`-${purchaseCost}`} color="#e53935" />}
+              {penaltyCost > 0 && <DailySumRow label="Penalità" value={`-${penaltyCost}`} color="#e53935" />}
+              {trackedItems.filter(ti => ti.cost > 0).map(ti => (
+                <DailySumRow key={ti.id} label={ti.name} value={`-${ti.cost}`} color="#e53935" />
+              ))}
+              {dailySpent === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun costo</div>}
+              <div style={{ borderTop: '1px solid rgba(229,57,53,0.2)', marginTop: 4, paddingTop: 4 }}>
+                <DailySumRow label="Totale" value={`-${dailySpent}`} color="#e53935" bold />
+              </div>
             </div>
           </div>
-          <div style={{ textAlign: 'center', marginTop: 6, marginBottom: 4, fontSize: '0.82em', color: '#666', fontWeight: 600 }}>
+          <div style={{ textAlign: 'center', padding: '6px 0', fontSize: '0.85em', color: '#666', fontWeight: 600 }}>
             NETTO&nbsp;
-            <span className={net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'} style={{ fontWeight: 800, fontSize: '1.05em' }}>
+            <span className={net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'} style={{ fontWeight: 800, fontSize: '1.15em' }}>
               {net > 0 ? '+' : ''}{net}pt
             </span>
           </div>
@@ -387,9 +403,13 @@ export default function App() {
 
       {/* Section header */}
       <div className="section-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div className="section-title" style={{ margin: 0 }}>Abitudini del Giorno</div>
-        </div>
+        <button
+          onClick={() => { const next = !habitsExpanded; setHabitsExpanded(next); localStorage.setItem('glp_habits_expanded', String(next)) }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text)' }}
+        >
+          <div className="section-title" style={{ margin: 0 }}>💪 Abitudini ({doneRegularCount}/{regular.length})</div>
+          <span className="material-icons-round" style={{ fontSize: 18, color: '#666' }}>{habitsExpanded ? 'expand_less' : 'expand_more'}</span>
+        </button>
         <div style={{ display: 'flex', gap: 6 }}>
           {!isReadOnly && (
             <button
@@ -420,41 +440,53 @@ export default function App() {
         </div>
       </div>
 
-      {/* Sort mode banner */}
-      {habitSortMode && (
-        <div style={{
-          background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)',
-          borderRadius: 10, padding: '8px 14px', marginBottom: 10,
-          fontSize: '0.78em', color: '#EF9F27', display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span className="material-icons-round" style={{ fontSize: 16 }}>swap_vert</span>
-          Modalità ordinamento attiva — trascina per riordinare
-        </div>
+      {habitsExpanded && (
+        <>
+          {/* Sort mode banner */}
+          {habitSortMode && (
+            <div style={{
+              background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)',
+              borderRadius: 10, padding: '8px 14px', marginBottom: 10,
+              fontSize: '0.78em', color: '#EF9F27', display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span className="material-icons-round" style={{ fontSize: 16 }}>swap_vert</span>
+              Modalità ordinamento attiva — trascina per riordinare
+            </div>
+          )}
+
+          {isToday && !isReadOnly && !habitSortMode && <ReminderBanner pendingCount={pendingCount} />}
+
+          {/* Time slot filter chips — nascosto in sort mode */}
+          {!habitSortMode && <TimeSlotFilter value={timeSlotFilter} onChange={v => { setTimeSlotFilter(v); localStorage.setItem('glp_timeslot_filter', v) }} />}
+
+          <div className={`habit-density-${density}`}>
+            {allRegularDone && !habitSortMode ? (
+              <div className="focus-complete">Tutto completato oggi! 🎉</div>
+            ) : filteredRegular.length === 0 && regular.length === 0 ? (
+              <div className="empty-state">Nessuna attività attiva oggi 🎉</div>
+            ) : (
+              <SortableHabitList habits={habitSortMode ? regular : filteredRegular} itemProps={{ ...itemProps, sortMode: habitSortMode }} sortMode={habitSortMode} />
+            )}
+
+            {!habitSortMode && (
+              <div>
+                <button
+                  onClick={() => { const next = !bonusExpanded; setBonusExpanded(next); localStorage.setItem('glp_bonus_expanded', String(next)) }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '10px 0', color: 'var(--text)' }}
+                >
+                  <span style={{ fontSize: '0.88em', fontWeight: 600 }}>🤷‍♂️ Abitudini Se/If (Bonus)</span>
+                  <span className="material-icons-round" style={{ fontSize: 18, color: '#666', marginLeft: 'auto' }}>{bonusExpanded ? 'expand_less' : 'expand_more'}</span>
+                </button>
+                {bonusExpanded && (
+                  filteredBonus.length === 0
+                    ? <div className="empty-state">{focusMode && bonus.length > 0 ? 'Tutti i bonus completati! 🎉' : 'Nessun bonus oggi'}</div>
+                    : <SortableHabitList habits={filteredBonus} itemProps={itemProps} sortMode={false} />
+                )}
+              </div>
+            )}
+          </div>
+        </>
       )}
-
-      {isToday && !isReadOnly && !habitSortMode && <ReminderBanner pendingCount={pendingCount} />}
-
-      {/* Time slot filter chips — nascosto in sort mode */}
-      {!habitSortMode && <TimeSlotFilter value={timeSlotFilter} onChange={v => { setTimeSlotFilter(v); localStorage.setItem('glp_timeslot_filter', v) }} />}
-
-      <div className={`habit-density-${density}`}>
-        {allRegularDone && !habitSortMode ? (
-          <div className="focus-complete">Tutto completato oggi! 🎉</div>
-        ) : filteredRegular.length === 0 && regular.length === 0 ? (
-          <div className="empty-state">Nessuna attività attiva oggi 🎉</div>
-        ) : (
-          <SortableHabitList habits={habitSortMode ? regular : filteredRegular} itemProps={{ ...itemProps, sortMode: habitSortMode }} sortMode={habitSortMode} />
-        )}
-
-        {!habitSortMode && (
-          <Accordion label="🤷‍♂️ Abitudini Se/If (Bonus)">
-            {filteredBonus.length === 0
-              ? <div className="empty-state">{focusMode && bonus.length > 0 ? 'Tutti i bonus completati! 🎉' : 'Nessun bonus oggi'}</div>
-              : <SortableHabitList habits={filteredBonus} itemProps={itemProps} sortMode={false} />
-            }
-          </Accordion>
-        )}
-      </div>
 
       {/* Task section — solo Flavio, non read-only */}
       {authUserId === 'flavio' && !isReadOnly && <TaskSection />}
@@ -535,6 +567,15 @@ export default function App() {
 }
 
 // ── Helper subcomponents ──────────────────────────────────────────────────────
+
+function DailySumRow({ label, value, color, bold }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+      <span style={{ fontSize: '0.72em', color: '#888' }}>{label}</span>
+      <span style={{ fontSize: bold ? '0.82em' : '0.75em', color, fontWeight: bold ? 800 : 600 }}>{value}</span>
+    </div>
+  )
+}
 
 function SearchSection() {
   const [showSearch, setShowSearch] = useState(false)

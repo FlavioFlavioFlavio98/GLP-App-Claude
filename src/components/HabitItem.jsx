@@ -141,8 +141,6 @@ export default function HabitItem({
   const streak = isToday && !isIf && !isDragOverlay ? calculateStreak(stableId, {}) : 0
   const existingNote = habitNotes?.[stableId] || ''
 
-  const [showNoteInput, setShowNoteInput] = useState(false)
-  const [noteText, setNoteText] = useState('')
   const [showNotePopup, setShowNotePopup] = useState(false)
 
   // ---- Swipe state ----
@@ -246,13 +244,6 @@ export default function HabitItem({
   const statusClass = isDone ? 'status-done' : isFailed ? 'status-failed' : ''
   const doneButtonKey = `done-${stableId}-${isDone ? (isMulti ? level : 'done') : 'neutral'}`
   const failButtonKey = `fail-${stableId}-${isFailed ? 'fail' : 'neutral'}`
-
-  function handleSaveNote() {
-    const trimmed = noteText.trim()
-    if (trimmed) actions.saveHabitNote(stableId, trimmed, viewDate)
-    setShowNoteInput(false)
-    setNoteText('')
-  }
 
   // Swipe hint content
   const rightLabel = isDone ? (isMulti && level === 'min' ? 'MAX' : 'Annulla') : (isMulti ? 'MIN' : 'Fatto')
@@ -365,28 +356,6 @@ export default function HabitItem({
         </div>
       </div>
 
-      {isDone && !existingNote && !showNoteInput && (
-        <button className="add-note-btn" onClick={() => { setNoteText(''); setShowNoteInput(true) }}>
-          📝 Aggiungi nota
-        </button>
-      )}
-      {showNoteInput && (
-        <div className="note-input-wrap">
-          <textarea
-            className="note-textarea"
-            value={noteText}
-            onChange={e => setNoteText(e.target.value.slice(0, 150))}
-            placeholder="Scrivi una nota breve... (max 150 caratteri)"
-            autoFocus
-            rows={2}
-          />
-          <div className="note-input-actions">
-            <span className="note-char-count">{noteText.length}/150</span>
-            <button className="note-cancel-btn" onClick={() => setShowNoteInput(false)}>Annulla</button>
-            <button className="note-save-btn" onClick={handleSaveNote} disabled={!noteText.trim()}>Salva</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

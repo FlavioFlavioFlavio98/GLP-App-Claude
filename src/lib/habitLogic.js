@@ -26,9 +26,9 @@ export function getItemValueAtDate(item, field, dateStr) {
 
 // Parse a dailyLog entry handling both legacy (array) and new (object) formats
 export function parseEntry(entry) {
-  if (!entry) return { habits: [], failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {}, habitValues: {}, mood: {} }
+  if (!entry) return { habits: [], failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {}, habitValues: {}, mood: {}, trackedRewards: {} }
   if (Array.isArray(entry)) {
-    return { habits: entry, failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {}, habitValues: {}, mood: {} }
+    return { habits: entry, failedHabits: [], habitLevels: {}, purchases: [], habitNotes: {}, habitValues: {}, mood: {}, trackedRewards: {} }
   }
   return {
     habits: entry.habits || [],
@@ -39,7 +39,15 @@ export function parseEntry(entry) {
     habitValues: entry.habitValues || {},
     mood: entry.mood || {},
     energy: entry.energy || {},
+    trackedRewards: entry.trackedRewards || {},
   }
+}
+
+// Calculate cost for a tracked reward given quantity
+export function calcTrackedCost(quantity, reward) {
+  const threshold = Math.max(1, parseInt(reward.threshold) || 1)
+  const cpt = parseInt(reward.costPerThreshold) || 0
+  return Math.floor(Math.max(0, parseInt(quantity) || 0) / threshold) * cpt
 }
 
 // Calculate points for a numeric habit given a value and config

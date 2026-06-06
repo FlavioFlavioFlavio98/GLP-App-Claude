@@ -1072,6 +1072,32 @@ export function AppProvider({ children }) {
       actions.showToast('Task eliminata', '🗑️')
     },
 
+    async registerTrackedReward(rewardId, quantity, dateStr) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const reward = (globalData.rewards || []).find(r => r.id === rewardId)
+      if (!reward) return
+
+      const { calcTrackedCost } = await import('./habitLogic')
+      const newCost = calcTrackedCost(quantity, reward)
+
+      const dailyLogs = { ...(globalData.dailyLogs || {}) }
+      let raw = dailyLogs[dateStr] || {}
+      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+
+      const trackedRewards = { ...(raw.trackedRewards || {}) }
+      const oldCost = trackedRewards[rewardId]?.cost || 0
+      trackedRewards[rewardId] = { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() }
+      dailyLogs[dateStr] = { ...raw, trackedRewards }
+
+      const diff = newCost - oldCost
+      await updateDoc(doc(db, 'users', authUserId), { dailyLogs, score: increment(-diff) })
+      await actions._logHistory(authUserId, (globalData.score || 0) - diff)
+      if (diff > 0) actions.showToast(`Registrato: -${newCost}pt`, '📊')
+      else if (diff < 0) actions.showToast(`Aggiornato: rimborso +${Math.abs(diff)}pt`, '📊')
+      else actions.showToast('Registrato', '📊')
+    },
+
     async reopenTask(task, newDeadline) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state

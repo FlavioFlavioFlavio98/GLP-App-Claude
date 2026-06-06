@@ -200,6 +200,8 @@ export default function App() {
 
   const purchaseCost = entry.purchases.reduce((acc, p) => acc + parseInt(p.cost || 0), 0)
   dailySpent += purchaseCost
+  const trackedCost = Object.values(entry.trackedRewards || {}).reduce((sum, tr) => sum + (parseInt(tr.cost) || 0), 0)
+  dailySpent += trackedCost
 
   // Punti extra: esercizi rapidi del giorno corrente
   const extraPts = Math.round(

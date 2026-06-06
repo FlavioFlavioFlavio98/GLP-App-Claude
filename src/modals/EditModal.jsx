@@ -34,6 +34,11 @@ export default function EditModal() {
       isMulti: item.isMulti || false,
       cost: item.cost || 0,
       categoryId: item.categoryId || '',
+      // tracked reward fields
+      rewardType: item.type === 'tracked' ? 'tracked' : 'normal',
+      trackedUnit: item.unit || '',
+      trackedCostPerThreshold: item.costPerThreshold ?? 5,
+      trackedThreshold: item.threshold ?? 10,
     })
     setShowArchive(false)
   }, [modal, modalPayload])
@@ -80,6 +85,12 @@ export default function EditModal() {
     changes.push(newChange)
     changes.sort((a, b) => a.date.localeCompare(b.date))
 
+    const rewardFields = type === 'habit'
+      ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti }
+      : f.rewardType === 'tracked'
+        ? { type: 'tracked', unit: f.trackedUnit, costPerThreshold: parseInt(f.trackedCostPerThreshold) || 0, threshold: parseInt(f.trackedThreshold) || 1 }
+        : { cost: parseInt(f.cost) || 0, categoryId: f.categoryId || '' }
+
     const updated = {
       ...item,
       name: f.name || item.name,
@@ -89,9 +100,7 @@ export default function EditModal() {
       timeSlot: f.timeSlot || null,
       why: f.why?.trim() || null,
       changes,
-      ...(type === 'habit'
-        ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti }
-        : { cost: parseInt(f.cost) || 0, categoryId: f.categoryId || '' }),
+      ...rewardFields,
     }
     console.log('[EditModal] saving', type, updated)
     await actions.saveEdit(updated, type)
@@ -150,12 +159,31 @@ export default function EditModal() {
 
         {f.type === 'reward' && (
           <>
-            <div className="input-group"><label>Costo</label><input type="number" value={f.cost} onChange={e => set('cost', e.target.value)} /></div>
-            <RewardCategoryPicker
-              categories={globalData?.rewardCategories || []}
-              value={f.categoryId || ''}
-              onChange={v => set('categoryId', v)}
-            />
+            {f.rewardType === 'tracked' ? (
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, margin: '8px 0' }}>
+                <div style={{ fontSize: '0.7em', color: '#888', marginBottom: 8, fontWeight: 700 }}>📊 Premio Speciale</div>
+                <div className="input-group"><label>Unità di misura</label>
+                  <input type="text" value={f.trackedUnit} onChange={e => set('trackedUnit', e.target.value)} /></div>
+                <div className="grid-2">
+                  <div className="input-group"><label>Costo (pt)</label>
+                    <input type="number" min="0" value={f.trackedCostPerThreshold} onChange={e => set('trackedCostPerThreshold', e.target.value)} /></div>
+                  <div className="input-group"><label>Ogni (quantità)</label>
+                    <input type="number" min="1" value={f.trackedThreshold} onChange={e => set('trackedThreshold', e.target.value)} /></div>
+                </div>
+                <div style={{ fontSize: '0.68em', color: '#555' }}>
+                  {f.trackedCostPerThreshold}pt ogni {f.trackedThreshold} {f.trackedUnit || 'unità'}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="input-group"><label>Costo</label><input type="number" value={f.cost} onChange={e => set('cost', e.target.value)} /></div>
+                <RewardCategoryPicker
+                  categories={globalData?.rewardCategories || []}
+                  value={f.categoryId || ''}
+                  onChange={v => set('categoryId', v)}
+                />
+              </>
+            )}
           </>
         )}
 

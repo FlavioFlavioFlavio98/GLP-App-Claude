@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../lib/store'
-import { getItemValueAtDate } from '../lib/habitLogic'
+import { getItemValueAtDate, calcTrackedCost, toDateString } from '../lib/habitLogic'
 import SortableShopList from './SortableShopList'
 
 const SORT_KEY = 'glp_reward_sort'
@@ -14,7 +14,7 @@ const SORT_OPTIONS = [
 
 export default function ShopList() {
   const { state, actions } = useApp()
-  const { globalData, viewDate } = state
+  const { globalData, viewDate, authUserId } = state
   const [selectedCat, setSelectedCat] = useState(null)
   const [sort, setSort] = useState(() => localStorage.getItem(SORT_KEY) || 'manual')
   const isReadOnly = state.viewUserId !== state.authUserId
@@ -27,14 +27,17 @@ export default function ShopList() {
 
   const allRewards = (globalData.rewards || []).filter(r => !(r.archivedAt && viewDate >= r.archivedAt))
 
-  // Category filter
-  const filtered = selectedCat === null
-    ? allRewards
-    : selectedCat === '__none__'
-      ? allRewards.filter(r => !r.categoryId || !catMap[r.categoryId])
-      : allRewards.filter(r => r.categoryId === selectedCat)
+  // Separate tracked rewards from normal
+  const trackedRewards = allRewards.filter(r => r.type === 'tracked')
+  const normalRewards = allRewards.filter(r => r.type !== 'tracked')
 
-  // Purchase counts and recency
+  // Category filter (only for normal rewards)
+  const filtered = selectedCat === null
+    ? normalRewards
+    : selectedCat === '__none__'
+      ? normalRewards.filter(r => !r.categoryId || !catMap[r.categoryId])
+      : normalRewards.filter(r => r.categoryId === selectedCat)
+
   function getRewardStats(name) {
     let count = 0, lastTime = 0
     Object.values(globalData.dailyLogs || {}).forEach(log => {
@@ -44,14 +47,13 @@ export default function ShopList() {
     return { count, lastTime }
   }
 
-  // Sort
   function sortRewards(arr) {
     const withStats = arr.map(r => ({ r, cost: getItemValueAtDate(r, 'cost', viewDate), stats: getRewardStats(r.name) }))
     if (sort === 'cost_asc') return withStats.sort((a, b) => a.cost - b.cost).map(x => x.r)
     if (sort === 'cost_desc') return withStats.sort((a, b) => b.cost - a.cost).map(x => x.r)
     if (sort === 'recent') return withStats.sort((a, b) => b.stats.lastTime - a.stats.lastTime).map(x => x.r)
     if (sort === 'popular') return withStats.sort((a, b) => b.stats.count - a.stats.count).map(x => x.r)
-    return arr // manual
+    return arr
   }
 
   function changeSort(s) {
@@ -62,6 +64,11 @@ export default function ShopList() {
 
   return (
     <>
+      {/* ── Tracciamento giornaliero — solo Flavio ── */}
+      {authUserId === 'flavio' && !isReadOnly && trackedRewards.length > 0 && (
+        <TrackedSection rewards={trackedRewards} globalData={globalData} actions={actions} viewDate={viewDate} />
+      )}
+
       {/* Sort selector */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap', overflowX: 'auto', marginBottom: 10, paddingBottom: 2 }}>
         {SORT_OPTIONS.map(opt => (
@@ -130,5 +137,105 @@ export default function ShopList() {
         })
       )}
     </>
+  )
+}
+
+function TrackedSection({ rewards, globalData, actions, viewDate }) {
+  const [quantities, setQuantities] = useState({})
+  const [saving, setSaving] = useState({})
+
+  const trackedToday = globalData.dailyLogs?.[viewDate]?.trackedRewards || {}
+
+  function getQty(rewardId) {
+    if (quantities[rewardId] !== undefined) return quantities[rewardId]
+    return trackedToday[rewardId] !== undefined ? String(trackedToday[rewardId].quantity) : ''
+  }
+
+  async function handleRegister(reward) {
+    const qty = parseInt(getQty(reward.id)) || 0
+    setSaving(prev => ({ ...prev, [reward.id]: true }))
+    await actions.registerTrackedReward(reward.id, qty, viewDate)
+    setSaving(prev => ({ ...prev, [reward.id]: false }))
+    setQuantities(prev => ({ ...prev, [reward.id]: undefined }))
+  }
+
+  return (
+    <div style={{
+      marginBottom: 16,
+      background: 'rgba(255,255,255,0.02)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 12, padding: '12px 14px',
+    }}>
+      <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+        📊 Tracciamento giornaliero
+      </div>
+      {rewards.map(reward => {
+        const qtyStr = getQty(reward.id)
+        const qty = parseInt(qtyStr) || 0
+        const cost = calcTrackedCost(qty, reward)
+        const alreadySaved = trackedToday[reward.id]
+        const isModified = alreadySaved && String(alreadySaved.quantity) !== qtyStr && qtyStr !== ''
+
+        return (
+          <div key={reward.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div>
+                <span style={{ fontWeight: 600, fontSize: '0.88em', color: 'var(--text)' }}>
+                  {reward.emoji || '📊'} {reward.name}
+                </span>
+                <span style={{ fontSize: '0.68em', color: '#555', marginLeft: 6 }}>
+                  {reward.costPerThreshold}pt / {reward.threshold} {reward.unit}
+                </span>
+              </div>
+              <button
+                className="btn-icon"
+                onClick={() => actions.openModal('singleReward', reward.id)}
+                style={{ padding: 2 }}
+              >
+                <span className="material-icons-round" style={{ fontSize: 16 }}>insights</span>
+              </button>
+            </div>
+
+            {alreadySaved && !isModified ? (
+              <div style={{ fontSize: '0.78em', color: '#666', marginBottom: 6 }}>
+                ✓ Registrato: <strong>{alreadySaved.quantity} {reward.unit}</strong> = <span style={{ color: '#e53935' }}>-{alreadySaved.cost}pt</span>
+              </div>
+            ) : null}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="number" min="0"
+                value={qtyStr}
+                onChange={e => setQuantities(prev => ({ ...prev, [reward.id]: e.target.value }))}
+                placeholder={`Quantità ${reward.unit}`}
+                style={{
+                  flex: 1, padding: '8px 10px', borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.05)', color: 'var(--text)',
+                  fontSize: '0.9em',
+                }}
+              />
+              <span style={{ fontSize: '0.82em', color: qty > 0 ? '#e53935' : '#555', fontWeight: 700, minWidth: 48, textAlign: 'right' }}>
+                {qty > 0 ? `= -${cost}pt` : reward.unit}
+              </span>
+              <button
+                onClick={() => handleRegister(reward)}
+                disabled={saving[reward.id] || qtyStr === ''}
+                style={{
+                  padding: '7px 12px', borderRadius: 8, fontSize: '0.8em', fontWeight: 700,
+                  background: alreadySaved ? 'rgba(255,255,255,0.08)' : 'var(--theme-glow)',
+                  border: `1px solid ${alreadySaved ? 'rgba(255,255,255,0.12)' : 'var(--theme-color)'}`,
+                  color: alreadySaved ? '#888' : 'var(--theme-color)',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                  opacity: saving[reward.id] || qtyStr === '' ? 0.5 : 1,
+                }}
+              >
+                {saving[reward.id] ? '⏳' : alreadySaved ? '↺ Aggiorna' : 'Registra'}
+              </button>
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }

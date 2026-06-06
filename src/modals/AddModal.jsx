@@ -24,6 +24,52 @@ const DEFAULT = {
   pointsPerUnit: '', unitSize: '1000', cap: '',
   // goal config
   goalTarget: '', goalUnit: '', goalDeadline: '', goalReward: '', goalPenalty: '',
+  // tracked reward config
+  rewardType: 'normal',
+  trackedUnit: '',
+  trackedCostPerThreshold: '5',
+  trackedThreshold: '10',
+  trackedTestQty: '',
+}
+
+function TrackedRewardForm({ f, set }) {
+  const cpt = parseInt(f.trackedCostPerThreshold) || 0
+  const thr = parseInt(f.trackedThreshold) || 1
+  const testQty = parseInt(f.trackedTestQty) || 0
+  const preview = testQty > 0 ? Math.floor(testQty / Math.max(1, thr)) * cpt : null
+
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, marginTop: 8 }}>
+      <div className="input-group">
+        <label>Unità di misura</label>
+        <input type="text" placeholder="es. puff, sigarette, bicchieri..." value={f.trackedUnit} onChange={e => set('trackedUnit', e.target.value)} />
+      </div>
+      <div className="grid-2">
+        <div className="input-group">
+          <label>Costo (pt)</label>
+          <input type="number" min="0" placeholder="es. 5" value={f.trackedCostPerThreshold} onChange={e => set('trackedCostPerThreshold', e.target.value)} />
+        </div>
+        <div className="input-group">
+          <label>Ogni (quantità)</label>
+          <input type="number" min="1" placeholder="es. 10" value={f.trackedThreshold} onChange={e => set('trackedThreshold', e.target.value)} />
+        </div>
+      </div>
+      <div style={{ fontSize: '0.68em', color: '#555', marginBottom: 10 }}>
+        {cpt}pt ogni {thr} {f.trackedUnit || 'unità'}
+      </div>
+      <div className="input-group">
+        <label>Anteprima (inserisci una quantità di test)</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input type="number" min="0" placeholder="es. 80" value={f.trackedTestQty} onChange={e => set('trackedTestQty', e.target.value)} style={{ flex: 1 }} />
+          {preview !== null && (
+            <span style={{ fontWeight: 700, color: '#e53935', fontSize: '0.9em', whiteSpace: 'nowrap' }}>
+              = -{preview}pt
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function NumericConfigForm({ f, set }) {
@@ -171,12 +217,27 @@ export default function AddModal() {
       else if (f.recurMode === 'single') habit.targetDate = f.targetDate
       await actions.addItem(habit, 'habit')
     } else {
-      const c = parseInt(f.cost) || 0
-      await actions.addItem({
-        id, name: f.name, cost: c, tagId: f.tagId,
-        categoryId: f.categoryId || '', description: f.desc,
-        changes: [{ date: startDate, cost: c, note: 'Creazione Iniziale' }],
-      }, 'reward')
+      if (f.rewardType === 'tracked') {
+        await actions.addItem({
+          id, name: f.name,
+          type: 'tracked',
+          unit: f.trackedUnit,
+          costPerThreshold: parseInt(f.trackedCostPerThreshold) || 5,
+          threshold: parseInt(f.trackedThreshold) || 10,
+          tagId: f.tagId || '',
+          categoryId: f.categoryId || '',
+          description: f.desc,
+          active: true,
+          changes: [{ date: startDate, note: 'Creazione Iniziale' }],
+        }, 'reward')
+      } else {
+        const c = parseInt(f.cost) || 0
+        await actions.addItem({
+          id, name: f.name, cost: c, tagId: f.tagId,
+          categoryId: f.categoryId || '', description: f.desc,
+          changes: [{ date: startDate, cost: c, note: 'Creazione Iniziale' }],
+        }, 'reward')
+      }
     }
     setF(DEFAULT)
     actions.closeModal()
@@ -317,12 +378,31 @@ export default function AddModal() {
 
         {f.itemType === 'reward' && (
           <>
-            <input type="number" placeholder="Costo" value={f.cost} onChange={e => set('cost', e.target.value)} />
-            <RewardCategoryPicker
-              categories={globalData?.rewardCategories || []}
-              value={f.categoryId || ''}
-              onChange={v => set('categoryId', v)}
-            />
+            {/* Reward type selector */}
+            <div className="input-group">
+              <label>Tipo Premio</label>
+              <div className="switch-group" style={{ marginTop: 4 }}>
+                <div className={`switch-opt${f.rewardType === 'normal' ? ' active' : ''}`} onClick={() => set('rewardType', 'normal')}>
+                  🎁 Premio Normale — costo fisso
+                </div>
+                <div className={`switch-opt${f.rewardType === 'tracked' ? ' active' : ''}`} onClick={() => set('rewardType', 'tracked')}>
+                  📊 Premio Speciale — costo per quantità
+                </div>
+              </div>
+            </div>
+
+            {f.rewardType === 'normal' ? (
+              <>
+                <input type="number" placeholder="Costo" value={f.cost} onChange={e => set('cost', e.target.value)} />
+                <RewardCategoryPicker
+                  categories={globalData?.rewardCategories || []}
+                  value={f.categoryId || ''}
+                  onChange={v => set('categoryId', v)}
+                />
+              </>
+            ) : (
+              <TrackedRewardForm f={f} set={set} />
+            )}
           </>
         )}
 

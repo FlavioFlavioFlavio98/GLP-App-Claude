@@ -488,6 +488,13 @@ body.offline .offline-badge { display: block; }
   transition: all var(--transition); letter-spacing: 0.2px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.2);
 }
+.accordion-btn {
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--theme-color);
+}
 .accordion-btn:hover,
 .accordion-btn.open {
   background: rgba(255,255,255,0.05);
@@ -777,10 +784,29 @@ input[type="color"] {
    FOCUS MODE
    ============================================= */
 .section-header {
-  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--theme-color);
+  opacity: 1;
+  padding: 12px 4px 8px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  user-select: none;
   margin-bottom: 10px;
 }
-.section-header .section-title { margin: 0; }
+.section-header:active { opacity: 0.7; }
+.section-header .section-title { margin: 0; color: var(--theme-color); font-size: 1em; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.section-count {
+  font-size: 0.85em;
+  color: var(--text-sec);
+  font-weight: 400;
+  margin-left: 6px;
+}
 
 .focus-toggle {
   display: flex; align-items: center; gap: 5px;

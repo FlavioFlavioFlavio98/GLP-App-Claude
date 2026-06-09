@@ -829,11 +829,11 @@ export function AppProvider({ children }) {
       const prevPts = prevValue !== undefined ? cnp(parseFloat(prevValue), habit.numericConfig) : 0
       entry.habitValues[habitId] = value
       const newPts = cnp(parseFloat(value), habit.numericConfig)
+      const delta = Math.round((newPts - prevPts) * 10) / 10
       if (!entry.habits.includes(habitId)) entry.habits.push(habitId)
-      let score = Math.round((globalData.score - prevPts + newPts) * 10) / 10
       dailyLogs[viewDate] = entry
-      await updateDoc(ref, { score, dailyLogs })
-      await actions._logHistory(authUserId, score)
+      await updateDoc(ref, { dailyLogs, score: increment(delta) })
+      await actions._logHistory(authUserId, (globalData.score || 0) + delta)
       actions.vibrate('light')
       actions.showToast(`${newPts >= 0 ? '+' : ''}${newPts} pt`, newPts >= 0 ? '✅' : '❌')
     },

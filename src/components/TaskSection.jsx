@@ -63,10 +63,10 @@ export default function TaskSection({ minimalMode }) {
       <div className="section-header" style={{ marginBottom: 10 }}>
         <button
           onClick={toggle}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text)' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--theme-color)' }}
         >
           <div className="section-title" style={{ margin: 0 }}>📋 Task ({activeTasks.length}/{totalCount})</div>
-          <span className="material-icons-round" style={{ fontSize: 18, color: '#666' }}>{expanded ? 'expand_less' : 'expand_more'}</span>
+          <span className="material-icons-round" style={{ fontSize: 18, color: 'var(--theme-color)' }}>{expanded ? 'expand_less' : 'expand_more'}</span>
         </button>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn-icon" onClick={() => actions.openModal('taskHistory')} title="Storico task">

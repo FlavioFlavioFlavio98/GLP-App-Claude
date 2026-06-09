@@ -451,10 +451,10 @@ export default function App() {
       <div className="section-header">
         <button
           onClick={() => { const next = !habitsExpanded; setHabitsExpanded(next); localStorage.setItem('glp_habits_expanded', String(next)) }}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text)' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--theme-color)' }}
         >
           <div className="section-title" style={{ margin: 0 }}>💪 Abitudini ({doneRegularCount}/{regular.length})</div>
-          <span className="material-icons-round" style={{ fontSize: 18, color: '#666' }}>{habitsExpanded ? 'expand_less' : 'expand_more'}</span>
+          <span className="material-icons-round" style={{ fontSize: 18, color: 'var(--theme-color)' }}>{habitsExpanded ? 'expand_less' : 'expand_more'}</span>
         </button>
         <div style={{ display: 'flex', gap: 6 }}>
           {!isReadOnly && (
@@ -518,10 +518,10 @@ export default function App() {
               <div>
                 <button
                   onClick={() => { const next = !bonusExpanded; setBonusExpanded(next); localStorage.setItem('glp_bonus_expanded', String(next)) }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '10px 0', color: 'var(--text)' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '10px 0', color: 'var(--theme-color)' }}
                 >
-                  <span style={{ fontSize: '0.88em', fontWeight: 600 }}>🤷‍♂️ Abitudini Se/If (Bonus)</span>
-                  <span className="material-icons-round" style={{ fontSize: 18, color: '#666', marginLeft: 'auto' }}>{bonusExpanded ? 'expand_less' : 'expand_more'}</span>
+                  <span style={{ fontSize: '0.75em', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>🤷‍♂️ Abitudini Se/If (Bonus)</span>
+                  <span className="material-icons-round" style={{ fontSize: 18, color: 'var(--theme-color)', marginLeft: 'auto' }}>{bonusExpanded ? 'expand_less' : 'expand_more'}</span>
                 </button>
                 {bonusExpanded && (
                   filteredBonus.length === 0

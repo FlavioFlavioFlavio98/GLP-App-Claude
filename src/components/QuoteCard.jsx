@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useApp } from '../lib/store'
 import { quotes, getRandomQuote } from '../lib/quotes'
 
@@ -6,27 +6,11 @@ export default function QuoteCard() {
   const { state, actions } = useApp()
   const { currentUser, globalData } = state
 
-  const [currentQuote, setCurrentQuote] = useState(null)
+  const dislikedIds = globalData?.quotes?.disliked || []
+  const [currentQuote, setCurrentQuote] = useState(() =>
+    getRandomQuote(quotes, dislikedIds)
+  )
   const [visible, setVisible] = useState(true)
-
-  useEffect(() => {
-    if (currentUser !== 'flavio' || !globalData) return
-    const quoteData = globalData.quotes || {}
-    const dislikedIds = quoteData.disliked || []
-    const lastShownId = quoteData.lastShown || null
-
-    const cachedId = sessionStorage.getItem('currentQuoteId')
-    if (cachedId) {
-      const found = quotes.find(q => q.id === parseInt(cachedId))
-      if (found && !dislikedIds.includes(found.id)) {
-        setCurrentQuote(found)
-        return
-      }
-    }
-    const q = getRandomQuote(quotes, dislikedIds, lastShownId)
-    setCurrentQuote(q)
-    sessionStorage.setItem('currentQuoteId', String(q.id))
-  }, [currentUser, globalData?.quotes?.lastShown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (currentUser !== 'flavio' || !currentQuote) return null
 
@@ -46,11 +30,9 @@ export default function QuoteCard() {
     actions.dislikeQuote(currentQuote.id)
     setVisible(false)
     setTimeout(() => {
-      const dislikedIds = [...(globalData?.quotes?.disliked || []), currentQuote.id]
-      const lastShownId = currentQuote.id
-      const next = getRandomQuote(quotes, dislikedIds, lastShownId)
+      const newDislikedIds = [...(globalData?.quotes?.disliked || []), currentQuote.id]
+      const next = getRandomQuote(quotes, newDislikedIds)
       setCurrentQuote(next)
-      sessionStorage.setItem('currentQuoteId', String(next.id))
       setVisible(true)
     }, 300)
   }

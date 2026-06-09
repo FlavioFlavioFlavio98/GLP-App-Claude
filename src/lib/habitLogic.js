@@ -132,6 +132,14 @@ export function getDailyNet(userData, dateStr) {
     const h = userData.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
     if (h) net -= getItemValueAtDate(h, 'penalty', dateStr)
   })
+  const numericPts = Object.entries(entry.habitValues || {}).reduce((sum, [hId, val]) => {
+    const h = userData.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
+    if (h?.numericConfig) {
+      return sum + calcNumericPoints(parseFloat(val), h.numericConfig)
+    }
+    return sum
+  }, 0)
+  net += numericPts
   const spent = entry.purchases.reduce((acc, p) => acc + parseInt(p.cost || 0), 0)
   return net - spent
 }

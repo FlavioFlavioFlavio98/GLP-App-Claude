@@ -30,7 +30,7 @@ exports.coachChat = onCall(
 
     const anthropic = getClient(anthropicKey.value())
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: 'claude-opus-4-8',
       max_tokens: 2048,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages,
@@ -49,7 +49,7 @@ exports.coachWeeklyReport = onCall(
 
     const anthropic = getClient(anthropicKey.value())
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: 'claude-opus-4-8',
       max_tokens: 1024,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages: [{
@@ -74,7 +74,7 @@ exports.summarizeConversation = onCall(
 
     const [summaryRes, toneRes] = await Promise.all([
       anthropic.messages.create({
-        model: 'claude-opus-4-5',
+        model: 'claude-opus-4-8',
         max_tokens: 200,
         system: 'Sei un assistente che riassume conversazioni in modo conciso.',
         messages: [{
@@ -83,7 +83,7 @@ exports.summarizeConversation = onCall(
         }],
       }),
       anthropic.messages.create({
-        model: 'claude-opus-4-5',
+        model: 'claude-opus-4-8',
         max_tokens: 50,
         system: 'Analizza il tono emotivo del messaggio utente.',
         messages: [{
@@ -158,7 +158,7 @@ exports.generateDailyInsight = onCall(
 
     const anthropic = getClient(anthropicKey.value())
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: 'claude-opus-4-8',
       max_tokens: 150,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages: [{

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from './lib/store'
-import { parseEntry, getItemValueAtDate, isHabitVisible, toDateString } from './lib/habitLogic'
+import { parseEntry, getItemValueAtDate, isHabitVisible, toDateString, calcNumericPoints } from './lib/habitLogic'
 import { applyTheme, applyUserColors } from './lib/themes'
 import { getLevel } from './lib/levels'
 import { TIME_SLOT_OPTS } from './lib/timeSlots'
@@ -220,6 +220,16 @@ export default function App() {
     if (isFailed) penaltyCost += penalty
   })
 
+  // Punti abitudini numeriche (solo positivi nei guadagni)
+  const numericHabitPoints = (globalData.habits || [])
+    .filter(h => h.numericConfig && entry.habitValues?.[h.id] != null)
+    .reduce((sum, h) => {
+      const pts = calcNumericPoints(parseFloat(entry.habitValues[h.id]), h.numericConfig)
+      return sum + (pts > 0 ? pts : 0)
+    }, 0)
+
+  const totalHabitPoints = dailyEarned + numericHabitPoints
+
   const purchaseCost = entry.purchases.reduce((acc, p) => acc + parseInt(p.cost || 0), 0)
   const trackedItems = Object.entries(entry.trackedRewards || {}).map(([id, tr]) => {
     const rw = (globalData.rewards || []).find(r => r.id === id)
@@ -252,7 +262,7 @@ export default function App() {
         .reduce((sum, t) => sum + (parseInt(t.penalty) || 0), 0)
     : 0
 
-  const net = dailyEarned + taskPts + extraPts - dailySpent - expiredTaskCost
+  const net = totalHabitPoints + taskPts + extraPts - dailySpent - expiredTaskCost
 
   function isFullyComplete(h) {
     const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
@@ -352,12 +362,12 @@ export default function App() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
             <div style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)', borderRadius: 10, padding: '10px 12px' }}>
               <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#4caf50', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>💚 Guadagni</div>
-              {dailyEarned > 0 && <DailySumRow label="Abitudini" value={`+${dailyEarned}`} color="#4caf50" />}
+              {totalHabitPoints > 0 && <DailySumRow label="Abitudini" value={`+${totalHabitPoints}`} color="#4caf50" />}
               {taskPts > 0 && <DailySumRow label="Task 📋" value={`+${taskPts}`} color="#4caf50" />}
               {extraPts > 0 && <DailySumRow label="Extra 💪" value={`+${extraPts}`} color="#4caf50" />}
-              {(dailyEarned + taskPts + extraPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
+              {(totalHabitPoints + taskPts + extraPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
               <div style={{ borderTop: '1px solid rgba(76,175,80,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`+${dailyEarned + taskPts + extraPts}`} color="#4caf50" bold />
+                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts}`} color="#4caf50" bold />
               </div>
             </div>
             <div style={{ background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 10, padding: '10px 12px' }}>
@@ -391,7 +401,7 @@ export default function App() {
         <div className="daily-summary">
           <div className="sum-item">
             <div className="sum-label">Abitudini</div>
-            <AnimatedNumber value={dailyEarned} className="sum-val sum-earn" prefix="+" />
+            <AnimatedNumber value={totalHabitPoints} className="sum-val sum-earn" prefix="+" />
           </div>
           {extraPts > 0 && (
             <div className="sum-item">
@@ -539,11 +549,10 @@ export default function App() {
 
       {!minimalMode && (
         <>
-          <div className="section-title" style={{ marginTop: 30 }}>Acquisti del Giorno</div>
-          <PurchasedList />
           <Accordion label={<><span className="material-icons-round" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>redeem</span>Negozio Premi</>} defaultOpen={false}>
             <ShopList />
           </Accordion>
+          <PurchasedList />
         </>
       )}
 

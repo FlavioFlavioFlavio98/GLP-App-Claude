@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useApp } from '../lib/store'
 import { parseEntry } from '../lib/habitLogic'
 
-const LS_KEY = 'glp_purchases_open'
+const LS_KEY = 'glp_purchases_expanded'
 
 export default function PurchasedList() {
   const { state, actions } = useApp()
@@ -10,56 +10,50 @@ export default function PurchasedList() {
   if (!globalData) return null
 
   const { purchases } = parseEntry(globalData.dailyLogs?.[viewDate])
-  const defaultOpen = purchases.length <= 2
-  const [open, setOpen] = useState(() => {
+
+  // Nascondi se nessun acquisto
+  if (purchases.length === 0) return null
+
+  // Default sempre collassato; opzionalmente ricorda la preferenza
+  const [expanded, setExpanded] = useState(() => {
     const stored = localStorage.getItem(LS_KEY)
-    return stored !== null ? stored === 'true' : defaultOpen
+    return stored === 'true'
   })
 
   function toggle() {
-    setOpen(v => {
-      localStorage.setItem(LS_KEY, String(!v))
-      return !v
-    })
+    const next = !expanded
+    setExpanded(next)
+    localStorage.setItem(LS_KEY, String(next))
   }
 
   return (
-    <div style={{ marginBottom: 4 }}>
-      {/* Accordion header */}
-      <button
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div
         onClick={toggle}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'none', border: 'none', padding: '6px 0', cursor: 'pointer',
-          color: 'var(--text)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          cursor: 'pointer', padding: '8px 4px',
+          fontSize: '0.78em', color: '#888',
         }}
       >
-        <span style={{ fontWeight: 700, fontSize: '0.95em' }}>
-          🛍️ Acquistati oggi ({purchases.length})
-        </span>
-        <span className="material-icons-round" style={{ fontSize: 20, color: '#555', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-          expand_more
-        </span>
-      </button>
+        <span>🛍️ Acquistati oggi ({purchases.length})</span>
+        <span style={{ fontSize: '0.9em' }}>{expanded ? '▲' : '▼'}</span>
+      </div>
 
-      {open && (
-        <>
-          {purchases.length === 0 ? (
-            <div className="empty-state">Nessun acquisto oggi</div>
-          ) : (
-            purchases.map((p, idx) => (
-              <div className="item" key={idx}>
-                <div>
-                  <h3>{p.name}</h3>
-                  <div className="vals"><span className="val-badge val-badge-minus">Pagato: {p.cost}</span></div>
-                </div>
-                <button className="btn-icon" style={{ color: 'var(--danger)' }} onClick={() => actions.refundPurchase(idx, p.cost)}>
-                  <span className="material-icons-round">undo</span>
-                </button>
+      {expanded && (
+        <div style={{ paddingBottom: 4 }}>
+          {purchases.map((p, idx) => (
+            <div className="item" key={idx} style={{ fontSize: '0.85em' }}>
+              <div>
+                <h3 style={{ fontSize: '0.95em' }}>{p.name}</h3>
+                <div className="vals"><span className="val-badge val-badge-minus">Pagato: {p.cost}</span></div>
               </div>
-            ))
-          )}
-        </>
+              <button className="btn-icon" style={{ color: 'var(--danger)' }} onClick={() => actions.refundPurchase(idx, p.cost)}>
+                <span className="material-icons-round">undo</span>
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

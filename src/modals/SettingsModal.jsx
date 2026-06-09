@@ -159,6 +159,10 @@ export default function SettingsModal() {
               <span style={{ fontSize: '1.1em' }}>📱</span>
               Statistiche Uso App
             </button>
+            <button className="btn-backup" onClick={() => openAfter('quotesModal')}>
+              <span style={{ fontSize: '1.1em' }}>💬</span>
+              Aforismi
+            </button>
           </div>
         )}
 

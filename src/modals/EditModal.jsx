@@ -4,6 +4,68 @@ import { toDateString } from '../lib/habitLogic'
 import RewardCategoryPicker from './RewardCategoryPicker'
 import { TIME_SLOT_OPTS } from '../lib/timeSlots'
 
+function NumericConfigForm({ f, set }) {
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, marginTop: 8 }}>
+      <div style={{ fontSize: '0.7em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, fontWeight: 700 }}>Configurazione Numerica</div>
+
+      <div className="grid-2">
+        <div className="input-group">
+          <label>Unità di misura</label>
+          <input type="text" placeholder="es. passi, km, ore" value={f.numUnit} onChange={e => set('numUnit', e.target.value)} />
+        </div>
+        <div className="input-group">
+          <label>Tipo input</label>
+          <div className="switch-group" style={{ marginTop: 6 }}>
+            <div className={`switch-opt${f.numInputType === 'integer' ? ' active' : ''}`} onClick={() => set('numInputType', 'integer')}>Intero</div>
+            <div className={`switch-opt${f.numInputType === 'decimal' ? ' active' : ''}`} onClick={() => set('numInputType', 'decimal')}>Decimale</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="input-group">
+          <label>Punti per unità</label>
+          <input type="number" step="0.01" placeholder="es. 0.2" value={f.numPointsPerUnit} onChange={e => set('numPointsPerUnit', e.target.value)} />
+        </div>
+        <div className="input-group">
+          <label>Per ogni (quantità)</label>
+          <input type="number" placeholder="es. 1000" value={f.numUnitSize} onChange={e => set('numUnitSize', e.target.value)} />
+        </div>
+      </div>
+      <div style={{ fontSize: '0.68em', color: '#555', marginBottom: 10 }}>
+        Formula: {f.numPointsPerUnit || '?'} pt ogni {f.numUnitSize || '?'} {f.numUnit || 'unità'}
+      </div>
+
+      <div className="grid-2">
+        <div className="input-group">
+          <label>Soglia minima</label>
+          <input type="number" placeholder="sotto cui si applica regola" value={f.numThreshold} onChange={e => set('numThreshold', e.target.value)} />
+        </div>
+        <div className="input-group">
+          <label>Cap massimo pt (0 = nessun limite)</label>
+          <input type="number" placeholder="es. 10" value={f.numCap} onChange={e => set('numCap', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="input-group">
+        <label>Sotto soglia</label>
+        <div className="switch-group" style={{ marginTop: 6 }}>
+          <div className={`switch-opt${f.numBelowThreshold === 'zero' ? ' active' : ''}`} onClick={() => set('numBelowThreshold', 'zero')}>0 pt</div>
+          <div className={`switch-opt${f.numBelowThreshold === 'fixed' ? ' active' : ''}`} onClick={() => set('numBelowThreshold', 'fixed')}>Penalità fissa</div>
+          <div className={`switch-opt${f.numBelowThreshold === 'proportional' ? ' active' : ''}`} onClick={() => set('numBelowThreshold', 'proportional')}>Proporzionale</div>
+        </div>
+      </div>
+      {f.numBelowThreshold === 'fixed' && (
+        <div className="input-group">
+          <label>Penalità fissa (pt)</label>
+          <input type="number" placeholder="es. 5" value={f.numPenaltyFixed} onChange={e => set('numPenaltyFixed', e.target.value)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function EditModal() {
   const { state, actions } = useApp()
   const { modal, modalPayload, globalData } = state
@@ -17,9 +79,12 @@ export default function EditModal() {
     const list = type === 'habit' ? globalData.habits : globalData.rewards
     const item = list.find(i => i.id === id)
     if (!item) return
+    const nc = item.numericConfig || {}
+    const habitType = item.numericConfig ? 'numeric' : item.goalConfig ? 'goal' : item.isMulti ? 'multi' : 'normal'
     setF({
       item,
       type,
+      habitType,
       name: item.name,
       desc: item.description || '',
       tagId: item.tagId || '',
@@ -40,6 +105,15 @@ export default function EditModal() {
       trackedUnit: item.unit || '',
       trackedCostPerThreshold: item.costPerThreshold ?? 5,
       trackedThreshold: item.threshold ?? 10,
+      // numeric config fields (prefixed with num to avoid collisions)
+      numUnit: nc.unit || '',
+      numInputType: nc.inputType || 'integer',
+      numThreshold: nc.threshold != null ? nc.threshold : '',
+      numBelowThreshold: nc.belowThreshold || 'zero',
+      numPenaltyFixed: nc.penaltyFixed || '',
+      numPointsPerUnit: nc.pointsPerUnit || '',
+      numUnitSize: nc.unitSize || '',
+      numCap: nc.cap != null ? nc.cap : '',
     })
     setShowArchive(false)
   }, [modal, modalPayload])
@@ -86,8 +160,19 @@ export default function EditModal() {
     changes.push(newChange)
     changes.sort((a, b) => a.date.localeCompare(b.date))
 
+    const numericConfig = f.habitType === 'numeric' ? {
+      unit: f.numUnit || '',
+      inputType: f.numInputType || 'integer',
+      threshold: parseFloat(f.numThreshold) || 0,
+      belowThreshold: f.numBelowThreshold || 'zero',
+      penaltyFixed: parseFloat(f.numPenaltyFixed) || 0,
+      pointsPerUnit: parseFloat(f.numPointsPerUnit) || 0,
+      unitSize: parseFloat(f.numUnitSize) || 1,
+      cap: f.numCap !== '' && f.numCap != null ? parseFloat(f.numCap) : null,
+    } : null
+
     const rewardFields = type === 'habit'
-      ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti }
+      ? { reward: parseInt(f.reward) || 0, penalty: parseInt(f.penalty) || 0, rewardMin: parseInt(f.rewardMin) || 0, isMulti: f.isMulti, numericConfig, numericType: f.habitType === 'numeric' || null }
       : f.rewardType === 'tracked'
         ? { type: 'tracked', emoji: f.trackedEmoji || '', unit: f.trackedUnit, costPerThreshold: parseInt(f.trackedCostPerThreshold) || 0, threshold: parseInt(f.trackedThreshold) || 1 }
         : { cost: parseInt(f.cost) || 0, categoryId: f.categoryId || '' }
@@ -141,19 +226,34 @@ export default function EditModal() {
 
         {f.type === 'habit' && (
           <>
-            <div style={{ margin: '15px 0', display: 'flex', alignItems: 'center', gap: 10, background: '#2a2a2a', padding: 10, borderRadius: 8 }}>
-              <input type="checkbox" id="editIsMulti" style={{ width: 20, height: 20, margin: 0 }} checked={f.isMulti} onChange={e => set('isMulti', e.target.checked)} />
-              <label htmlFor="editIsMulti" style={{ fontSize: '0.9em', margin: 0 }}>Abilita livelli Min/Max?</label>
-            </div>
-            <div className="grid-2">
-              <div className="input-group"><label>{f.isMulti ? 'Reward (Max)' : 'Reward'}</label><input type="number" value={f.reward} onChange={e => set('reward', e.target.value)} /></div>
-              <div className="input-group"><label>Penalità</label><input type="number" value={f.penalty} onChange={e => set('penalty', e.target.value)} /></div>
-            </div>
-            {f.isMulti && (
-              <div className="input-group" style={{ borderTop: '1px solid #333', paddingTop: 5 }}>
-                <label style={{ color: 'var(--theme-color)' }}>Reward Minimo (Min)</label>
-                <input type="number" value={f.rewardMin} onChange={e => set('rewardMin', e.target.value)} />
+            <div className="input-group" style={{ marginBottom: 8 }}>
+              <label>Tipo abitudine</label>
+              <div className="switch-group" style={{ marginTop: 4 }}>
+                {[{ v: 'normal', label: 'Normale' }, { v: 'multi', label: 'Multi' }, { v: 'numeric', label: 'Numerica' }].map(opt => (
+                  <div key={opt.v} className={`switch-opt${f.habitType === opt.v ? ' active' : ''}`} onClick={() => set('habitType', opt.v)}>{opt.label}</div>
+                ))}
               </div>
+            </div>
+
+            {f.habitType === 'numeric' ? (
+              <NumericConfigForm f={f} set={set} />
+            ) : (
+              <>
+                <div style={{ margin: '15px 0', display: 'flex', alignItems: 'center', gap: 10, background: '#2a2a2a', padding: 10, borderRadius: 8 }}>
+                  <input type="checkbox" id="editIsMulti" style={{ width: 20, height: 20, margin: 0 }} checked={f.isMulti} onChange={e => set('isMulti', e.target.checked)} />
+                  <label htmlFor="editIsMulti" style={{ fontSize: '0.9em', margin: 0 }}>Abilita livelli Min/Max?</label>
+                </div>
+                <div className="grid-2">
+                  <div className="input-group"><label>{f.isMulti ? 'Reward (Max)' : 'Reward'}</label><input type="number" value={f.reward} onChange={e => set('reward', e.target.value)} /></div>
+                  <div className="input-group"><label>Penalità</label><input type="number" value={f.penalty} onChange={e => set('penalty', e.target.value)} /></div>
+                </div>
+                {f.isMulti && (
+                  <div className="input-group" style={{ borderTop: '1px solid #333', paddingTop: 5 }}>
+                    <label style={{ color: 'var(--theme-color)' }}>Reward Minimo (Min)</label>
+                    <input type="number" value={f.rewardMin} onChange={e => set('rewardMin', e.target.value)} />
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

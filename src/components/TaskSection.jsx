@@ -92,6 +92,7 @@ export default function TaskSection({ minimalMode }) {
                 completed={false}
                 onComplete={() => actions.confirmCompleteTask(task)}
                 onEdit={() => actions.openModal('taskEdit', { task })}
+                onDelete={() => actions.deleteTask(task.id)}
               />
             ))}
             {!minimalMode && completedToday.map(task => (
@@ -110,11 +111,12 @@ export default function TaskSection({ minimalMode }) {
   )
 }
 
-function TaskItem({ task, completed, onComplete, onEdit }) {
+function TaskItem({ task, completed, onComplete, onEdit, onDelete }) {
   const color = completed ? '#4caf50' : getDeadlineColor(task.deadline)
   const deadline = formatDeadline(task.deadline)
   const pColor = PRIORITY_COLORS[task.priority] || '#ff7043'
   const pLabel = PRIORITY_LABELS[task.priority] || 'MEDIA'
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const longPressTimer = useRef(null)
   const didLong = useRef(false)
@@ -124,7 +126,7 @@ function TaskItem({ task, completed, onComplete, onEdit }) {
     didLong.current = false
     longPressTimer.current = setTimeout(() => {
       didLong.current = true
-      onEdit()
+      setMenuOpen(true)
       navigator.vibrate?.([30, 20, 30])
     }, 500)
   }
@@ -181,18 +183,46 @@ function TaskItem({ task, completed, onComplete, onEdit }) {
       </div>
 
       {!completed ? (
-        <button
-          onClick={e => { e.stopPropagation(); onComplete() }}
-          onPointerDown={e => e.stopPropagation()}
-          style={{
-            width: 36, height: 36, borderRadius: '50%',
-            border: '2px solid rgba(255,255,255,0.15)',
-            background: 'rgba(255,255,255,0.05)', color: '#888',
-            cursor: 'pointer', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', flexShrink: 0, fontSize: '1em',
-          }}
-          title="Completa task"
-        >✓</button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+          <button
+            onClick={e => { e.stopPropagation(); onComplete() }}
+            onPointerDown={e => e.stopPropagation()}
+            style={{
+              width: 36, height: 36, borderRadius: '50%',
+              border: '2px solid rgba(255,255,255,0.15)',
+              background: 'rgba(255,255,255,0.05)', color: '#888',
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: '1em',
+            }}
+            title="Completa task"
+          >✓</button>
+          {menuOpen ? (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit() }}
+                onPointerDown={e => e.stopPropagation()}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                title="Modifica"
+              >✏️</button>
+              <button
+                onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
+                onPointerDown={e => e.stopPropagation()}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                title="Elimina"
+              >🗑️</button>
+            </div>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); setMenuOpen(true) }}
+              onPointerDown={e => e.stopPropagation()}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#555', fontSize: '1.1em', padding: 2, lineHeight: 1,
+              }}
+              title="Azioni"
+            >⋮</button>
+          )}
+        </div>
       ) : (
         <div style={{
           width: 36, height: 36, borderRadius: '50%',

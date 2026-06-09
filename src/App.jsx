@@ -58,10 +58,12 @@ import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
+import QuoteCard from './components/QuoteCard'
 import { trackAppOpen } from './lib/trackAppOpen'
 import TaskSection from './components/TaskSection'
 import TaskModal from './modals/TaskModal'
 import TaskHistoryModal from './modals/TaskHistoryModal'
+import QuotesModal from './modals/QuotesModal'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -414,6 +416,9 @@ export default function App() {
 
       <TrendRow userData={globalData} />
 
+      {/* Quote Card — solo Flavio */}
+      {authUserId === 'flavio' && !isReadOnly && <QuoteCard />}
+
       {/* Daily Insight Card — solo Flavio */}
       {authUserId === 'flavio' && !isReadOnly && (
         <DailyInsightCard
@@ -593,6 +598,7 @@ export default function App() {
       {authUserId === 'flavio' && <AppUsageModal />}
       {authUserId === 'flavio' && <TaskModal />}
       {authUserId === 'flavio' && <TaskHistoryModal />}
+      {authUserId === 'flavio' && <QuotesModal />}
       <UpdateBanner />
 
       <AchievementQueue

@@ -101,6 +101,7 @@ export default function TaskHistoryModal() {
                   key={task.id}
                   task={task}
                   onUncomplete={() => actions.uncompleteTask(task)}
+                  onDelete={() => actions.deleteCompletedTask(task.id)}
                 />
               ))
           )}
@@ -133,7 +134,7 @@ function EmptyState({ text }) {
   )
 }
 
-function CompletedItem({ task, onUncomplete }) {
+function CompletedItem({ task, onUncomplete, onDelete }) {
   const pColor = PRIORITY_COLORS[task.priority] || '#ff7043'
   return (
     <div style={{
@@ -161,15 +162,16 @@ function CompletedItem({ task, onUncomplete }) {
           </div>
         </div>
       </div>
-      <button
-        onClick={onUncomplete}
-        style={{
-          marginTop: 10, width: '100%', padding: '7px', borderRadius: 8,
-          border: '1px solid rgba(255,255,255,0.08)',
-          background: 'rgba(255,255,255,0.04)',
-          color: '#666', cursor: 'pointer', fontSize: '0.78em',
-        }}
-      >↩ Annulla completamento</button>
+      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+        <button
+          onClick={onDelete}
+          style={{ ...secondaryBtnStyle, color: '#e53935' }}
+        >🗑️ Elimina</button>
+        <button
+          onClick={onUncomplete}
+          style={{ ...secondaryBtnStyle, flex: 2 }}
+        >↩ Annulla completamento</button>
+      </div>
     </div>
   )
 }

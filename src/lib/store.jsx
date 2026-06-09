@@ -1084,6 +1084,76 @@ export function AppProvider({ children }) {
       actions.showToast('Task eliminata', '🗑️')
     },
 
+    async deleteTask(taskId) {
+      if (isReadOnly()) return
+      if (!window.confirm('Eliminare questa task attiva?')) return
+      const { authUserId, globalData } = state
+      const tasks = (globalData.tasks || []).filter(t => t.id !== taskId)
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      actions.showToast('Task eliminata', '🗑️')
+    },
+
+    async deleteCompletedTask(taskId) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const task = (globalData.tasks || []).find(t => t.id === taskId)
+      if (!task) return
+      const rewardNum = parseInt(task.reward) || 0
+      let refundPoints = false
+      if (task.status === 'completed' && rewardNum > 0) {
+        refundPoints = window.confirm(`Vuoi anche restituire i ${rewardNum}pt guadagnati?`)
+      } else {
+        if (!window.confirm('Eliminare definitivamente questa task?')) return
+      }
+      const tasks = (globalData.tasks || []).filter(t => t.id !== taskId)
+      const update = { tasks }
+      if (refundPoints) update.score = increment(-rewardNum)
+      await updateDoc(doc(db, 'users', authUserId), update)
+      if (refundPoints) await actions._logHistory(authUserId, (globalData.score || 0) - rewardNum)
+      actions.showToast('Task eliminata', '🗑️')
+    },
+
+    openTaskEdit(task) {
+      actions.openModal('taskEdit', { task })
+    },
+
+    // ─── Quotes ──────────────────────────────────────────────────────────────
+    async likeQuote(id) {
+      if (isReadOnly()) return
+      const { authUserId } = state
+      await updateDoc(doc(db, 'users', authUserId), { 'quotes.liked': arrayUnion(id) })
+    },
+
+    async dislikeQuote(id) {
+      if (isReadOnly()) return
+      const { authUserId } = state
+      await updateDoc(doc(db, 'users', authUserId), {
+        'quotes.disliked': arrayUnion(id),
+        'quotes.lastShown': id,
+      })
+    },
+
+    async unlikeQuote(id) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const liked = (globalData.quotes?.liked || []).filter(x => x !== id)
+      await updateDoc(doc(db, 'users', authUserId), { 'quotes.liked': liked })
+    },
+
+    async undislikeQuote(id) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const disliked = (globalData.quotes?.disliked || []).filter(x => x !== id)
+      await updateDoc(doc(db, 'users', authUserId), { 'quotes.disliked': disliked })
+    },
+
+    async clearAllDisliked() {
+      if (isReadOnly()) return
+      const { authUserId } = state
+      await updateDoc(doc(db, 'users', authUserId), { 'quotes.disliked': [] })
+      actions.showToast('Aforismi ripristinati', '✅')
+    },
+
     async registerTrackedReward(rewardId, quantity, dateStr) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state

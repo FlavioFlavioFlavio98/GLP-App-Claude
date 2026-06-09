@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../lib/store'
-import { useCoach } from '../hooks/useCoach'
+import { useCoach, resetSessionStats, getCoachStats } from '../hooks/useCoach'
 import { doc, setDoc, updateDoc, getDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { toDateString } from '../lib/habitLogic'
@@ -93,6 +93,8 @@ export default function CoachPage() {
   const [reportLoading, setReportLoading] = useState(false)
   const [error, setError] = useState(null)
   const [summarizing, setSummarizing] = useState(false)
+  const [statsCollapsed, setStatsCollapsed] = useState(true)
+  const [coachStats, setCoachStats] = useState(() => getCoachStats())
 
   // Memory modal
   const [showMemory, setShowMemory] = useState(false)
@@ -147,8 +149,9 @@ export default function CoachPage() {
     setMessages(newMessages)
     setLoading(true)
     try {
-      const reply = await sendMessage(newMessages.map(m => ({ role: m.role, content: m.content })))
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+      const { content: reply, usage } = await sendMessage(newMessages.map(m => ({ role: m.role, content: m.content })))
+      setMessages(prev => [...prev, { role: 'assistant', content: reply, usage: usage ? { totalTokens: usage.totalTokens, costUSD: usage.costUSD } : undefined }])
+      setCoachStats(getCoachStats())
     } catch (e) {
       console.error('[CoachPage] sendMessage error:', e)
       setError(`Errore: ${e.code || e.message || 'sconosciuto'}`)
@@ -206,6 +209,8 @@ export default function CoachPage() {
     }
     setMessages([])
     localStorage.removeItem(chatStorageKey)
+    resetSessionStats()
+    setCoachStats(getCoachStats())
   }
 
   async function handleLoadPastReports() {
@@ -340,6 +345,9 @@ export default function CoachPage() {
             onShowPastReports={handleLoadPastReports}
             onBackFromReports={() => { if (selectedPastReport) setSelectedPastReport(null); else setShowPastReports(false) }}
             messagesEndRef={messagesEndRef}
+            statsCollapsed={statsCollapsed}
+            onToggleStats={() => setStatsCollapsed(v => !v)}
+            coachStats={coachStats}
           />
         )}
         {activeTab === 'goals' && (
@@ -402,7 +410,7 @@ export default function CoachPage() {
 
 // ─── Chat Tab ─────────────────────────────────────────────────────────────────
 
-function ChatTab({ messages, loading, summarizing, report, reportLoading, weekKey, error, avatar, onRegenerate, showPastReports, pastReports, selectedPastReport, onSelectPastReport, onShowPastReports, onBackFromReports, messagesEndRef }) {
+function ChatTab({ messages, loading, summarizing, report, reportLoading, weekKey, error, avatar, onRegenerate, showPastReports, pastReports, selectedPastReport, onSelectPastReport, onShowPastReports, onBackFromReports, messagesEndRef, statsCollapsed, onToggleStats, coachStats }) {
   if (selectedPastReport) return (
     <div>
       <button onClick={onBackFromReports} style={{ ...chipStyle, marginBottom: 16 }}>← Lista report</button>
@@ -427,6 +435,41 @@ function ChatTab({ messages, loading, summarizing, report, reportLoading, weekKe
 
   return (
     <>
+      {/* Stats card */}
+      <div
+        onClick={onToggleStats}
+        style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 10,
+          padding: '8px 12px',
+          marginBottom: 10,
+          cursor: 'pointer',
+          fontSize: '0.8em',
+          color: '#666',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>📊 Statistiche</span>
+          <span>{statsCollapsed ? '▼' : '▲'}</span>
+        </div>
+        {!statsCollapsed && coachStats && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {[
+              ['Modello', 'claude-haiku-4-5'],
+              ['Token sessione', (coachStats.sessionTokens || 0).toLocaleString()],
+              ['Costo sessione', `$${(coachStats.sessionCostUSD || 0).toFixed(4)}`],
+              ['Costo lifetime', `$${(coachStats.totalCostUSD || 0).toFixed(4)}`],
+              ['Messaggi totali', coachStats.totalMessages || 0],
+            ].map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{label}:</span>
+                <span style={{ color: '#888' }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <ReportCard report={report} onRegenerate={onRegenerate} loading={reportLoading} weekKey={weekKey} />
       {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.82em', color: '#ef4444' }}>{error}</div>}
       {messages.length === 0 && !summarizing && (
@@ -753,11 +796,18 @@ function MessageBubble({ msg, avatar }) {
       <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: isUser ? 'rgba(255,202,40,0.15)' : 'var(--theme-glow)', border: `1px solid ${isUser ? 'rgba(255,202,40,0.3)' : 'var(--theme-color)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85em' }}>
         {isUser ? (avatar || '🧑') : '🤖'}
       </div>
-      <div style={{ maxWidth: '78%', background: isUser ? 'rgba(255,202,40,0.08)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isUser ? 'rgba(255,202,40,0.15)' : 'rgba(255,255,255,0.1)'}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '9px 13px', fontSize: '0.87em', lineHeight: 1.55 }}>
-        {isUser
-          ? <span style={{ color: 'var(--text)' }}>{msg.content}</span>
-          : <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
-        }
+      <div style={{ maxWidth: '78%' }}>
+        <div style={{ background: isUser ? 'rgba(255,202,40,0.08)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isUser ? 'rgba(255,202,40,0.15)' : 'rgba(255,255,255,0.1)'}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '9px 13px', fontSize: '0.87em', lineHeight: 1.55 }}>
+          {isUser
+            ? <span style={{ color: 'var(--text)' }}>{msg.content}</span>
+            : <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+          }
+        </div>
+        {!isUser && msg.usage && (
+          <div style={{ fontSize: '0.65em', color: '#444', marginTop: 4, textAlign: 'right' }}>
+            claude-haiku-4-5 · {(msg.usage.totalTokens || 0).toLocaleString()} token · ${(msg.usage.costUSD || 0).toFixed(4)}
+          </div>
+        )}
       </div>
     </div>
   )

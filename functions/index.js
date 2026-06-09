@@ -30,12 +30,25 @@ exports.coachChat = onCall(
 
     const anthropic = getClient(anthropicKey.value())
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-8',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages,
     })
-    return { content: response.content[0].text }
+    const inputTokens = response.usage.input_tokens
+    const outputTokens = response.usage.output_tokens
+    // Prezzi claude-haiku-4-5: $1/1M input, $5/1M output
+    const costUSD = (inputTokens / 1000000) * 1 + (outputTokens / 1000000) * 5
+    return {
+      content: response.content[0].text,
+      usage: {
+        model: 'claude-haiku-4-5',
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        costUSD: parseFloat(costUSD.toFixed(6))
+      }
+    }
   }
 )
 
@@ -49,7 +62,7 @@ exports.coachWeeklyReport = onCall(
 
     const anthropic = getClient(anthropicKey.value())
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-8',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages: [{
@@ -57,7 +70,19 @@ exports.coachWeeklyReport = onCall(
         content: `Analizza questi dati e genera il report settimanale:\n${JSON.stringify(coachContext, null, 2)}`,
       }],
     })
-    return { content: response.content[0].text }
+    const inputTokens = response.usage.input_tokens
+    const outputTokens = response.usage.output_tokens
+    const costUSD = (inputTokens / 1000000) * 1 + (outputTokens / 1000000) * 5
+    return {
+      content: response.content[0].text,
+      usage: {
+        model: 'claude-haiku-4-5',
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        costUSD: parseFloat(costUSD.toFixed(6))
+      }
+    }
   }
 )
 
@@ -74,7 +99,7 @@ exports.summarizeConversation = onCall(
 
     const [summaryRes, toneRes] = await Promise.all([
       anthropic.messages.create({
-        model: 'claude-opus-4-8',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
         system: 'Sei un assistente che riassume conversazioni in modo conciso.',
         messages: [{
@@ -83,7 +108,7 @@ exports.summarizeConversation = onCall(
         }],
       }),
       anthropic.messages.create({
-        model: 'claude-opus-4-8',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 50,
         system: 'Analizza il tono emotivo del messaggio utente.',
         messages: [{
@@ -105,7 +130,23 @@ exports.summarizeConversation = onCall(
       }
     } catch { /* usa defaults */ }
 
-    return { summary, tone, toneScore }
+    // Aggregate usage from both calls
+    const inputTokens = summaryRes.usage.input_tokens + toneRes.usage.input_tokens
+    const outputTokens = summaryRes.usage.output_tokens + toneRes.usage.output_tokens
+    const costUSD = (inputTokens / 1000000) * 1 + (outputTokens / 1000000) * 5
+
+    return {
+      summary,
+      tone,
+      toneScore,
+      usage: {
+        model: 'claude-haiku-4-5',
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        costUSD: parseFloat(costUSD.toFixed(6))
+      }
+    }
   }
 )
 
@@ -158,7 +199,7 @@ exports.generateDailyInsight = onCall(
 
     const anthropic = getClient(anthropicKey.value())
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-8',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 150,
       system: systemPrompt || 'Sei il coach personale di Flavio.',
       messages: [{
@@ -172,6 +213,18 @@ exports.generateDailyInsight = onCall(
 Rispondi SOLO con l'insight, niente altro.`,
       }],
     })
-    return { content: response.content[0].text }
+    const inputTokens = response.usage.input_tokens
+    const outputTokens = response.usage.output_tokens
+    const costUSD = (inputTokens / 1000000) * 1 + (outputTokens / 1000000) * 5
+    return {
+      content: response.content[0].text,
+      usage: {
+        model: 'claude-haiku-4-5',
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        costUSD: parseFloat(costUSD.toFixed(6))
+      }
+    }
   }
 )

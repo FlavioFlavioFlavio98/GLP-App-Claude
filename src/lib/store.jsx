@@ -5,7 +5,7 @@ import { app } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   doc, onSnapshot, updateDoc, setDoc, getDoc, deleteDoc,
-  arrayUnion, collection, getDocs, increment,
+  arrayUnion, collection, getDocs, increment, runTransaction,
 } from 'firebase/firestore'
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, recalculateScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
@@ -283,63 +283,87 @@ export function AppProvider({ children }) {
       const { authUserId, globalData, viewDate } = state
       actions.vibrate('light')
       const ref = doc(db, 'users', authUserId)
-      const dailyLogs = { ...(globalData.dailyLogs || {}) }
-      let raw = dailyLogs[viewDate] || {}
-      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
-      let entry = {
-        habits: [...(raw.habits || [])],
-        failedHabits: [...(raw.failedHabits || [])],
-        habitLevels: { ...(raw.habitLevels || {}) },
-        purchases: raw.purchases || [],
-      }
 
-      const habitsArr = [...(globalData.habits || [])]
-      const habitIndex = habitsArr.findIndex(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
-      const habitObj = habitsArr[habitIndex]
+      // Determine habit metadata from globalData (habits list is not race-condition sensitive)
+      const habitsArrBase = [...(globalData.habits || [])]
+      const habitIndex = habitsArrBase.findIndex(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
+      const habitObj = habitsArrBase[habitIndex]
       if (!habitObj) return
 
       const isMulti = getItemValueAtDate(habitObj, 'isMulti', viewDate)
-      const rewardMax = getItemValueAtDate(habitObj, 'reward', viewDate)
-      const rewardMin = getItemValueAtDate(habitObj, 'rewardMin', viewDate)
-      const penalty = getItemValueAtDate(habitObj, 'penalty', viewDate)
 
-      const wasDone = entry.habits.includes(habitId)
-      const wasLevel = entry.habitLevels[habitId] || 'max'
+      let score, finalEntry, finalHabitsArr, actionType = 'neutral'
 
-      if (wasDone) {
-        entry.habits = entry.habits.filter(id => id !== habitId)
-        delete entry.habitLevels[habitId]
-      }
-      if (entry.failedHabits.includes(habitId)) {
-        entry.failedHabits = entry.failedHabits.filter(id => id !== habitId)
-      }
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data()
 
-      let actionType = 'neutral'
-      if (action === 'failed') {
-        entry.failedHabits.push(habitId)
-        actionType = 'failed'
-      } else if (action === 'next') {
-        if (!wasDone) {
-          entry.habits.push(habitId)
-          if (isMulti) {
-            entry.habitLevels[habitId] = 'min'
-          } else {
-            entry.habitLevels[habitId] = 'max'
-            actionType = 'done'
+          const habitsArr = [...(freshData.habits || [])]
+          const freshHabitIndex = habitsArr.findIndex(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
+
+          let raw = freshData.dailyLogs?.[viewDate] || {}
+          if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+          let entry = {
+            habits: [...(raw.habits || [])],
+            failedHabits: [...(raw.failedHabits || [])],
+            habitLevels: { ...(raw.habitLevels || {}) },
+            purchases: raw.purchases || [],
           }
-        } else if (isMulti && wasLevel === 'min') {
-          entry.habits.push(habitId)
-          entry.habitLevels[habitId] = 'max'
-          actionType = 'done'
-        }
-        if (habitIndex >= 0 && entry.habits.includes(habitId)) {
-          habitsArr[habitIndex] = { ...habitsArr[habitIndex], lastDone: viewDate }
-        }
+
+          const wasDone = entry.habits.includes(habitId)
+          const wasLevel = entry.habitLevels[habitId] || 'max'
+
+          if (wasDone) {
+            entry.habits = entry.habits.filter(id => id !== habitId)
+            delete entry.habitLevels[habitId]
+          }
+          if (entry.failedHabits.includes(habitId)) {
+            entry.failedHabits = entry.failedHabits.filter(id => id !== habitId)
+          }
+
+          actionType = 'neutral'
+          if (action === 'failed') {
+            entry.failedHabits.push(habitId)
+            actionType = 'failed'
+          } else if (action === 'next') {
+            if (!wasDone) {
+              entry.habits.push(habitId)
+              if (isMulti) {
+                entry.habitLevels[habitId] = 'min'
+              } else {
+                entry.habitLevels[habitId] = 'max'
+                actionType = 'done'
+              }
+            } else if (isMulti && wasLevel === 'min') {
+              entry.habits.push(habitId)
+              entry.habitLevels[habitId] = 'max'
+              actionType = 'done'
+            }
+            if (freshHabitIndex >= 0 && entry.habits.includes(habitId)) {
+              habitsArr[freshHabitIndex] = { ...habitsArr[freshHabitIndex], lastDone: viewDate }
+            }
+          }
+
+          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: entry }
+          score = recalculateScore(habitsArr, freshData.rewards || [], newDailyLogs)
+          finalEntry = entry
+          finalHabitsArr = habitsArr
+
+          transaction.update(ref, {
+            [`dailyLogs.${viewDate}.habits`]: entry.habits,
+            [`dailyLogs.${viewDate}.failedHabits`]: entry.failedHabits,
+            [`dailyLogs.${viewDate}.habitLevels`]: entry.habitLevels,
+            score,
+            habits: habitsArr,
+          })
+        })
+      } catch (err) {
+        console.error('setHabitStatus transaction failed:', err)
+        actions.showToast('Errore nel salvataggio', '❌')
+        return
       }
 
-      dailyLogs[viewDate] = entry
-      const score = recalculateScore(habitsArr, globalData.rewards || [], dailyLogs)
-      await updateDoc(ref, { score, dailyLogs, habits: habitsArr })
       await actions._logHistory(authUserId, score)
 
       if (actionType === 'done') {
@@ -348,9 +372,9 @@ export function AppProvider({ children }) {
       } else if (actionType === 'failed') {
         actions.showToast('Segnata come fallita', '❌')
       }
-      actions._triggerPersistentNotification(authUserId, score, dailyLogs[viewDate], globalData.habits)
+      actions._triggerPersistentNotification(authUserId, score, finalEntry, finalHabitsArr)
       setTimeout(() => {
-        const freshData = { ...globalData, score, dailyLogs, habits: habitsArr }
+        const freshData = { ...globalData, score, dailyLogs: { ...globalData.dailyLogs, [viewDate]: finalEntry }, habits: finalHabitsArr }
         actions._checkAchievements(freshData, authUserId)
       }, 500)
     },
@@ -364,19 +388,37 @@ export function AppProvider({ children }) {
         if (!window.confirm(`Comprare ${name} per ${cost}?`)) return
       }
       const ref = doc(db, 'users', authUserId)
-      const dailyLogs = { ...(globalData.dailyLogs || {}) }
-      let raw = dailyLogs[viewDate] || {}
-      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
-      const purchases = [...(raw.purchases || []), { name, cost, time: Date.now() }]
-      dailyLogs[viewDate] = { habits: raw.habits || [], failedHabits: raw.failedHabits || [], habitLevels: raw.habitLevels || {}, purchases }
-      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
-      await updateDoc(ref, { score: newScore, dailyLogs })
+      let newScore
+
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data()
+
+          let raw = freshData.dailyLogs?.[viewDate] || {}
+          if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+          const purchases = [...(raw.purchases || []), { name, cost, time: Date.now() }]
+
+          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: { ...raw, purchases } }
+          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
+
+          transaction.update(ref, {
+            [`dailyLogs.${viewDate}.purchases`]: purchases,
+            score: newScore,
+          })
+        })
+      } catch (err) {
+        console.error('buyReward transaction failed:', err)
+        actions.showToast('Errore nel salvataggio', '❌')
+        return
+      }
+
       await actions._logHistory(authUserId, newScore)
       actions.vibrate('heavy')
       import('canvas-confetti').then(m => m.default({ shapes: ['circle'], colors: ['#4caf50'] }))
       actions.showToast('Acquisto effettuato!', '🛍️')
       setTimeout(() => {
-        const freshData = { ...globalData, score: newScore, dailyLogs }
+        const freshData = { ...globalData, score: newScore }
         actions._checkAchievements(freshData, authUserId)
       }, 500)
     },
@@ -386,13 +428,32 @@ export function AppProvider({ children }) {
       if (!window.confirm('Annullare acquisto e rimborsare punti?')) return
       const { authUserId, globalData, viewDate } = state
       const ref = doc(db, 'users', authUserId)
-      const dailyLogs = { ...(globalData.dailyLogs || {}) }
-      const raw = dailyLogs[viewDate]
-      const purchases = [...(raw.purchases || [])]
-      purchases.splice(idx, 1)
-      dailyLogs[viewDate] = { ...raw, purchases }
-      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
-      await updateDoc(ref, { score: newScore, dailyLogs })
+      let newScore
+
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data()
+
+          let raw = freshData.dailyLogs?.[viewDate] || {}
+          if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+          const purchases = [...(raw.purchases || [])]
+          purchases.splice(idx, 1)
+
+          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: { ...raw, purchases } }
+          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
+
+          transaction.update(ref, {
+            [`dailyLogs.${viewDate}.purchases`]: purchases,
+            score: newScore,
+          })
+        })
+      } catch (err) {
+        console.error('refundPurchase transaction failed:', err)
+        actions.showToast('Errore nel salvataggio', '❌')
+        return
+      }
+
       await actions._logHistory(authUserId, newScore)
       actions.vibrate('light')
       actions.showToast('Rimborsato!', '↩️')
@@ -803,28 +864,48 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       const { authUserId, globalData, viewDate } = state
       const ref = doc(db, 'users', authUserId)
-      const dailyLogs = { ...(globalData.dailyLogs || {}) }
-      let raw = dailyLogs[viewDate] || {}
-      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
-      const entry = {
-        habits: [...(raw.habits || [])],
-        failedHabits: [...(raw.failedHabits || [])],
-        habitLevels: { ...(raw.habitLevels || {}) },
-        purchases: raw.purchases || [],
-        habitNotes: raw.habitNotes || {},
-        habitValues: { ...(raw.habitValues || {}) },
-        mood: raw.mood || {},
-        energy: raw.energy || {},
-      }
+
       const habit = (globalData.habits || []).find(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
       if (!habit || !habit.numericConfig) return
       const { calcNumericPoints: cnp } = await import('./habitLogic')
-      entry.habitValues[habitId] = value
       const newPts = cnp(parseFloat(value), habit.numericConfig)
-      if (!entry.habits.includes(habitId)) entry.habits.push(habitId)
-      dailyLogs[viewDate] = entry
-      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
-      await updateDoc(ref, { dailyLogs, score: newScore })
+
+      let newScore
+
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data()
+
+          let raw = freshData.dailyLogs?.[viewDate] || {}
+          if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+          const entry = {
+            habits: [...(raw.habits || [])],
+            failedHabits: [...(raw.failedHabits || [])],
+            habitLevels: { ...(raw.habitLevels || {}) },
+            purchases: raw.purchases || [],
+            habitNotes: raw.habitNotes || {},
+            habitValues: { ...(raw.habitValues || {}), [habitId]: value },
+            mood: raw.mood || {},
+            energy: raw.energy || {},
+          }
+          if (!entry.habits.includes(habitId)) entry.habits.push(habitId)
+
+          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: entry }
+          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
+
+          transaction.update(ref, {
+            [`dailyLogs.${viewDate}.habitValues`]: entry.habitValues,
+            [`dailyLogs.${viewDate}.habits`]: entry.habits,
+            score: newScore,
+          })
+        })
+      } catch (err) {
+        console.error('setNumericValue transaction failed:', err)
+        actions.showToast('Errore nel salvataggio', '❌')
+        return
+      }
+
       await actions._logHistory(authUserId, newScore)
       actions.vibrate('light')
       actions.showToast(`${newPts >= 0 ? '+' : ''}${newPts} pt`, newPts >= 0 ? '✅' : '❌')
@@ -1154,26 +1235,39 @@ export function AppProvider({ children }) {
 
       const { calcTrackedCost } = await import('./habitLogic')
       const newCost = calcTrackedCost(quantity, reward)
+      const ref = doc(db, 'users', authUserId)
 
-      const dailyLogs = { ...(globalData.dailyLogs || {}) }
-      let raw = dailyLogs[dateStr] || {}
-      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+      let newScore, diff
 
-      const trackedRewards = { ...(raw.trackedRewards || {}) }
-      const oldCost = trackedRewards[rewardId]?.cost || 0
-      trackedRewards[rewardId] = { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() }
-      dailyLogs[dateStr] = { ...raw, trackedRewards }
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data()
 
-      const diff = newCost - oldCost
-      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
+          let raw = freshData.dailyLogs?.[dateStr] || {}
+          if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
 
-      console.log('[registerTrackedReward] rewardId=', rewardId, 'qty=', quantity, 'date=', dateStr, 'newCost=', newCost, 'newScore=', newScore, 'trackedRewards=', trackedRewards)
+          const trackedRewards = { ...(raw.trackedRewards || {}) }
+          const oldCost = trackedRewards[rewardId]?.cost || 0
+          diff = newCost - oldCost
+          trackedRewards[rewardId] = { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() }
 
-      // Use dot-notation for nested update to avoid overwriting sibling fields in a race condition
-      await updateDoc(doc(db, 'users', authUserId), {
-        [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
-        score: newScore,
-      })
+          const newDailyLogs = { ...freshData.dailyLogs, [dateStr]: { ...raw, trackedRewards } }
+          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
+
+          console.log('[registerTrackedReward] rewardId=', rewardId, 'qty=', quantity, 'date=', dateStr, 'newCost=', newCost, 'newScore=', newScore, 'trackedRewards=', trackedRewards)
+
+          transaction.update(ref, {
+            [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
+            score: newScore,
+          })
+        })
+      } catch (err) {
+        console.error('registerTrackedReward transaction failed:', err)
+        actions.showToast('Errore nel salvataggio', '❌')
+        return
+      }
+
       await actions._logHistory(authUserId, newScore)
       if (diff > 0) actions.showToast(`Registrato: -${newCost}pt`, '📊')
       else if (diff < 0) actions.showToast(`Aggiornato: rimborso +${Math.abs(diff)}pt`, '📊')
@@ -1189,22 +1283,34 @@ export function AppProvider({ children }) {
 
       const { calcTrackedCost } = await import('./habitLogic')
       const newCost = calcTrackedCost(quantity, reward)
+      const ref = doc(db, 'users', authUserId)
+      let newScore
 
-      const dailyLogs = { ...(globalData.dailyLogs || {}) }
-      let raw = dailyLogs[dateStr] || {}
-      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data()
 
-      const trackedRewards = { ...(raw.trackedRewards || {}), [rewardId]: { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() } }
-      dailyLogs[dateStr] = { ...raw, trackedRewards }
+          let raw = freshData.dailyLogs?.[dateStr] || {}
+          if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
 
-      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
+          const trackedRewards = { ...(raw.trackedRewards || {}), [rewardId]: { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() } }
+          const newDailyLogs = { ...freshData.dailyLogs, [dateStr]: { ...raw, trackedRewards } }
+          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
 
-      console.log('[patchTrackedRewardManual] rewardId=', rewardId, 'date=', dateStr, 'qty=', quantity, 'newCost=', newCost, 'newScore=', newScore)
+          console.log('[patchTrackedRewardManual] rewardId=', rewardId, 'date=', dateStr, 'qty=', quantity, 'newCost=', newCost, 'newScore=', newScore)
 
-      await updateDoc(doc(db, 'users', authUserId), {
-        [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
-        score: newScore,
-      })
+          transaction.update(ref, {
+            [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
+            score: newScore,
+          })
+        })
+      } catch (err) {
+        console.error('patchTrackedRewardManual transaction failed:', err)
+        actions.showToast('Errore nel salvataggio', '❌')
+        return
+      }
+
       await actions._logHistory(authUserId, newScore)
       actions.showToast(`Corretto ${dateStr}: ${quantity}x ${reward.name} (-${newCost}pt)`, '✅')
     },

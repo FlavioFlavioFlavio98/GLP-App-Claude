@@ -27,16 +27,14 @@ function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
             {savedPts >= 0 ? '+' : ''}{savedPts} pt
           </div>
         </div>
-        {isToday && (
-          <button className="btn-icon" onClick={() => { setInputVal(String(savedValue)); setEditing(true) }}>
-            <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
-          </button>
-        )}
+        <button className="btn-icon" onClick={() => { setInputVal(String(savedValue)); setEditing(true) }}>
+          <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
+        </button>
       </div>
     )
   }
 
-  if (editing || (savedValue === undefined && isToday)) {
+  if (editing || savedValue === undefined) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
@@ -84,11 +82,9 @@ function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
 
   return (
     <div style={{ color: '#444', fontSize: '0.78em' }}>
-      {isToday ? (
-        <button className="btn-status done-btn" style={{ fontSize: '0.65em', width: 52 }} onClick={() => setEditing(true)}>
-          <span className="material-icons-round" style={{ fontSize: 16 }}>input</span>
-        </button>
-      ) : <span>—</span>}
+      <button className="btn-status done-btn" style={{ fontSize: '0.65em', width: 52 }} onClick={() => setEditing(true)}>
+        <span className="material-icons-round" style={{ fontSize: 16 }}>input</span>
+      </button>
     </div>
   )
 }

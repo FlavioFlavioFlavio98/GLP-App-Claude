@@ -119,6 +119,7 @@ export default function TaskHistoryModal() {
                   onCancelReopen={() => setReopenId(null)}
                   onConfirmReopen={() => handleReopen(task)}
                   onDelete={() => actions.deleteExpiredTask(task.id)}
+                  onMarkCompleted={() => actions.markExpiredAsCompleted(task)}
                 />
               ))
           )}
@@ -176,7 +177,7 @@ function CompletedItem({ task, onUncomplete, onDelete }) {
   )
 }
 
-function ExpiredItem({ task, isReopening, reopenDate, onReopenDateChange, onStartReopen, onCancelReopen, onConfirmReopen, onDelete }) {
+function ExpiredItem({ task, isReopening, reopenDate, onReopenDateChange, onStartReopen, onCancelReopen, onConfirmReopen, onDelete, onMarkCompleted }) {
   const pColor = PRIORITY_COLORS[task.priority] || '#ff7043'
   return (
     <div style={{
@@ -229,10 +230,43 @@ function ExpiredItem({ task, isReopening, reopenDate, onReopenDateChange, onStar
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-          <button onClick={onDelete} style={{ ...secondaryBtnStyle, color: '#e53935' }}>🗑️ Elimina</button>
-          <button onClick={onStartReopen} style={{ ...secondaryBtnStyle, flex: 2 }}>↩ Riapri</button>
-        </div>
+        <>
+          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+            <button onClick={onDelete} style={{ ...secondaryBtnStyle, color: '#e53935' }}>🗑️ Elimina</button>
+            <button onClick={onStartReopen} style={{ ...secondaryBtnStyle, flex: 2 }}>↩ Riapri</button>
+          </div>
+          <div style={{
+            marginTop: 8,
+            padding: '8px 10px',
+            background: 'rgba(76,175,80,0.06)',
+            border: '1px solid rgba(76,175,80,0.15)',
+            borderRadius: 8,
+            fontSize: '0.75em',
+            color: '#888',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}>
+            <span>📝 L'avevi completata ma te ne sei dimenticato?</span>
+            <button
+              onClick={onMarkCompleted}
+              style={{
+                background: 'rgba(76,175,80,0.15)',
+                border: '1px solid rgba(76,175,80,0.3)',
+                borderRadius: 6,
+                color: '#4caf50',
+                cursor: 'pointer',
+                fontSize: '0.85em',
+                fontWeight: 600,
+                padding: '4px 10px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Segna completata
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

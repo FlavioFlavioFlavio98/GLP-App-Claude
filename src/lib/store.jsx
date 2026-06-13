@@ -1340,6 +1340,40 @@ export function AppProvider({ children }) {
       await updateDoc(doc(db, 'users', authUserId), { tasks, ...scoreUpdate })
       actions.showToast('Task riaperta!', '↩️')
     },
+
+    async markExpiredAsCompleted(task) {
+      if (isReadOnly()) return
+      const rewardNum = parseInt(task.reward) || 0
+      const penaltyNum = task.penaltyApplied ? (parseInt(task.penalty) || 0) : 0
+      const scoreDelta = penaltyNum + rewardNum
+      const confirmMsg = penaltyNum > 0
+        ? `Segna come completata? Verrà restituita la penalità di ${penaltyNum}pt e accreditato il reward di ${rewardNum}pt (+${scoreDelta}pt totali)`
+        : `Segna come completata? Verranno accreditati ${rewardNum}pt`
+      if (!window.confirm(confirmMsg)) return
+
+      const { authUserId } = state
+      const userRef = doc(db, 'users', authUserId)
+
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(userRef)
+        const freshData = snap.data()
+
+        const updatedTasks = (freshData.tasks || []).map(t => {
+          if (t.id !== task.id) return t
+          return {
+            ...t,
+            status: 'completed',
+            completedAt: (t.deadline || new Date().toISOString().slice(0, 10)) + 'T23:59:59.000Z',
+            penaltyApplied: false,
+          }
+        })
+
+        const newScore = (freshData.score || 0) + scoreDelta
+        transaction.update(userRef, { tasks: updatedTasks, score: newScore })
+      })
+
+      actions.showToast(`Task completata! +${rewardNum}pt`, '✅')
+    },
   }
 
   return (

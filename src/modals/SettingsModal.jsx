@@ -232,6 +232,10 @@ export default function SettingsModal() {
             <span className="material-icons-round" style={{ fontSize: 18 }}>folder_zip</span>
             📦 Backup e Dati
           </button>
+          <button className="btn-backup" onClick={actions.forceRecalculateScore} style={{ marginTop: 8 }}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>calculate</span>
+            🔄 Ricalcola punteggio
+          </button>
         </div>
 
         {/* LOGOUT */}

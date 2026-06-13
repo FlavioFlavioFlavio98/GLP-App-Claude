@@ -7,7 +7,7 @@ import {
   doc, onSnapshot, updateDoc, setDoc, getDoc, deleteDoc,
   arrayUnion, collection, getDocs, increment,
 } from 'firebase/firestore'
-import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry } from './habitLogic'
+import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, recalculateScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 
@@ -305,38 +305,31 @@ export function AppProvider({ children }) {
 
       const wasDone = entry.habits.includes(habitId)
       const wasLevel = entry.habitLevels[habitId] || 'max'
-      let score = globalData.score
 
       if (wasDone) {
-        score -= isMulti && wasLevel === 'min' ? rewardMin : rewardMax
         entry.habits = entry.habits.filter(id => id !== habitId)
         delete entry.habitLevels[habitId]
       }
       if (entry.failedHabits.includes(habitId)) {
-        score += penalty
         entry.failedHabits = entry.failedHabits.filter(id => id !== habitId)
       }
 
       let actionType = 'neutral'
       if (action === 'failed') {
         entry.failedHabits.push(habitId)
-        score -= penalty
         actionType = 'failed'
       } else if (action === 'next') {
         if (!wasDone) {
           entry.habits.push(habitId)
           if (isMulti) {
             entry.habitLevels[habitId] = 'min'
-            score += rewardMin
           } else {
             entry.habitLevels[habitId] = 'max'
-            score += rewardMax
             actionType = 'done'
           }
         } else if (isMulti && wasLevel === 'min') {
           entry.habits.push(habitId)
           entry.habitLevels[habitId] = 'max'
-          score += rewardMax
           actionType = 'done'
         }
         if (habitIndex >= 0 && entry.habits.includes(habitId)) {
@@ -345,6 +338,7 @@ export function AppProvider({ children }) {
       }
 
       dailyLogs[viewDate] = entry
+      const score = recalculateScore(habitsArr, globalData.rewards || [], dailyLogs)
       await updateDoc(ref, { score, dailyLogs, habits: habitsArr })
       await actions._logHistory(authUserId, score)
 
@@ -375,7 +369,7 @@ export function AppProvider({ children }) {
       if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
       const purchases = [...(raw.purchases || []), { name, cost, time: Date.now() }]
       dailyLogs[viewDate] = { habits: raw.habits || [], failedHabits: raw.failedHabits || [], habitLevels: raw.habitLevels || {}, purchases }
-      const newScore = globalData.score - parseInt(cost)
+      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
       await updateDoc(ref, { score: newScore, dailyLogs })
       await actions._logHistory(authUserId, newScore)
       actions.vibrate('heavy')
@@ -397,7 +391,7 @@ export function AppProvider({ children }) {
       const purchases = [...(raw.purchases || [])]
       purchases.splice(idx, 1)
       dailyLogs[viewDate] = { ...raw, purchases }
-      const newScore = globalData.score + parseInt(cost)
+      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
       await updateDoc(ref, { score: newScore, dailyLogs })
       await actions._logHistory(authUserId, newScore)
       actions.vibrate('light')
@@ -663,7 +657,7 @@ export function AppProvider({ children }) {
       } catch (e) { console.error('[ensureDefaultExercise]', e) }
     },
 
-    async addExerciseSession(exerciseId, reps) {
+    async addExerciseSession(exerciseId, reps, dateStr) {
       if (state.authUserId !== 'flavio') return
       const gd = state.allUsersData?.flavio
       if (!gd) { console.error('[addExerciseSession] no gd'); return }
@@ -680,12 +674,12 @@ export function AppProvider({ children }) {
       }
       if (!ex) { actions.showToast('Esercizio non trovato', '❌'); return }
 
-      const today = toDateString(new Date())
-      const ppr = _getPPR(ex, today)
+      const logDate = dateStr || toDateString(new Date())
+      const ppr = _getPPR(ex, logDate)
       const numReps = parseInt(reps) || 0
       const pts = parseFloat((numReps * ppr).toFixed(2))
 
-      console.log('[addExerciseSession]', { exerciseId, ex, reps: numReps, ppr, pts })
+      console.log('[addExerciseSession]', { exerciseId, ex, reps: numReps, ppr, pts, logDate })
 
       if (!pts || pts <= 0) {
         actions.showToast('Errore nel calcolo punti — controlla ppr', '❌')
@@ -703,7 +697,7 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, {
         score: increment(pts),
-        [`exerciseLog.${today}`]: arrayUnion(logEntry),
+        [`exerciseLog.${logDate}`]: arrayUnion(logEntry),
       })
       await actions._logHistory('flavio', (gd.score || 0) + pts)
       actions.vibrate('light')
@@ -825,15 +819,13 @@ export function AppProvider({ children }) {
       const habit = (globalData.habits || []).find(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
       if (!habit || !habit.numericConfig) return
       const { calcNumericPoints: cnp } = await import('./habitLogic')
-      const prevValue = entry.habitValues[habitId]
-      const prevPts = prevValue !== undefined ? cnp(parseFloat(prevValue), habit.numericConfig) : 0
       entry.habitValues[habitId] = value
       const newPts = cnp(parseFloat(value), habit.numericConfig)
-      const delta = Math.round((newPts - prevPts) * 10) / 10
       if (!entry.habits.includes(habitId)) entry.habits.push(habitId)
       dailyLogs[viewDate] = entry
-      await updateDoc(ref, { dailyLogs, score: increment(delta) })
-      await actions._logHistory(authUserId, (globalData.score || 0) + delta)
+      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
+      await updateDoc(ref, { dailyLogs, score: newScore })
+      await actions._logHistory(authUserId, newScore)
       actions.vibrate('light')
       actions.showToast(`${newPts >= 0 ? '+' : ''}${newPts} pt`, newPts >= 0 ? '✅' : '❌')
     },
@@ -1173,11 +1165,24 @@ export function AppProvider({ children }) {
       dailyLogs[dateStr] = { ...raw, trackedRewards }
 
       const diff = newCost - oldCost
-      await updateDoc(doc(db, 'users', authUserId), { dailyLogs, score: increment(-diff) })
-      await actions._logHistory(authUserId, (globalData.score || 0) - diff)
+      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
+      await updateDoc(doc(db, 'users', authUserId), { dailyLogs, score: newScore })
+      await actions._logHistory(authUserId, newScore)
       if (diff > 0) actions.showToast(`Registrato: -${newCost}pt`, '📊')
       else if (diff < 0) actions.showToast(`Aggiornato: rimborso +${Math.abs(diff)}pt`, '📊')
       else actions.showToast('Registrato', '📊')
+    },
+
+    async forceRecalculateScore() {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const newScore = recalculateScore(
+        globalData.habits || [],
+        globalData.rewards || [],
+        globalData.dailyLogs || {}
+      )
+      await updateDoc(doc(db, 'users', authUserId), { score: newScore })
+      actions.showToast(`Punteggio ricalcolato: ${newScore}pt`, '✅')
     },
 
     async reopenTask(task, newDeadline) {

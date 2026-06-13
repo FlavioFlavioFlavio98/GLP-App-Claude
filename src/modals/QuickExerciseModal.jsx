@@ -9,6 +9,7 @@ export default function QuickExerciseModal() {
   const [selId, setSelId] = useState(null)
   const [reps, setReps] = useState(10)
   const [saving, setSaving] = useState(false)
+  const [exerciseDate, setExerciseDate] = useState(toDateString(new Date()))
 
   const gd = allUsersData?.flavio
   const exercises = (gd?.quickExercises || []).filter(e => e.active !== false)
@@ -17,6 +18,7 @@ export default function QuickExerciseModal() {
   useEffect(() => {
     if (modal === 'quickExercise') {
       setReps(10)
+      setExerciseDate(toDateString(new Date()))
       if (exercises.length > 0) setSelId(exercises[0].id)
     }
   }, [modal]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -47,7 +49,7 @@ export default function QuickExerciseModal() {
     if (!exercise) { actions.showToast('Nessun esercizio selezionato', '⚠️'); return }
     console.log('[QuickExercise] handleAdd', exercise.id, reps, pts)
     setSaving(true)
-    await actions.addExerciseSession(exercise.id, reps)
+    await actions.addExerciseSession(exercise.id, reps, exerciseDate)
     setSaving(false)
     actions.closeModal()
   }
@@ -134,6 +136,18 @@ export default function QuickExerciseModal() {
         {/* Points preview */}
         <div style={{ textAlign: 'center', marginBottom: 22, fontSize: '1.2em', fontWeight: 800, color: 'var(--success)' }}>
           = +{pts} pt
+        </div>
+
+        {/* Date picker */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Data</div>
+          <input
+            type="date"
+            value={exerciseDate}
+            max={toDateString(new Date())}
+            onChange={e => setExerciseDate(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
+          />
         </div>
 
         {/* Save button */}

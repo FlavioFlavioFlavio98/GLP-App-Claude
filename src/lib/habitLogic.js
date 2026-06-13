@@ -152,6 +152,57 @@ export function toDateString(date) {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Ricalcola il punteggio totale leggendo tutti i dailyLogs.
+ * Usa questa invece di increment() per mantenere score e dailyLogs sincronizzati.
+ * NON include task (gestite separatamente con increment()).
+ */
+export function recalculateScore(habits, rewards, dailyLogs) {
+  if (!dailyLogs || !habits) return 0
+  let total = 0
+
+  for (const [date, rawEntry] of Object.entries(dailyLogs)) {
+    if (!rawEntry || typeof rawEntry !== 'object') continue
+    const entry = parseEntry(rawEntry)
+
+    // Abitudini completate
+    for (const habitId of entry.habits) {
+      const habit = habits.find(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
+      if (!habit) continue
+      const isM = getItemValueAtDate(habit, 'isMulti', date)
+      const rMin = getItemValueAtDate(habit, 'rewardMin', date)
+      const rMax = getItemValueAtDate(habit, 'reward', date)
+      const lvl = entry.habitLevels[habitId] || 'max'
+      total += isM && lvl === 'min' ? rMin : rMax
+    }
+
+    // Penalita abitudini fallite
+    for (const habitId of entry.failedHabits) {
+      const habit = habits.find(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
+      if (habit) total -= getItemValueAtDate(habit, 'penalty', date)
+    }
+
+    // Abitudini numeriche
+    for (const [habitId, value] of Object.entries(entry.habitValues)) {
+      const habit = habits.find(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
+      if (habit?.numericConfig) total += calcNumericPoints(parseFloat(value), habit.numericConfig)
+    }
+
+    // Acquisti negozio (array di oggetti {name, cost, time})
+    for (const p of entry.purchases) {
+      const cost = typeof p === 'object' ? (parseInt(p.cost) || 0) : 0
+      total -= cost
+    }
+
+    // Premi tracciati
+    for (const [, data] of Object.entries(entry.trackedRewards || {})) {
+      if (data && typeof data.cost === 'number') total -= data.cost
+    }
+  }
+
+  return Math.round(total * 100) / 100
+}
+
 export function formatDisplayDate(dateStr) {
   const today = toDateString(new Date())
   const yesterday = toDateString(new Date(Date.now() - 86400000))

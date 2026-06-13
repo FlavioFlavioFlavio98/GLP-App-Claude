@@ -236,6 +236,47 @@ export default function SettingsModal() {
             <span className="material-icons-round" style={{ fontSize: 18 }}>calculate</span>
             🔄 Ricalcola punteggio
           </button>
+          <button
+            className="btn-backup"
+            style={{ marginTop: 8 }}
+            onClick={() => {
+              const logs = (allUsersData[currentUser]?.dailyLogs) || {}
+              const dates = ['2026-06-06','2026-06-07','2026-06-08','2026-06-09','2026-06-10','2026-06-11','2026-06-12']
+              dates.forEach(d => {
+                console.log(`=== ${d} ===`, JSON.stringify(logs[d] || null, null, 2))
+              })
+              console.log('=== ALL KEYS in dailyLogs ===', Object.keys(logs))
+            }}
+          >
+            <span className="material-icons-round" style={{ fontSize: 18 }}>search</span>
+            Debug dailyLogs (console)
+          </button>
+          <button
+            className="btn-backup"
+            style={{ marginTop: 8 }}
+            onClick={() => {
+              const logs = (allUsersData[currentUser]?.dailyLogs) || {}
+              const dates = ['2026-06-07','2026-06-10','2026-06-11']
+              let output = ''
+              dates.forEach(d => {
+                const entry = logs[d]
+                if (entry) {
+                  output += `\n${d}: keys=[${Object.keys(entry).join(',')}]`
+                  if (entry.trackedRewards) output += ` trackedRewards=${JSON.stringify(entry.trackedRewards)}`
+                  if (entry.trackedPurchases) output += ` trackedPurchases=${JSON.stringify(entry.trackedPurchases)}`
+                  Object.keys(entry).filter(k => k.toLowerCase().includes('track') || k.toLowerCase().includes('vape') || k.toLowerCase().includes('reward')).forEach(k => {
+                    output += ` [${k}]=${JSON.stringify(entry[k])}`
+                  })
+                } else {
+                  output += `\n${d}: nessun dato`
+                }
+              })
+              alert('DailyLogs premi tracciati:\n' + output)
+            }}
+          >
+            <span className="material-icons-round" style={{ fontSize: 18 }}>visibility</span>
+            Mostra premi tracciati (06-07/10/11)
+          </button>
         </div>
 
         {/* LOGOUT */}

@@ -277,6 +277,24 @@ export default function SettingsModal() {
             <span className="material-icons-round" style={{ fontSize: 18 }}>visibility</span>
             Mostra premi tracciati (06-07/10/11)
           </button>
+          <button
+            className="btn-backup"
+            style={{ marginTop: 8, borderColor: '#e67e22', color: '#e67e22' }}
+            onClick={async () => {
+              const rewards = allUsersData[currentUser]?.rewards || []
+              const rewardNames = rewards.map(r => `${r.id}: ${r.name}`).join('\n')
+              const rewardId = window.prompt(`ID del premio da correggere:\n(premi disponibili)\n${rewardNames}`)
+              if (!rewardId) return
+              const dateStr = window.prompt('Data (es. 2026-06-07):')
+              if (!dateStr) return
+              const qty = window.prompt('Quantità:')
+              if (qty === null) return
+              await actions.patchTrackedRewardManual(rewardId.trim(), dateStr.trim(), parseInt(qty) || 0)
+            }}
+          >
+            <span className="material-icons-round" style={{ fontSize: 18 }}>build</span>
+            Correggi premio tracciato manuale
+          </button>
         </div>
 
         {/* LOGOUT */}

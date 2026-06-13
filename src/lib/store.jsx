@@ -1166,11 +1166,47 @@ export function AppProvider({ children }) {
 
       const diff = newCost - oldCost
       const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
-      await updateDoc(doc(db, 'users', authUserId), { dailyLogs, score: newScore })
+
+      console.log('[registerTrackedReward] rewardId=', rewardId, 'qty=', quantity, 'date=', dateStr, 'newCost=', newCost, 'newScore=', newScore, 'trackedRewards=', trackedRewards)
+
+      // Use dot-notation for nested update to avoid overwriting sibling fields in a race condition
+      await updateDoc(doc(db, 'users', authUserId), {
+        [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
+        score: newScore,
+      })
       await actions._logHistory(authUserId, newScore)
       if (diff > 0) actions.showToast(`Registrato: -${newCost}pt`, '📊')
       else if (diff < 0) actions.showToast(`Aggiornato: rimborso +${Math.abs(diff)}pt`, '📊')
       else actions.showToast('Registrato', '📊')
+    },
+
+    // Manual patch for retroactive correction of missing trackedRewards entries
+    async patchTrackedRewardManual(rewardId, dateStr, quantity) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const reward = (globalData.rewards || []).find(r => r.id === rewardId)
+      if (!reward) { alert('Premio non trovato: ' + rewardId); return }
+
+      const { calcTrackedCost } = await import('./habitLogic')
+      const newCost = calcTrackedCost(quantity, reward)
+
+      const dailyLogs = { ...(globalData.dailyLogs || {}) }
+      let raw = dailyLogs[dateStr] || {}
+      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+
+      const trackedRewards = { ...(raw.trackedRewards || {}), [rewardId]: { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() } }
+      dailyLogs[dateStr] = { ...raw, trackedRewards }
+
+      const newScore = recalculateScore(globalData.habits || [], globalData.rewards || [], dailyLogs)
+
+      console.log('[patchTrackedRewardManual] rewardId=', rewardId, 'date=', dateStr, 'qty=', quantity, 'newCost=', newCost, 'newScore=', newScore)
+
+      await updateDoc(doc(db, 'users', authUserId), {
+        [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
+        score: newScore,
+      })
+      await actions._logHistory(authUserId, newScore)
+      actions.showToast(`Corretto ${dateStr}: ${quantity}x ${reward.name} (-${newCost}pt)`, '✅')
     },
 
     async forceRecalculateScore() {

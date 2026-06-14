@@ -150,6 +150,44 @@ exports.summarizeConversation = onCall(
   }
 )
 
+// ── Push notifications helper ────────────────────────────────────────────────
+async function sendPushToFlavio(title, body) {
+  try {
+    const { getMessaging } = require('firebase-admin/messaging')
+    const flavioSnap = await admin.firestore().collection('users').doc('flavio').get()
+    const token = flavioSnap.data()?.fcmToken
+    if (!token) { console.log('[push] no FCM token'); return }
+    await getMessaging().send({
+      token,
+      notification: { title, body },
+      webpush: { fcmOptions: { link: 'https://flavioflavioflavio98.github.io/GLP-App-Claude/' } },
+    })
+    console.log('[push] sent:', title)
+  } catch (e) {
+    console.error('[push] error:', e.message)
+  }
+}
+
+exports.notifyMorningCheckIn = onSchedule(
+  { schedule: '30 7 * * *', timeZone: 'Europe/Rome', region: REGION },
+  async () => { await sendPushToFlavio('🌅 Check-in mattino', 'Inizia bene la giornata! +1pt ti aspetta.') }
+)
+
+exports.notifyMiddayCheckIn = onSchedule(
+  { schedule: '30 12 * * *', timeZone: 'Europe/Rome', region: REGION },
+  async () => { await sendPushToFlavio('☀️ Check-in mezzogiorno', 'Come sta andando? +1pt per aggiornarsi.') }
+)
+
+exports.notifyEveningCheckIn = onSchedule(
+  { schedule: '0 20 * * *', timeZone: 'Europe/Rome', region: REGION },
+  async () => { await sendPushToFlavio('🌙 Check-in serale', 'Momento di riflettere sulla giornata. +1pt') }
+)
+
+exports.notifyHabitsReminder = onSchedule(
+  { schedule: '0 21 * * *', timeZone: 'Europe/Rome', region: REGION },
+  async () => { await sendPushToFlavio('💪 Abitudini', 'Hai ancora abitudini da completare oggi?') }
+)
+
 // ── expireTasks ───────────────────────────────────────────────────────────────
 exports.expireTasks = onSchedule(
   { schedule: '1 0 * * *', timeZone: 'Europe/Rome', region: REGION },

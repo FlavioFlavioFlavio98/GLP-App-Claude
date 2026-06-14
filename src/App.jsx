@@ -59,11 +59,13 @@ import CoachPage from './modals/CoachPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
 import QuoteCard from './components/QuoteCard'
+import CheckInBanner from './components/CheckInBanner'
 import { trackAppOpen } from './lib/trackAppOpen'
 import TaskSection from './components/TaskSection'
 import TaskModal from './modals/TaskModal'
 import TaskHistoryModal from './modals/TaskHistoryModal'
 import QuotesModal from './modals/QuotesModal'
+import MissionsCard from './components/MissionsCard'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -162,6 +164,17 @@ export default function App() {
       trackAppOpen('flavio')
     }
   }, [authUserId, authStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Missions: genera se nuovo giorno, poi aggiorna il progresso
+  useEffect(() => {
+    if (authUserId !== 'flavio' || !globalData) return
+    const today = toDateString(new Date())
+    if (!globalData.missions || globalData.missions.date !== today) {
+      actions.generateDailyMissions()
+    } else {
+      actions.checkAndUpdateMissions()
+    }
+  }, [globalData, authUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth state routing ──
   if (authStatus === 'loading') {
@@ -428,6 +441,12 @@ export default function App() {
 
       {/* Quote Card — solo Flavio */}
       {authUserId === 'flavio' && !isReadOnly && <QuoteCard />}
+
+      {/* Check-in mattino/mezzogiorno/sera — solo Flavio */}
+      {authUserId === 'flavio' && !isReadOnly && <CheckInBanner />}
+
+      {/* Missioni giornaliere — solo Flavio */}
+      {authUserId === 'flavio' && !isReadOnly && <MissionsCard missions={globalData.missions} />}
 
       {/* Daily Insight Card — solo Flavio */}
       {authUserId === 'flavio' && !isReadOnly && (

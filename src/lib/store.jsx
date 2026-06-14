@@ -16,6 +16,17 @@ const DispatchContext = createContext(null)
 
 const USERS = ['flavio', 'simona']
 
+const MISSION_POOL = [
+  { id: 'complete_5_habits', title: 'Completa 5 abitudini', pts: 5, target: 5, type: 'habits_count' },
+  { id: 'complete_3_habits', title: 'Completa 3 abitudini', pts: 3, target: 3, type: 'habits_count' },
+  { id: 'no_failures', title: 'Zero abitudini fallite', pts: 4, target: 0, type: 'no_failures' },
+  { id: 'checkin_all', title: 'Completa tutti i check-in', pts: 4, target: 3, type: 'checkin_count' },
+  { id: 'checkin_morning', title: 'Fai il check-in mattutino', pts: 2, target: 1, type: 'checkin_morning' },
+  { id: 'add_numeric', title: 'Inserisci un valore numerico', pts: 2, target: 1, type: 'numeric_count' },
+  { id: 'earn_10pts', title: 'Guadagna 10pt oggi', pts: 3, target: 10, type: 'daily_pts' },
+  { id: 'complete_task', title: 'Completa una task', pts: 3, target: 1, type: 'task_done' },
+]
+
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
 function reducer(state, action) {
@@ -1339,6 +1350,108 @@ export function AppProvider({ children }) {
         : {}
       await updateDoc(doc(db, 'users', authUserId), { tasks, ...scoreUpdate })
       actions.showToast('Task riaperta!', '↩️')
+    },
+
+    // ─── Check-in ─────────────────────────────────────────────────────────────
+    async completeCheckIn(slot, answer) {
+      if (isReadOnly()) return
+      const { authUserId } = state
+      const date = toDateString(new Date())
+      const userRef = doc(db, 'users', authUserId)
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(userRef)
+        const freshData = snap.data()
+        const newScore = (freshData.score || 0) + 1
+        transaction.update(userRef, {
+          [`dailyLogs.${date}.checkIns.${slot}`]: { done: true, pts: 1, answer, answeredAt: new Date().toISOString() },
+          score: newScore,
+        })
+      })
+      actions.showToast('Check-in completato! +1pt', '✅')
+    },
+
+    // ─── Missions ─────────────────────────────────────────────────────────────
+    async generateDailyMissions() {
+      if (isReadOnly()) return
+      const { authUserId } = state
+      if (authUserId !== 'flavio') return
+      const date = toDateString(new Date())
+      const shuffled = [...MISSION_POOL].sort(() => Math.random() - 0.5)
+      const list = shuffled.slice(0, 3).map(m => ({ ...m, progress: 0, done: false, rewardGiven: false }))
+      const userRef = doc(db, 'users', 'flavio')
+      await updateDoc(userRef, { missions: { date, list } })
+    },
+
+    async checkAndUpdateMissions() {
+      const { globalData, authUserId } = state
+      if (!globalData?.missions || authUserId !== 'flavio') return
+      const date = toDateString(new Date())
+
+      if (globalData.missions.date !== date) {
+        await actions.generateDailyMissions()
+        return
+      }
+
+      const todayLog = globalData.dailyLogs?.[date] || {}
+      const habits = todayLog.habits || []
+      const failed = todayLog.failedHabits || []
+      const checkIns = todayLog.checkIns || {}
+      const habitValues = todayLog.habitValues || {}
+
+      const dailyPts = (globalData.habits || [])
+        .filter(h => habits.includes(h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')))
+        .reduce((s, h) => s + (h.reward || 0), 0)
+
+      const completedCheckIns = ['morning', 'midday', 'evening'].filter(s => checkIns[s]?.done).length
+      const tasksCompletedToday = (globalData.tasks || []).filter(t => t.status === 'completed' && t.completedAt?.startsWith(date)).length
+
+      const updatedList = [...(globalData.missions.list || [])]
+      let changed = false
+      let pointsToAdd = 0
+
+      for (let i = 0; i < updatedList.length; i++) {
+        const m = updatedList[i]
+        if (m.rewardGiven) continue
+
+        let progress = 0
+        if (m.type === 'habits_count') progress = habits.length
+        else if (m.type === 'no_failures') progress = failed.length === 0 ? 1 : 0
+        else if (m.type === 'checkin_count') progress = completedCheckIns
+        else if (m.type === 'checkin_morning') progress = checkIns.morning?.done ? 1 : 0
+        else if (m.type === 'numeric_count') progress = Object.keys(habitValues).length
+        else if (m.type === 'daily_pts') progress = dailyPts
+        else if (m.type === 'task_done') progress = tasksCompletedToday
+
+        const done = m.type === 'no_failures' ? (failed.length === 0 && habits.length > 0) : progress >= m.target
+
+        if (progress !== m.progress || (done && !m.done)) {
+          updatedList[i] = { ...m, progress, done }
+          changed = true
+        }
+
+        if (done && !m.rewardGiven) {
+          updatedList[i] = { ...updatedList[i], rewardGiven: true }
+          pointsToAdd += m.pts
+          changed = true
+          actions.showToast(`Missione completata! +${m.pts}pt`, '🎯')
+        }
+      }
+
+      if (!changed) return
+
+      const userRef = doc(db, 'users', 'flavio')
+      if (pointsToAdd > 0) {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(userRef)
+          const freshData = snap.data()
+          transaction.update(userRef, {
+            'missions.list': updatedList,
+            score: (freshData.score || 0) + pointsToAdd,
+          })
+        })
+      } else {
+        await updateDoc(userRef, { 'missions.list': updatedList })
+      }
     },
 
     async markExpiredAsCompleted(task) {

@@ -993,6 +993,19 @@ input[type="color"] {
   color: var(--danger) !important;
   transition: color 0.5s ease;
 }
+@keyframes scoreDeltaFade {
+  0%   { opacity: 0; transform: translateY(0px); }
+  15%  { opacity: 1; transform: translateY(-4px); }
+  70%  { opacity: 1; transform: translateY(-6px); }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+.score-delta {
+  font-size: 0.7em;
+  font-weight: 700;
+  animation: scoreDeltaFade 1.5s ease forwards;
+  pointer-events: none;
+  white-space: nowrap;
+}
 
 /* =============================================
    FEATURE 2 — SPLASH SCREEN

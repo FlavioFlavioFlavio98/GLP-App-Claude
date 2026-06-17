@@ -149,6 +149,36 @@ export default function SingleHabitView() {
           </>
         )}
 
+        {/* ── Voice Notes ───────────────────────────────────────────────────── */}
+        {(() => {
+          const voiceNotes = (habit.voiceNotes || []).slice().sort((a, b) => b.date.localeCompare(a.date))
+          if (voiceNotes.length === 0) return null
+          return (
+            <div style={{ marginTop: 24, marginBottom: 24 }}>
+              <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+                Note vocali ({voiceNotes.length})
+              </div>
+              {voiceNotes.map(note => (
+                <div key={note.id} style={{
+                  background: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: '12px 14px',
+                  marginBottom: 10, border: '1px solid rgba(255,255,255,0.06)'
+                }}>
+                  <div style={{ fontSize: '0.68em', color: 'var(--theme-color)', fontWeight: 700, marginBottom: 6 }}>
+                    {note.date} {note.costEUR > 0 && <span style={{ color: '#444', fontWeight: 400 }}> EUR {note.costEUR.toFixed(4)}</span>}
+                  </div>
+                  <div style={{ fontSize: '0.86em', color: 'var(--text-sec)', lineHeight: 1.6 }}>{note.text}</div>
+                  <button
+                    onClick={() => actions.deleteVoiceNote(stableId, 'habit', note.id)}
+                    style={{ marginTop: 8, background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: '0.72em' }}
+                  >
+                    Elimina nota
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+
         {/* ── Feature 7: Change History ─────────────────────────────────────── */}
         <SectionLabel>Storico Modifiche</SectionLabel>
         {changes.length <= 1 ? (

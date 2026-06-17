@@ -203,6 +203,17 @@ export function recalculateScore(habits, rewards, dailyLogs) {
   return Math.round(total * 100) / 100
 }
 
+export function countPerfectDays(habits, dailyLogs) {
+  if (!habits || !dailyLogs) return 0
+  let count = 0
+  for (const [date, rawEntry] of Object.entries(dailyLogs)) {
+    const entry = parseEntry(rawEntry)
+    if (!entry.habits || entry.habits.length === 0) continue
+    if (entry.failedHabits.length === 0 && entry.habits.length >= 5) count++
+  }
+  return count
+}
+
 export function formatDisplayDate(dateStr) {
   const today = toDateString(new Date())
   const yesterday = toDateString(new Date(Date.now() - 86400000))

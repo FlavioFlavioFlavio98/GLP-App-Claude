@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from './lib/store'
-import { parseEntry, getItemValueAtDate, isHabitVisible, toDateString, calcNumericPoints } from './lib/habitLogic'
+import { parseEntry, getItemValueAtDate, isHabitVisible, toDateString, calcNumericPoints, countPerfectDays } from './lib/habitLogic'
 import { applyTheme, applyUserColors } from './lib/themes'
 import { getLevel } from './lib/levels'
 import { TIME_SLOT_OPTS } from './lib/timeSlots'
@@ -58,6 +58,7 @@ import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
+import ScoreSparkline from './components/ScoreSparkline'
 import QuoteCard from './components/QuoteCard'
 import CheckInBanner from './components/CheckInBanner'
 import { trackAppOpen } from './lib/trackAppOpen'
@@ -65,7 +66,6 @@ import TaskSection from './components/TaskSection'
 import TaskModal from './modals/TaskModal'
 import TaskHistoryModal from './modals/TaskHistoryModal'
 import QuotesModal from './modals/QuotesModal'
-import MissionsCard from './components/MissionsCard'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -165,17 +165,6 @@ export default function App() {
     }
   }, [authUserId, authStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Missions: genera se nuovo giorno, poi aggiorna il progresso
-  useEffect(() => {
-    if (authUserId !== 'flavio' || !globalData) return
-    const today = toDateString(new Date())
-    if (!globalData.missions || globalData.missions.date !== today) {
-      actions.generateDailyMissions()
-    } else {
-      actions.checkAndUpdateMissions()
-    }
-  }, [globalData, authUserId]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Auth state routing ──
   if (authStatus === 'loading') {
     return (
@@ -257,6 +246,13 @@ export default function App() {
       .reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) * 10
   ) / 10
 
+  // Punti check-in del giorno visualizzato (solo Flavio)
+  const checkInPts = authUserId === 'flavio'
+    ? Object.values(globalData.dailyLogs?.[viewDate]?.checkIns || {})
+        .filter(c => c?.done)
+        .reduce((sum, c) => sum + (c.pts || 1), 0)
+    : 0
+
   // Punti task completate nel viewDate (solo Flavio)
   const taskPts = authUserId === 'flavio'
     ? (globalData.tasks || [])
@@ -275,7 +271,7 @@ export default function App() {
         .reduce((sum, t) => sum + (parseInt(t.penalty) || 0), 0)
     : 0
 
-  const net = totalHabitPoints + taskPts + extraPts - dailySpent - expiredTaskCost
+  const net = totalHabitPoints + taskPts + extraPts + checkInPts - dailySpent - expiredTaskCost
 
   function isFullyComplete(h) {
     const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
@@ -378,9 +374,10 @@ export default function App() {
               {totalHabitPoints > 0 && <DailySumRow label="Abitudini" value={`+${totalHabitPoints}`} color="#4caf50" />}
               {taskPts > 0 && <DailySumRow label="Task 📋" value={`+${taskPts}`} color="#4caf50" />}
               {extraPts > 0 && <DailySumRow label="Extra 💪" value={`+${extraPts}`} color="#4caf50" />}
-              {(totalHabitPoints + taskPts + extraPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
+              {checkInPts > 0 && <DailySumRow label="Check-in ✅" value={`+${checkInPts}`} color="#4caf50" />}
+              {(totalHabitPoints + taskPts + extraPts + checkInPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
               <div style={{ borderTop: '1px solid rgba(76,175,80,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts}`} color="#4caf50" bold />
+                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts + checkInPts}`} color="#4caf50" bold />
               </div>
             </div>
             <div style={{ background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 10, padding: '10px 12px' }}>
@@ -408,6 +405,10 @@ export default function App() {
             >
               {net > 0 ? '+' : ''}{net}pt
             </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 4 }}>
+              <ScoreSparkline habits={globalData?.habits} rewards={globalData?.rewards} dailyLogs={globalData?.dailyLogs} />
+              {(() => { const pd = countPerfectDays(globalData?.habits, globalData?.dailyLogs); return pd > 0 ? <span style={{ fontSize: '0.72em', color: '#ffd700', fontWeight: 700 }}>⭐ {pd} giorni perfetti</span> : null })()}
+            </div>
           </div>
         </div>
       ) : (
@@ -445,8 +446,6 @@ export default function App() {
       {/* Check-in mattino/mezzogiorno/sera — solo Flavio */}
       {authUserId === 'flavio' && !isReadOnly && <CheckInBanner />}
 
-      {/* Missioni giornaliere — solo Flavio */}
-      {authUserId === 'flavio' && !isReadOnly && <MissionsCard missions={globalData.missions} />}
 
       {/* Daily Insight Card — solo Flavio */}
       {authUserId === 'flavio' && !isReadOnly && (

@@ -3,6 +3,7 @@ import { useApp } from '../lib/store'
 import { getItemValueAtDate, calculateStreak, calcNumericPoints } from '../lib/habitLogic'
 import { calcQualityScore } from '../lib/statsLogic'
 import { TIME_SLOT_OPTS } from '../lib/timeSlots'
+import VoiceNoteButton from './VoiceNoteButton'
 
 // ---- Widget per abitudini numeriche ----
 function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
@@ -134,7 +135,7 @@ export default function HabitItem({
   const isHighFailed = importance === 'high' && isFailed
 
   const tag = tagsMap[habit.tagId]
-  const streak = isToday && !isIf && !isDragOverlay ? calculateStreak(stableId, {}) : 0
+  const streak = isToday && !isIf && !isDragOverlay ? calculateStreak(stableId, globalData?.dailyLogs || {}) : 0
   const existingNote = habitNotes?.[stableId] || ''
 
   const [showNotePopup, setShowNotePopup] = useState(false)
@@ -299,6 +300,7 @@ export default function HabitItem({
               {existingNote && (
                 <button className="note-icon-btn" onClick={() => setShowNotePopup(v => !v)} title="Vedi nota">📝</button>
               )}
+              <VoiceNoteButton itemId={stableId} itemType="habit" />
             </div>
             {description ? <span className="item-desc">{description}</span> : null}
             <div className="vals">

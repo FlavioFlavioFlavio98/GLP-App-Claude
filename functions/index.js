@@ -227,6 +227,37 @@ exports.expireTasks = onSchedule(
   }
 )
 
+// ── cleanupTranscription ──────────────────────────────────────────────────────
+exports.cleanupTranscription = onCall(
+  { region: REGION, secrets: [anthropicKey], invoker: 'public' },
+  async (request) => {
+    authCheck(request)
+    const { rawText } = request.data
+    if (!rawText) throw new HttpsError('invalid-argument', 'rawText richiesto')
+
+    const anthropic = getClient(anthropicKey.value())
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 500,
+      system: 'Sei un assistente che corregge e formatta trascrizioni vocali in italiano. Correggi errori grammaticali, punteggiatura mancante, e rendi il testo leggibile. Non aggiungere nulla, non rimuovere il contenuto. Restituisci SOLO il testo corretto, niente altro.',
+      messages: [{ role: 'user', content: `Correggi questa trascrizione:\n${rawText}` }]
+    })
+
+    const inputTokens = response.usage.input_tokens
+    const outputTokens = response.usage.output_tokens
+    // Haiku: $1/1M input, $5/1M output → converti in EUR (tasso fisso 0.92)
+    const costUSD = (inputTokens / 1_000_000) * 1 + (outputTokens / 1_000_000) * 5
+    const costEUR = parseFloat((costUSD * 0.92).toFixed(6))
+
+    return {
+      text: response.content[0].text,
+      costEUR,
+      inputTokens,
+      outputTokens
+    }
+  }
+)
+
 // ── generateDailyInsight ──────────────────────────────────────────────────────
 exports.generateDailyInsight = onCall(
   { region: REGION, secrets: [anthropicKey], invoker: 'public' },

@@ -647,6 +647,55 @@ export function AppProvider({ children }) {
       return result.data
     },
 
+    // ─── Voice Notes ──────────────────────────────────────────────────────────
+    async saveVoiceNote(itemId, itemType, date, rawText) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      actions.showToast('Trascrizione in corso...', '🎤')
+      const functions = getFunctions(app, 'europe-west1')
+      const cleanupTranscriptionFn = httpsCallable(functions, 'cleanupTranscription', { timeout: 30000 })
+      const result = await cleanupTranscriptionFn({ rawText })
+      const { text, costEUR } = result.data
+
+      const userRef = doc(db, 'users', authUserId)
+      const note = {
+        id: `note_${Date.now()}`,
+        date,
+        text,
+        costEUR,
+        createdAt: new Date().toISOString()
+      }
+
+      const arrayField = itemType === 'habit' ? 'habits' : 'rewards'
+      const items = globalData?.[arrayField] || []
+      const idx = items.findIndex(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')) === itemId)
+      if (idx === -1) throw new Error('Item non trovato')
+
+      const updatedItems = items.map((item, i) => {
+        if (i !== idx) return item
+        return { ...item, voiceNotes: [...(item.voiceNotes || []), note] }
+      })
+
+      await updateDoc(userRef, { [arrayField]: updatedItems })
+      actions.showToast(`Nota salvata! Costo: €${costEUR.toFixed(4)}`, '✅')
+      return { text, costEUR }
+    },
+
+    async deleteVoiceNote(itemId, itemType, noteId) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const userRef = doc(db, 'users', authUserId)
+      const arrayField = itemType === 'habit' ? 'habits' : 'rewards'
+      const items = globalData?.[arrayField] || []
+      const updatedItems = items.map(item => {
+        const stableId = item.id || item.name?.replace(/[^a-zA-Z0-9]/g, '')
+        if (stableId !== itemId) return item
+        return { ...item, voiceNotes: (item.voiceNotes || []).filter(n => n.id !== noteId) }
+      })
+      await updateDoc(userRef, { [arrayField]: updatedItems })
+      actions.showToast('Nota eliminata', '🗑️')
+    },
+
     // ─── Goals ───────────────────────────────────────────────────────────────
     async updateGoalValue(habitId, newValue) {
       if (isReadOnly()) return
@@ -859,14 +908,24 @@ export function AppProvider({ children }) {
     // ─── Mood ─────────────────────────────────────────────────────────────────
     async saveMood(dateStr, mood) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
+      const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
-      const dailyLogs = { ...(globalData.dailyLogs || {}) }
-      let raw = dailyLogs[dateStr] || {}
-      if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
-      const moodMap = { ...(raw.mood || {}), [authUserId]: mood }
-      dailyLogs[dateStr] = { ...raw, mood: moodMap }
-      await updateDoc(ref, { dailyLogs })
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(ref)
+        const freshData = snap.data()
+        let raw = freshData.dailyLogs?.[dateStr] || {}
+        if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
+        const alreadyGiven = raw.moodPtsGiven === true
+        const moodMap = { ...(raw.mood || {}), [authUserId]: mood }
+        const update = {
+          [`dailyLogs.${dateStr}.mood`]: moodMap,
+        }
+        if (!alreadyGiven) {
+          update[`dailyLogs.${dateStr}.moodPtsGiven`] = true
+          update.score = (freshData.score || 0) + 0.5
+        }
+        transaction.update(ref, update)
+      })
       actions.showToast('Mood salvato!', mood.emoji)
     },
 

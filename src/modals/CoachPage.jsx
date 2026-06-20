@@ -107,6 +107,11 @@ export default function CoachPage() {
   const [pastReports, setPastReports] = useState([])
   const [selectedPastReport, setSelectedPastReport] = useState(null)
 
+  // Diary report
+  const [updatingDiaries, setUpdatingDiaries] = useState(false)
+  const [diaryReport, setDiaryReport] = useState(null) // array of habitUpdates | null
+  const [savedDiaryIds, setSavedDiaryIds] = useState(new Set())
+
   // Goals
   const [showAddGoal, setShowAddGoal] = useState(false)
   const [editingGoal, setEditingGoal] = useState(null)
@@ -251,6 +256,51 @@ export default function CoachPage() {
     localStorage.removeItem(chatStorageKey)
     resetSessionStats()
     setCoachStats(getCoachStats())
+  }
+
+  async function saveDiaryEntry(update) {
+    const habitId = update.habitId
+    const existingEntries = userData?.habitDiaries?.[habitId]?.entries || []
+    const newEntry = {
+      id: `entry_${Date.now()}_${habitId}`,
+      date: toDateString(new Date()),
+      source: 'coach',
+      narrative: update.narrative,
+      keyPoints: update.keyPoints,
+      rawConversationSummary: update.rawSummary,
+    }
+    await updateDoc(doc(db, 'users', 'flavio'), {
+      [`habitDiaries.${habitId}`]: {
+        habitName: update.habitName,
+        entries: [...existingEntries, newEntry],
+        lastUpdated: new Date().toISOString(),
+      }
+    })
+    setSavedDiaryIds(prev => new Set([...prev, habitId]))
+    actions.showToast(`📖 Diario aggiornato: ${update.habitName}`, '✅')
+  }
+
+  async function handleUpdateDiaries() {
+    if (messages.length < 2) {
+      actions.showToast('Inizia una conversazione prima di aggiornare i diari.', '💬')
+      return
+    }
+    setUpdatingDiaries(true)
+    setSavedDiaryIds(new Set())
+    setDiaryReport(null)
+    try {
+      const fns = getFunctions(getApp(), 'europe-west1')
+      const updateHabitDiariesFn = httpsCallable(fns, 'updateHabitDiaries', { timeout: 30000 })
+      const result = await updateHabitDiariesFn({
+        conversationMessages: messages.map(m => ({ role: m.role, content: m.content })),
+        habits: userData?.habits || [],
+      })
+      setDiaryReport(result.data.habitUpdates || [])
+    } catch (e) {
+      actions.showToast('Errore: ' + (e.message || 'Riprova'), '❌')
+    } finally {
+      setUpdatingDiaries(false)
+    }
   }
 
   async function handleLoadPastReports() {
@@ -434,13 +484,119 @@ export default function CoachPage() {
               ↑
             </button>
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <button onClick={handleNewChat} style={{ ...chipStyle, opacity: summarizing ? 1 : 0.7 }} disabled={summarizing}>
               {summarizing ? '💾 Salvando...' : '🔄 Nuova conversazione'}
+            </button>
+            <button
+              onClick={handleUpdateDiaries}
+              disabled={updatingDiaries || messages.length < 2}
+              style={{ ...chipStyle, opacity: updatingDiaries ? 1 : messages.length < 2 ? 0.3 : 0.7 }}
+            >
+              {updatingDiaries ? '🔍 Analizzando...' : '📖 Aggiorna diari'}
             </button>
             <button onClick={showPastReports ? () => setShowPastReports(false) : handleLoadPastReports} style={{ ...chipStyle, opacity: 0.7 }}>
               📋 Report precedenti
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Diary Report Modal */}
+      {diaryReport !== null && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'flex-end',
+        }} onClick={e => e.target === e.currentTarget && setDiaryReport(null)}>
+          <div style={{
+            width: '100%', background: 'var(--card-solid)',
+            borderRadius: '20px 20px 0 0',
+            maxHeight: '85vh', overflowY: 'auto',
+            padding: '20px 16px max(24px, env(safe-area-inset-bottom, 24px))',
+          }}>
+            <div style={{ width: 36, height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 2, margin: '0 auto 18px' }} />
+            <div style={{ fontWeight: 700, fontSize: '1.05em', marginBottom: 4 }}>📖 Report aggiornamento diari</div>
+
+            {diaryReport.length === 0 ? (
+              <div style={{ color: 'var(--text-sec)', padding: '20px 0', fontSize: '0.9em' }}>
+                Nessuna informazione sulle abitudini trovata in questa conversazione.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '0.82em', color: 'var(--text-sec)', marginBottom: 16 }}>
+                  Ho trovato informazioni su <strong>{diaryReport.length}</strong> {diaryReport.length === 1 ? 'abitudine' : 'abitudini'}:
+                </div>
+
+                {diaryReport.map(update => {
+                  const habitId = update.habitId
+                  const isSaved = savedDiaryIds.has(habitId)
+                  return (
+                    <div key={habitId} style={{
+                      background: isSaved ? 'rgba(76,175,80,0.08)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${isSaved ? 'rgba(76,175,80,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: 14, padding: '14px', marginBottom: 12,
+                      transition: 'background 0.2s, border 0.2s',
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95em', marginBottom: 8 }}>
+                        {update.habitName}
+                        {isSaved && <span style={{ marginLeft: 8, fontSize: '0.75em', color: '#4caf50' }}>✓ Salvato</span>}
+                      </div>
+                      {update.narrative && (
+                        <div style={{ fontStyle: 'italic', color: 'var(--text-sec)', fontSize: '0.85em', lineHeight: 1.5, marginBottom: 10 }}>
+                          "{update.narrative}"
+                        </div>
+                      )}
+                      {update.keyPoints?.whenFails && (
+                        <div style={{ fontSize: '0.8em', color: 'var(--text-sec)', marginBottom: 4 }}>
+                          ⚠️ <strong>Fallisce quando:</strong> {update.keyPoints.whenFails}
+                        </div>
+                      )}
+                      {update.keyPoints?.coachTips?.length > 0 && (
+                        <div style={{ fontSize: '0.8em', color: 'var(--text-sec)', marginBottom: 4 }}>
+                          💡 <strong>Consiglio:</strong> {update.keyPoints.coachTips[0]}
+                        </div>
+                      )}
+                      {update.keyPoints?.patterns && (
+                        <div style={{ fontSize: '0.8em', color: 'var(--text-sec)', marginBottom: 10 }}>
+                          📊 <strong>Pattern:</strong> {update.keyPoints.patterns}
+                        </div>
+                      )}
+                      {!isSaved && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                          <button
+                            onClick={() => saveDiaryEntry(update)}
+                            style={{ flex: 1, padding: '9px', background: 'var(--theme-color)', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: '0.85em', cursor: 'pointer' }}
+                          >✓ Salva</button>
+                          <button
+                            onClick={() => setSavedDiaryIds(prev => new Set([...prev, habitId]))}
+                            style={{ flex: 1, padding: '9px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: 'var(--text-sec)', fontSize: '0.85em', cursor: 'pointer' }}
+                          >✗ Salta</button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                  <button
+                    onClick={async () => {
+                      const unsaved = diaryReport.filter(u => !savedDiaryIds.has(u.habitId))
+                      for (const update of unsaved) await saveDiaryEntry(update)
+                    }}
+                    style={{ flex: 1, padding: '13px', background: 'var(--theme-color)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 700, fontSize: '0.92em', cursor: 'pointer' }}
+                  >
+                    Salva tutto
+                  </button>
+                  <button
+                    onClick={() => setDiaryReport(null)}
+                    style={{ padding: '13px 20px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: 'var(--text-sec)', fontSize: '0.88em', cursor: 'pointer' }}
+                  >
+                    Chiudi
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

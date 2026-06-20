@@ -300,7 +300,7 @@ export default function HabitItem({
               {existingNote && (
                 <button className="note-icon-btn" onClick={() => setShowNotePopup(v => !v)} title="Vedi nota">📝</button>
               )}
-              <VoiceNoteButton itemId={stableId} itemType="habit" />
+              <VoiceNoteButton itemId={stableId} itemType="habit" itemName={habit.name} existingNotes={habit.voiceNotes || []} />
             </div>
             {description ? <span className="item-desc">{description}</span> : null}
             <div className="vals">

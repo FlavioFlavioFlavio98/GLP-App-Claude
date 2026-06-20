@@ -3,7 +3,6 @@ import { useApp } from '../lib/store'
 import { getItemValueAtDate, calculateStreak, calcNumericPoints } from '../lib/habitLogic'
 import { calcQualityScore } from '../lib/statsLogic'
 import { TIME_SLOT_OPTS } from '../lib/timeSlots'
-import VoiceNoteButton from './VoiceNoteButton'
 
 // ---- Widget per abitudini numeriche ----
 function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
@@ -109,7 +108,7 @@ const SWIPE_THRESHOLD = 80
 
 export default function HabitItem({
   habit, viewDate, doneHabits, failedHabits, habitLevels, habitNotes, habitValues, tagsMap, isToday,
-  dragHandleProps, isDragOverlay, globalData, sortMode,
+  dragHandleProps, isDragOverlay, globalData, sortMode, onOpenVoiceNote,
 }) {
   const { actions } = useApp()
   // Quality dot — compute only for non-numeric, non-if habits
@@ -300,7 +299,13 @@ export default function HabitItem({
               {existingNote && (
                 <button className="note-icon-btn" onClick={() => setShowNotePopup(v => !v)} title="Vedi nota">📝</button>
               )}
-              <VoiceNoteButton itemId={stableId} itemType="habit" itemName={habit.name} existingNotes={habit.voiceNotes || []} />
+              {onOpenVoiceNote && (
+                <button
+                  onClick={e => { e.stopPropagation(); onOpenVoiceNote(habit) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85em', padding: '2px 4px', opacity: 0.45, color: 'var(--text)', lineHeight: 1, flexShrink: 0 }}
+                  title="Note vocali"
+                >🎤</button>
+              )}
             </div>
             {description ? <span className="item-desc">{description}</span> : null}
             <div className="vals">

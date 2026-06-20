@@ -66,6 +66,7 @@ import TaskSection from './components/TaskSection'
 import TaskModal from './modals/TaskModal'
 import TaskHistoryModal from './modals/TaskHistoryModal'
 import QuotesModal from './modals/QuotesModal'
+import VoiceNotePage from './modals/VoiceNotePage'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -96,6 +97,7 @@ export default function App() {
   const [habitSortMode, setHabitSortMode] = useState(false)
   const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
   const [bonusExpanded, setBonusExpanded] = useState(() => localStorage.getItem('glp_bonus_expanded') === 'true')
+  const [voiceNoteHabit, setVoiceNoteHabit] = useState(null)
   const fcmInitialized = useRef(false)
   const wakeLockRef = useRef(null)
 
@@ -320,6 +322,7 @@ export default function App() {
     habitValues: entry.habitValues,
     tagsMap, isToday, globalData,
     isReadOnly,
+    onOpenVoiceNote: setVoiceNoteHabit,
   }
 
   const allRegularDone = regular.length > 0 && filteredRegular.length === 0
@@ -626,6 +629,13 @@ export default function App() {
       {authUserId === 'flavio' && <TaskModal />}
       {authUserId === 'flavio' && <TaskHistoryModal />}
       {authUserId === 'flavio' && <QuotesModal />}
+      {voiceNoteHabit && (
+        <VoiceNotePage
+          habit={voiceNoteHabit}
+          onClose={() => setVoiceNoteHabit(null)}
+          viewDate={viewDate}
+        />
+      )}
       <UpdateBanner />
 
       <AchievementQueue

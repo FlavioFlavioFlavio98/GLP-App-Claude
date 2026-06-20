@@ -23,6 +23,20 @@ Monitora questi obiettivi nelle tue analisi:
 - Suggerisci abitudini specifiche per raggiungere gli obiettivi
 ` : ''
 
+  const diaries = coachContext?.habitDiaries || {}
+  const diarySection = Object.keys(diaries).length > 0 ? `
+DIARI DELLE ABITUDINI (conoscenza accumulata da conversazioni precedenti):
+${Object.values(diaries).filter(d => d.latestAnalysis).map(d => `
+${d.habitName}:
+- Motivazione: ${d.latestAnalysis.why || 'non registrata'}
+- Quando fallisce: ${d.latestAnalysis.whenFails || 'non registrato'}
+- Pattern: ${d.latestAnalysis.patterns || 'non identificati'}
+- Consigli già dati: ${(d.latestAnalysis.coachTips || []).join(', ') || 'nessuno'}
+${d.recentTextNotes?.length > 0 ? `- Note recenti di Flavio: "${d.recentTextNotes.join('" | "')}"` : ''}
+`).join('')}
+Usa questa conoscenza per dare consigli più personalizzati e specifici. Non ripetere consigli già dati.
+` : ''
+
   const avgTone = recentTones.length > 0
     ? (recentTones.reduce((s, t) => s + t.toneScore, 0) / recentTones.length).toFixed(1)
     : null
@@ -42,7 +56,7 @@ PERSONALITÀ:
 - Non sei un chatbot generico — sei il coach di Flavio e parli solo di lui
 - Quando le cose vanno male sei onesto, non solo incoraggiante
 - Adatti la lunghezza della risposta alla domanda: breve per domande semplici, dettagliata per analisi
-${memorySection}${goalsSection}${toneSection}
+${memorySection}${goalsSection}${toneSection}${diarySection}
 COSA SAI DI FLAVIO:
 ${JSON.stringify(coachContext, null, 2)}
 

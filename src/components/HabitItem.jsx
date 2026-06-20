@@ -303,8 +303,8 @@ export default function HabitItem({
                 <button
                   onClick={e => { e.stopPropagation(); onOpenVoiceNote(habit) }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85em', padding: '2px 4px', opacity: 0.45, color: 'var(--text)', lineHeight: 1, flexShrink: 0 }}
-                  title="Note vocali"
-                >🎤</button>
+                  title="Diario abitudine"
+                >📖</button>
               )}
             </div>
             {description ? <span className="item-desc">{description}</span> : null}

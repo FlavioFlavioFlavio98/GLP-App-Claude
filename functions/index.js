@@ -258,6 +258,65 @@ exports.cleanupTranscription = onCall(
   }
 )
 
+// ── updateHabitDiaries ────────────────────────────────────────────────────────
+exports.updateHabitDiaries = onCall(
+  { region: REGION, secrets: [anthropicKey], invoker: 'public' },
+  async (request) => {
+    authCheck(request)
+    const { conversationMessages, habits } = request.data
+    if (!conversationMessages || !Array.isArray(conversationMessages) || conversationMessages.length < 2)
+      throw new HttpsError('invalid-argument', 'conversationMessages obbligatorio')
+
+    const anthropic = getClient(anthropicKey.value())
+    const habitList = (habits || []).map(h => `- ${h.name} (id: ${h.id || h.name.replace(/[^a-zA-Z0-9]/g,'')})`).join('\n')
+    const transcript = conversationMessages.map(m => `${m.role === 'user' ? 'Flavio' : 'Coach'}: ${m.content}`).join('\n')
+
+    const prompt = `Analizza questa conversazione tra Flavio e il suo Coach AI e identifica tutte le informazioni rilevanti sulle sue abitudini.
+
+CONVERSAZIONE:
+${transcript}
+
+ABITUDINI ESISTENTI:
+${habitList}
+
+Per ogni abitudine menzionata nella conversazione, estrai informazioni utili.
+Rispondi SOLO con un JSON valido, senza testo aggiuntivo:
+{
+  "habitUpdates": [
+    {
+      "habitId": "id_dell_abitudine",
+      "habitName": "nome abitudine",
+      "narrative": "riassunto narrativo in 2-3 frasi in prima persona",
+      "keyPoints": {
+        "why": "motivazione emersa o null",
+        "whenFails": "quando fallisce o null",
+        "coachTips": ["consiglio 1", "consiglio 2"],
+        "patterns": "pattern comportamentali o null"
+      },
+      "rawSummary": "riassunto grezzo della parte di conversazione rilevante"
+    }
+  ]
+}
+Se nessuna abitudine specifica è stata discussa, restituisci {"habitUpdates": []}`
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+
+    const text = response.content[0].text
+    const clean = text.replace(/```json|```/g, '').trim()
+    let parsed
+    try { parsed = JSON.parse(clean) } catch { parsed = { habitUpdates: [] } }
+
+    return {
+      habitUpdates: parsed.habitUpdates || [],
+      tokensUsed: response.usage.input_tokens + response.usage.output_tokens
+    }
+  }
+)
+
 // ── generateDailyInsight ──────────────────────────────────────────────────────
 exports.generateDailyInsight = onCall(
   { region: REGION, secrets: [anthropicKey], invoker: 'public' },

@@ -3,6 +3,8 @@ import { useApp } from '../lib/store'
 import { useCoach, resetSessionStats, getCoachStats } from '../hooks/useCoach'
 import { doc, setDoc, updateDoc, getDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { getFunctions, httpsCallable } from 'firebase/functions'
+import { getApp } from 'firebase/app'
 import { toDateString } from '../lib/habitLogic'
 import '../lib/chartSetup'
 import { Line } from 'react-chartjs-2'
@@ -183,10 +185,11 @@ export default function CoachPage() {
 
   async function handleNewChat() {
     if (!window.confirm('Iniziare una nuova conversazione? La cronologia sarà salvata nella memoria.')) return
-    // Save to memory if there are messages
+    // Save to memory and update habit diaries
     if (messages.length >= 2) {
       setSummarizing(true)
       try {
+        // 1. Summarize conversation → memory
         const { summary, tone, toneScore } = await summarizeConversation(
           messages.map(m => ({ role: m.role, content: m.content }))
         )
@@ -198,9 +201,46 @@ export default function CoachPage() {
           toneScore,
           messages: messages.map(m => ({ role: m.role, content: m.content })),
         }
-        const existing = coachMemory.slice(-29) // keep max 30 total
+        const existing = coachMemory.slice(-29)
         const updated = [...existing, convEntry]
         await setDoc(doc(db, 'users', 'flavio'), { coachMemory: { conversations: updated } }, { merge: true })
+
+        // 2. Update habit diaries from conversation
+        try {
+          const fns = getFunctions(getApp(), 'europe-west1')
+          const updateHabitDiariesFn = httpsCallable(fns, 'updateHabitDiaries', { timeout: 30000 })
+          const result = await updateHabitDiariesFn({
+            conversationMessages: messages.map(m => ({ role: m.role, content: m.content })),
+            habits: userData?.habits || [],
+          })
+          const { habitUpdates = [] } = result.data
+          if (habitUpdates.length > 0) {
+            const firestoreUpdates = {}
+            const today = toDateString(new Date())
+            for (const update of habitUpdates) {
+              const habitId = update.habitId
+              const existingEntries = userData?.habitDiaries?.[habitId]?.entries || []
+              const newEntry = {
+                id: `entry_${Date.now()}_${habitId}`,
+                date: today,
+                source: 'coach',
+                narrative: update.narrative,
+                keyPoints: update.keyPoints,
+                rawConversationSummary: update.rawSummary,
+              }
+              firestoreUpdates[`habitDiaries.${habitId}`] = {
+                habitName: update.habitName,
+                entries: [...existingEntries, newEntry],
+                lastUpdated: new Date().toISOString(),
+              }
+            }
+            await updateDoc(doc(db, 'users', 'flavio'), firestoreUpdates)
+            const names = habitUpdates.map(u => u.habitName).join(', ')
+            actions.showToast(`📖 Diario aggiornato: ${names}`, '🤖')
+          }
+        } catch (e) {
+          console.warn('[CoachPage] habit diaries update failed (non-critical):', e)
+        }
       } catch (e) {
         console.warn('[CoachPage] summarize failed (non-critical):', e)
       } finally {

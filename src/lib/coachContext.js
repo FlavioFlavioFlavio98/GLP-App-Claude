@@ -179,5 +179,28 @@ export function buildCoachContext(userData, dailyLogs, tags) {
         priority: t.priority,
         daysLeft: Math.ceil((new Date(t.deadline) - new Date()) / 86400000),
       })),
+    habitDiaries: Object.fromEntries(
+      Object.entries(userData.habitDiaries || {}).map(([habitId, diary]) => {
+        const latest = (diary.entries || []).slice(-1)[0]
+        const habit = (userData.habits || []).find(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g,'')) === habitId)
+        const recentNotes = (habit?.voiceNotes || [])
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 3)
+          .map(n => n.text)
+        return [habitId, {
+          habitName: diary.habitName,
+          lastUpdated: diary.lastUpdated,
+          latestAnalysis: latest ? {
+            date: latest.date,
+            narrative: latest.narrative,
+            why: latest.keyPoints?.why,
+            whenFails: latest.keyPoints?.whenFails,
+            patterns: latest.keyPoints?.patterns,
+            coachTips: latest.keyPoints?.coachTips,
+          } : null,
+          recentTextNotes: recentNotes,
+        }]
+      })
+    ),
   }
 }

@@ -66,7 +66,7 @@ import TaskSection from './components/TaskSection'
 import TaskModal from './modals/TaskModal'
 import TaskHistoryModal from './modals/TaskHistoryModal'
 import QuotesModal from './modals/QuotesModal'
-import VoiceNotePage from './modals/VoiceNotePage'
+import HabitDiaryPage from './modals/HabitDiaryPage'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -630,10 +630,11 @@ export default function App() {
       {authUserId === 'flavio' && <TaskHistoryModal />}
       {authUserId === 'flavio' && <QuotesModal />}
       {voiceNoteHabit && (
-        <VoiceNotePage
+        <HabitDiaryPage
           habit={voiceNoteHabit}
           onClose={() => setVoiceNoteHabit(null)}
           viewDate={viewDate}
+          authUserId={authUserId}
         />
       )}
       <UpdateBanner />

@@ -6,6 +6,8 @@ import { toDateString } from '../lib/habitLogic'
 import PsychPage from './PsychPage'
 import PsychProfilePage from './PsychProfilePage'
 import PsychStatsDrawer from './PsychStatsDrawer'
+import PsychSearchPage from './PsychSearchPage'
+import { exportSessionPdf } from '../lib/psychPdf'
 
 function fmtRelDate(ts) {
   if (!ts) return ''
@@ -59,6 +61,7 @@ export default function PsychSessionsPage({ onClose }) {
   const [activeSession, setActiveSession] = useState(null) // { id, data } | null
   const [showProfile, setShowProfile] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
   const [longPressMenu, setLongPressMenu] = useState(null) // { id, x, y }
   const [renamingId, setRenamingId] = useState(null)
   const [renameText, setRenameText] = useState('')
@@ -127,6 +130,14 @@ export default function PsychSessionsPage({ onClose }) {
   const visibleSessions = sessions.filter(s => !s.deleted)
 
   // ── Sub-pages ──────────────────────────────────────────────────────────────
+  if (showSearch) {
+    return <PsychSearchPage
+      onClose={() => setShowSearch(false)}
+      onOpenSession={(id, data) => { setShowSearch(false); setActiveSession({ id, data }) }}
+      onOpenProfile={() => { setShowSearch(false); setShowProfile(true) }}
+    />
+  }
+
   if (showProfile) {
     return (
       <PsychProfilePage
@@ -164,6 +175,7 @@ export default function PsychSessionsPage({ onClose }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowSearch(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '0.95em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔍</button>
           <button onClick={() => setShowStats(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '0.95em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📊</button>
           <button onClick={() => setShowProfile(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '1em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</button>
         </div>
@@ -227,7 +239,16 @@ export default function PsychSessionsPage({ onClose }) {
                         {sess.totalCostEUR > 0 && <span>· €{sess.totalCostEUR.toFixed(4)}</span>}
                       </div>
                     </div>
-                    <span style={{ color: '#444', fontSize: '0.9em', flexShrink: 0 }}>→</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, alignItems: 'center' }}>
+                      <span style={{ color: '#444', fontSize: '0.9em' }}>→</span>
+                      {(sess.messages || []).length > 0 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); exportSessionPdf({ session: sess, psychProfile: userData?.psychProfile }) }}
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '2px 5px', color: '#555', cursor: 'pointer', fontSize: '0.62em' }}>
+                          ⬇️
+                        </button>
+                      )}
+                    </div>
                   </button>
                 )}
               </div>

@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import PsychSearchPage from './PsychSearchPage'
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useApp } from '../lib/store'
@@ -347,6 +348,7 @@ export default function PsychProfilePage({ psychProfile, psychSessions, psychSta
   const [globalExpanded, setGlobalExpanded] = useState(false)
   const [expandedMonths, setExpandedMonths] = useState(new Set())
   const [showWhatKnows, setShowWhatKnows] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
   const [addingManual, setAddingManual] = useState(false)
   const [manualForm, setManualForm] = useState({ date: toDateString(new Date()), text: '' })
 
@@ -423,6 +425,14 @@ export default function PsychProfilePage({ psychProfile, psychSessions, psychSta
     return <WhatKnowsModal psychProfile={localProfile} userData={userData} dailyLogs={dailyLogs} onClose={() => setShowWhatKnows(false)} />
   }
 
+  if (showSearch) {
+    return <PsychSearchPage
+      onClose={() => setShowSearch(false)}
+      onOpenSession={() => setShowSearch(false)}
+      onOpenProfile={(date) => { setShowSearch(false) }}
+    />
+  }
+
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg)', zIndex: 10100, display: 'flex', flexDirection: 'column' }}>
 
@@ -437,10 +447,14 @@ export default function PsychProfilePage({ psychProfile, psychSessions, psychSta
             </div>
           )}
         </div>
-        <button onClick={() => setShowWhatKnows(true)}
-          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: '6px 12px', color: 'var(--text-sec)', cursor: 'pointer', fontSize: '0.75em', flexShrink: 0 }}>
-          👁️ Cosa sa di me
-        </button>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button onClick={() => setShowSearch(true)}
+            style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '0.95em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔍</button>
+          <button onClick={() => setShowWhatKnows(true)}
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: '6px 12px', color: 'var(--text-sec)', cursor: 'pointer', fontSize: '0.75em' }}>
+            👁️ Cosa sa di me
+          </button>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 60px' }}>

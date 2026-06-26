@@ -9,6 +9,9 @@ import { buildPsychSystemPrompt } from '../lib/psychPrompt'
 import { buildGlpContext } from '../lib/psychContext'
 import PsychProfilePage from './PsychProfilePage'
 import PsychStatsDrawer from './PsychStatsDrawer'
+import PsychSearchPage from './PsychSearchPage'
+import PsychChatSettings, { loadPrefs, savePrefs, DEFAULT_PREFS } from '../components/PsychChatSettings'
+import { exportSessionPdf } from '../lib/psychPdf'
 
 const MODELS = [
   { id: 'gemini-2.5-flash-lite', label: '⚡ Flash-Lite', labelFull: '⚡ Gemini 2.5 Flash-Lite', desc: 'economico e veloce' },
@@ -38,14 +41,25 @@ function fmtTime(seconds) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
-// Props: sessionId, sessionData, onBack (→ sessions list), onClose (→ close all), onOpenProfile
+function getBubbleRadius(style, role) {
+  if (style === 'square') return '6px'
+  if (style === 'flat') return '0'
+  return role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px'
+}
+
+function getDensityPadding(density) {
+  if (density === 'compact') return '7px 11px'
+  if (density === 'spacious') return '14px 18px'
+  return '10px 14px'
+}
+
+// Props: sessionId, sessionData, onBack, onClose, onOpenProfile
 export default function PsychPage({ sessionId, sessionData, onBack, onClose, onOpenProfile }) {
   const { state, actions } = useApp()
   const { allUsersData } = state
   const userData = allUsersData?.flavio || {}
   const dailyLogs = userData?.dailyLogs || {}
 
-  // Load messages from sessionData (Firestore) — already passed in
   const [messages, setMessages] = useState(() => sessionData?.messages || [])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -54,6 +68,9 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [prefs, setPrefs] = useState(() => loadPrefs())
   const [sessionTitle, setSessionTitle] = useState(sessionData?.title || 'Nuova sessione')
   const [renamingTitle, setRenamingTitle] = useState(false)
   const [renameTmp, setRenameTmp] = useState('')
@@ -61,7 +78,6 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
   const [profileEntryGenerated, setProfileEntryGenerated] = useState(sessionData?.profileEntryGenerated || false)
   const [pinMenu, setPinMenu] = useState(null)
   const [reloadBanner, setReloadBanner] = useState(() => {
-    // Show banner only if session has existing messages
     const hasHistory = (sessionData?.messages || []).length > 0
     if (!hasHistory) return null
     const chars = (sessionData.messages || []).reduce((n, m) => n + (m.content?.length || 0), 0)
@@ -70,7 +86,18 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
     return { tokens: estTokens, cost: estCost }
   })
 
-  // ── Tracking ──────────────────────────────────────────────────────────────
+  // ── Voice input ───────────────────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false)
+  const [interimText, setInterimText] = useState('')
+  const recognitionRef = useRef(null)
+
+  // ── Reflection mode ───────────────────────────────────────────────────────
+  const [showReflectionConfig, setShowReflectionConfig] = useState(false)
+  const [reflectionConfig, setReflectionConfig] = useState({ numQ: 5, theme: '' })
+  const [reflection, setReflection] = useState(null)
+  // null | { questions:[], currentIndex:number, answers:[], done:false } | { done:true, summary:'' }
+
+  // ── Stats tracking ────────────────────────────────────────────────────────
   const [todayTimeSeconds, setTodayTimeSeconds] = useState(0)
   const [todayActiveSeconds, setTodayActiveSeconds] = useState(0)
   const [todayWords, setTodayWords] = useState(0)
@@ -88,27 +115,13 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
   const generateDailyEntryFn = httpsCallable(fns, 'generateDailyEntry', { timeout: 90000 })
   const generateSessionTitleFn = httpsCallable(fns, 'generateSessionTitle', { timeout: 30000 })
 
-  // Auto-dismiss reload banner after 5s
-  useEffect(() => {
-    if (!reloadBanner) return
-    const t = setTimeout(() => setReloadBanner(null), 5000)
-    return () => clearTimeout(t)
-  }, [])
+  useEffect(() => { if (!reloadBanner) return; const t = setTimeout(() => setReloadBanner(null), 5000); return () => clearTimeout(t) }, [])
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
-
-  // Total time ticker
   useEffect(() => {
     const interval = setInterval(() => {
-      setTodayTimeSeconds(prev => prev + 1)
-      pendingSeconds.current += 1
-      if (isActiveRef.current) {
-        setTodayActiveSeconds(prev => prev + 1)
-        pendingActiveSeconds.current += 1
-      }
+      setTodayTimeSeconds(prev => prev + 1); pendingSeconds.current += 1
+      if (isActiveRef.current) { setTodayActiveSeconds(prev => prev + 1); pendingActiveSeconds.current += 1 }
       if (Date.now() - lastSaveRef.current >= 60000) flushStats()
     }, 1000)
     return () => clearInterval(interval)
@@ -127,11 +140,10 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
     return () => { document.removeEventListener('visibilitychange', handler); flushStats() }
   }, [])
 
-  // Pin text selection
+  // Pin text
   useEffect(() => {
     const handler = () => {
-      const sel = window.getSelection()
-      const txt = sel?.toString().trim()
+      const sel = window.getSelection(); const txt = sel?.toString().trim()
       if (txt && txt.length > 10) {
         const rect = sel.getRangeAt(0).getBoundingClientRect()
         setPinMenu({ x: rect.left + rect.width / 2, y: rect.top - 8, text: txt })
@@ -142,12 +154,9 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
   }, [])
 
   const flushStats = useCallback(async () => {
-    const words = pendingWords.current
-    const secs = pendingSeconds.current
-    const activeSecs = pendingActiveSeconds.current
+    const words = pendingWords.current, secs = pendingSeconds.current, activeSecs = pendingActiveSeconds.current
     if (words === 0 && secs === 0 && activeSecs === 0) return
-    pendingWords.current = 0; pendingSeconds.current = 0; pendingActiveSeconds.current = 0
-    lastSaveRef.current = Date.now()
+    pendingWords.current = 0; pendingSeconds.current = 0; pendingActiveSeconds.current = 0; lastSaveRef.current = Date.now()
     const today = toDateString(new Date())
     try {
       const updates = {}
@@ -158,7 +167,6 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
     } catch (e) { console.warn('[PsychPage] flushStats error:', e) }
   }, [])
 
-  // ── Save message to Firestore session ─────────────────────────────────────
   async function saveMessage(msg, usage) {
     const toSave = { role: msg.role, content: msg.content, timestamp: msg.timestamp || new Date().toISOString(), ...(usage ? { usage } : {}) }
     try {
@@ -173,7 +181,6 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
     } catch (e) { console.warn('[PsychPage] saveMessage error:', e) }
   }
 
-  // ── Auto-generate title after 4th message ────────────────────────────────
   async function maybeGenerateTitle(allMsgs) {
     if (titleGeneratedRef.current || allMsgs.length < 4) return
     titleGeneratedRef.current = true
@@ -182,49 +189,150 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
       const title = result.data.title
       if (title) {
         setSessionTitle(title)
-        await updateDoc(doc(db, 'users', 'flavio'), {
-          [`psychSessions.${sessionId}.title`]: title,
-        })
+        await updateDoc(doc(db, 'users', 'flavio'), { [`psychSessions.${sessionId}.title`]: title })
       }
     } catch (e) { console.warn('[PsychPage] generateTitle error:', e) }
   }
 
-  // ── Pin selected text ─────────────────────────────────────────────────────
   async function pinSelectedText(text) {
-    setPinMenu(null)
-    window.getSelection()?.removeAllRanges()
-    const today = toDateString(new Date())
-    const pinnedMoment = { text, savedAt: new Date().toISOString() }
+    setPinMenu(null); window.getSelection()?.removeAllRanges()
+    const today = toDateString(new Date()), pinnedMoment = { text, savedAt: new Date().toISOString() }
     try {
-      await updateDoc(doc(db, 'users', 'flavio'), {
-        [`psychProfile.dailyEntries.${today}.pinnedMoments`]: arrayUnion(pinnedMoment),
-      })
+      await updateDoc(doc(db, 'users', 'flavio'), { [`psychProfile.dailyEntries.${today}.pinnedMoments`]: arrayUnion(pinnedMoment) })
     } catch {
-      await updateDoc(doc(db, 'users', 'flavio'), {
-        [`psychProfile.dailyEntries.${today}`]: { id: today, date: today, autoGenerated: false, starred: false, insights: '', pinnedMoments: [pinnedMoment], connections: [] },
-      })
+      await updateDoc(doc(db, 'users', 'flavio'), { [`psychProfile.dailyEntries.${today}`]: { id: today, date: today, autoGenerated: false, starred: false, insights: '', pinnedMoments: [pinnedMoment], connections: [] } })
     }
     actions.showToast('📌 Salvato nel profilo di oggi', '✅')
+  }
+
+  // ── Voice input ───────────────────────────────────────────────────────────
+  function startVoiceInput() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    if (isIOS) { actions.showToast('Su iOS usa Gboard o la dettatura vocale della tastiera', '🎤'); return }
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      actions.showToast('Riconoscimento vocale non supportato su questo browser', '❌'); return
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    const recognition = new SR()
+    recognition.lang = 'it-IT'; recognition.continuous = true; recognition.interimResults = true
+    recognition.onresult = (event) => {
+      let interim = '', final = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) final += event.results[i][0].transcript
+        else interim += event.results[i][0].transcript
+      }
+      if (final) setInput(prev => prev + final)
+      setInterimText(interim)
+    }
+    recognition.onerror = (e) => { console.error('Speech error:', e.error); setIsRecording(false); setInterimText('') }
+    recognition.onend = () => { setIsRecording(false); setInterimText('') }
+    recognition.start()
+    recognitionRef.current = recognition
+    setIsRecording(true)
+  }
+
+  function stopVoiceInput() {
+    if (interimText) setInput(prev => prev + interimText)
+    recognitionRef.current?.stop()
+    setIsRecording(false); setInterimText('')
+  }
+
+  // ── Reflection mode ───────────────────────────────────────────────────────
+  async function startReflection() {
+    setShowReflectionConfig(false)
+    setLoading(true)
+    const { numQ, theme } = reflectionConfig
+    const psychProfile = userData?.psychProfile || null
+    const systemPrompt = `Sei in modalità riflessione guidata. Devi preparare esattamente ${numQ} domande per guidare Flavio in una riflessione strutturata${theme ? ` sul tema: ${theme}` : ''}.
+
+REGOLE:
+- Le domande devono essere aperte, profonde e personalizzate sul profilo
+- Rispondi SOLO con un JSON array di stringhe, nessun testo extra
+- Formato: ["domanda1", "domanda2", ...]
+
+PROFILO:
+${JSON.stringify(psychProfile?.globalSummary || {}, null, 2)}`
+
+    try {
+      const result = await geminiChatFn({
+        messages: [{ role: 'user', content: `Genera ${numQ} domande di riflessione${theme ? ` sul tema ${theme}` : ''}` }],
+        systemPrompt,
+        model,
+      })
+      let questions = []
+      try {
+        const txt = result.data.content.replace(/^```json\s*|^```\s*|\s*```$/g, '').trim()
+        questions = JSON.parse(txt)
+      } catch {
+        questions = result.data.content.split('\n').filter(l => l.trim()).slice(0, numQ)
+      }
+      if (!questions.length) throw new Error('Nessuna domanda generata')
+
+      setReflection({ questions, currentIndex: 0, answers: [], done: false })
+      const firstQ = { role: 'assistant', content: questions[0], timestamp: new Date().toISOString(), reflection: true }
+      setMessages(prev => [...prev, firstQ])
+      saveMessage(firstQ)
+    } catch (e) {
+      actions.showToast('Errore avvio riflessione: ' + (e.message || 'Riprova'), '❌')
+    } finally { setLoading(false) }
+  }
+
+  async function handleReflectionAnswer(content) {
+    const userMsg = { role: 'user', content, timestamp: new Date().toISOString() }
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
+    saveMessage(userMsg)
+
+    const { questions, currentIndex, answers } = reflection
+    const newAnswers = [...answers, { q: questions[currentIndex], a: content }]
+    const nextIndex = currentIndex + 1
+
+    if (nextIndex < questions.length) {
+      setReflection({ questions, currentIndex: nextIndex, answers: newAnswers, done: false })
+      const nextQ = { role: 'assistant', content: questions[nextIndex], timestamp: new Date().toISOString(), reflection: true }
+      setMessages(prev => [...prev, nextQ])
+      saveMessage(nextQ)
+    } else {
+      setReflection({ questions, currentIndex: nextIndex, answers: newAnswers, done: true })
+      setLoading(true)
+      try {
+        const summaryPrompt = `Sei in modalità riflessione. Flavio ha risposto a tutte le domande. Genera un riassunto riflessivo profondo che analizza le sue risposte, evidenzia pattern, contraddizioni e insight significativi. Sii diretto e profondo.
+
+DOMANDE E RISPOSTE:
+${newAnswers.map((qa, i) => `[${i+1}] D: ${qa.q}\nR: ${qa.a}`).join('\n\n')}`
+        const result = await geminiChatFn({
+          messages: [{ role: 'user', content: 'Genera il riassunto riflessivo' }],
+          systemPrompt: summaryPrompt,
+          model,
+        })
+        const summary = result.data.content
+        const summaryMsg = { role: 'assistant', content: summary, timestamp: new Date().toISOString(), reflectionSummary: true, usage: result.data.usage }
+        setMessages(prev => [...prev, summaryMsg])
+        saveMessage(summaryMsg, result.data.usage)
+        setReflection(prev => ({ ...prev, summary }))
+      } catch (e) { actions.showToast('Errore riassunto: ' + e.message, '❌') }
+      finally { setLoading(false) }
+    }
   }
 
   // ── handleSend with retry ─────────────────────────────────────────────────
   async function handleSend(text) {
     const content = (text || input).trim()
     if (!content || loading) return
-    setInput('')
-    setError(null)
-
-    const wordCount = content.split(/\s+/).filter(Boolean).length
-    setTodayWords(prev => prev + wordCount)
-    pendingWords.current += wordCount
+    setInput(''); setError(null)
     isActiveRef.current = true
+    const wordCount = content.split(/\s+/).filter(Boolean).length
+    setTodayWords(prev => prev + wordCount); pendingWords.current += wordCount
+
+    // Reflection mode — don't call Gemini for each answer
+    if (reflection && !reflection.done) {
+      handleReflectionAnswer(content)
+      return
+    }
 
     const userMsg = { role: 'user', content, timestamp: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
-    setMessages(newMessages)
-    setLoading(true)
-
-    // Save user message to Firestore
+    setMessages(newMessages); setLoading(true)
     saveMessage(userMsg)
 
     const psychProfile = userData?.psychProfile || null
@@ -234,49 +342,32 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
     let lastErr
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const result = await geminiChatFn({
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          systemPrompt,
-          model,
-        })
+        const result = await geminiChatFn({ messages: newMessages.map(m => ({ role: m.role, content: m.content })), systemPrompt, model })
         const { content: reply, usage } = result.data
         const assistantMsg = { role: 'assistant', content: reply, usage, timestamp: new Date().toISOString() }
         const finalMessages = [...newMessages, assistantMsg]
         setMessages(finalMessages)
-
-        // Save assistant message
         saveMessage(assistantMsg, usage)
-
-        // Update daily cost stats
         const today = toDateString(new Date())
         updateDoc(doc(db, 'users', 'flavio'), {
           [`psychStats.dailyStats.${today}.costEUR`]: increment(usage?.costEUR || 0),
           [`psychStats.dailyStats.${today}.messages`]: increment(1),
           'psychStats.totalMessages': increment(1),
         }).catch(() => {})
-
-        // Auto-generate title in background
         maybeGenerateTitle(finalMessages)
-
-        setLoading(false)
-        return
+        setLoading(false); return
       } catch (err) {
-        lastErr = err
-        console.error(`[PsychPage] handleSend attempt ${attempt} failed:`, err)
+        lastErr = err; console.error(`[PsychPage] attempt ${attempt}:`, err)
         if (attempt < 3) await sleep(1000 * attempt)
       }
     }
-
-    setLoading(false)
-    setError('Errore nella risposta. Riprova.')
-    console.error('[PsychPage] Errore definitivo dopo 3 tentativi:', lastErr)
+    setLoading(false); setError('Errore nella risposta. Riprova.')
+    console.error('[PsychPage] Errore definitivo:', lastErr)
   }
 
-  // ── Salva nel profilo ─────────────────────────────────────────────────────
   async function handleSaveToProfile() {
     if (isUpdatingRef.current || messages.length < 2) return
-    isUpdatingRef.current = true
-    setIsUpdatingProfile(true)
+    isUpdatingRef.current = true; setIsUpdatingProfile(true)
     try {
       const today = toDateString(new Date())
       const existingProfile = userData?.psychProfile || {}
@@ -285,65 +376,69 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
         sessionMessages: messages.map(m => ({ role: m.role, content: m.content })),
         existingEntries: existingProfile.dailyEntries || {},
         globalSummary: existingProfile.globalSummary || null,
-        date: today,
-        existingEntry,
+        date: today, existingEntry,
       })
       const { entry } = result.data
       const globalUpdate = entry.globalSummaryUpdate || {}
-      const newEntry = {
-        id: today, date: today, autoGenerated: true,
-        starred: existingEntry?.starred || false,
-        insights: entry.insights || '',
-        patterns: entry.patterns || null,
-        openQuestions: entry.openQuestions || null,
-        connections: entry.connections || [],
-        pinnedMoments: existingEntry?.pinnedMoments || [],
-        corrections: existingEntry?.corrections || [],
-      }
+      const newEntry = { id: today, date: today, autoGenerated: true, starred: existingEntry?.starred || false, insights: entry.insights || '', patterns: entry.patterns || null, openQuestions: entry.openQuestions || null, connections: entry.connections || [], pinnedMoments: existingEntry?.pinnedMoments || [], corrections: existingEntry?.corrections || [] }
       const updates = { [`psychProfile.dailyEntries.${today}`]: newEntry }
       if (globalUpdate.narrative) {
         updates['psychProfile.globalSummary'] = { ...globalUpdate, lastUpdated: new Date().toISOString() }
         updates['psychStats.topThemes'] = [...(globalUpdate.coreThemes || []), ...(globalUpdate.emotionalPatterns || [])]
         updates['psychStats.profileUpdatesCount'] = increment(1)
       }
-      // Mark session as having generated an entry
       updates[`psychSessions.${sessionId}.profileEntryGenerated`] = true
       await updateDoc(doc(db, 'users', 'flavio'), updates)
       setProfileEntryGenerated(true)
       actions.showToast('📅 Entry salvato nel profilo psicologico', '✅')
-    } catch (e) {
-      console.error('[PsychPage] saveToProfile failed:', e)
-      actions.showToast('Errore: ' + (e.message || 'Riprova'), '❌')
-    } finally {
-      isUpdatingRef.current = false
-      setIsUpdatingProfile(false)
-    }
+    } catch (e) { console.error('[PsychPage] saveToProfile failed:', e); actions.showToast('Errore: ' + (e.message || 'Riprova'), '❌') }
+    finally { isUpdatingRef.current = false; setIsUpdatingProfile(false) }
   }
 
-  // ── Rename title ──────────────────────────────────────────────────────────
   async function saveTitle() {
-    const t = renameTmp.trim()
-    if (!t) { setRenamingTitle(false); return }
-    setSessionTitle(t)
-    setRenamingTitle(false)
-    await updateDoc(doc(db, 'users', 'flavio'), {
-      [`psychSessions.${sessionId}.title`]: t,
-    })
+    const t = renameTmp.trim(); if (!t) { setRenamingTitle(false); return }
+    setSessionTitle(t); setRenamingTitle(false)
+    await updateDoc(doc(db, 'users', 'flavio'), { [`psychSessions.${sessionId}.title`]: t })
+  }
+
+  function handleExportPdf() {
+    const sessData = {
+      ...sessionData,
+      title: sessionTitle,
+      messages,
+      model,
+    }
+    exportSessionPdf({ session: sessData, psychProfile: userData?.psychProfile })
   }
 
   const selectedModel = MODELS.find(m => m.id === model) || MODELS[0]
   const ps = userData?.psychStats || {}
-  const lifetimeWords = (ps.totalWordsLifetime || 0)
+
+  // Build the current session object for PDF export
+  const currentSession = { ...sessionData, title: sessionTitle, messages, model }
+
+  // Derived prefs
+  const msgFontSize = prefs.textSize === 'small' ? '0.83em' : prefs.textSize === 'large' ? '1em' : '0.92em'
+  const msgPadding = getDensityPadding(prefs.density)
+  const msgMarginBottom = prefs.density === 'compact' ? 8 : prefs.density === 'spacious' ? 20 : 14
+
+  function getPsychBg() {
+    if (prefs.psychColor === 'neutral') return 'rgba(60,60,60,0.9)'
+    if (prefs.psychColor === 'custom') return prefs.psychColorCustom || '#2a2a2a'
+    return 'var(--card)'
+  }
+
+  if (showSearch) {
+    return <PsychSearchPage
+      onClose={() => setShowSearch(false)}
+      onOpenSession={(id, data) => { setShowSearch(false); /* navigate handled by parent */ }}
+      onOpenProfile={(date) => { setShowSearch(false); setShowProfile(true) }}
+    />
+  }
 
   if (showProfile) {
     return (
-      <PsychProfilePage
-        psychProfile={userData?.psychProfile}
-        psychSessions={[]}
-        psychStats={ps}
-        onClose={() => setShowProfile(false)}
-        authUserId="flavio"
-      />
+      <PsychProfilePage psychProfile={userData?.psychProfile} psychSessions={[]} psychStats={ps} onClose={() => setShowProfile(false)} authUserId="flavio" />
     )
   }
 
@@ -351,35 +446,37 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ padding: '10px 16px 8px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-        <button onClick={onBack || onClose} style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: '1.4em', cursor: 'pointer', padding: '4px 8px 4px 0', lineHeight: 1, flexShrink: 0 }}>←</button>
+      <div style={{ padding: '10px 16px 8px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+        <button onClick={onBack || onClose} style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: '1.4em', cursor: 'pointer', padding: '4px 6px 4px 0', lineHeight: 1, flexShrink: 0 }}>←</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           {renamingTitle ? (
-            <input
-              value={renameTmp}
-              onChange={e => setRenameTmp(e.target.value)}
+            <input value={renameTmp} onChange={e => setRenameTmp(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setRenamingTitle(false) }}
-              onBlur={saveTitle}
-              autoFocus
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--theme-color)', borderRadius: 8, padding: '4px 8px', color: 'var(--text)', fontSize: '0.9em', fontWeight: 700, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}
-            />
+              onBlur={saveTitle} autoFocus
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--theme-color)', borderRadius: 8, padding: '4px 8px', color: 'var(--text)', fontSize: '0.9em', fontWeight: 700, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
           ) : (
             <div style={{ fontWeight: 700, fontSize: '0.95em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sessionTitle}</div>
           )}
           <div style={{ fontSize: '0.68em', color: 'var(--text-sec)' }}>{selectedModel.label}</div>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           <button onClick={() => { setRenameTmp(sessionTitle); setRenamingTitle(true) }} title="Rinomina"
-            style={{ background: 'none', border: 'none', color: 'var(--text-sec)', cursor: 'pointer', fontSize: '0.9em', padding: '4px 6px', opacity: 0.6 }}>✏️</button>
+            style={{ background: 'none', border: 'none', color: 'var(--text-sec)', cursor: 'pointer', fontSize: '0.85em', padding: '4px 5px', opacity: 0.55 }}>✏️</button>
+          <button onClick={() => setShowSearch(true)} title="Cerca"
+            style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', fontSize: '0.85em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔍</button>
+          <button onClick={() => setShowReflectionConfig(true)} title="Modalità Riflessione"
+            style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', fontSize: '0.85em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🪞</button>
+          <button onClick={() => setShowSettings(true)} title="Impostazioni chat"
+            style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', fontSize: '0.85em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚙️</button>
           <button onClick={() => setShowStats(true)}
-            style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: '0.85em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📊</button>
+            style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', fontSize: '0.85em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📊</button>
           <button onClick={() => setShowProfile(true)}
-            style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: '0.9em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</button>
+            style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', fontSize: '0.85em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</button>
         </div>
       </div>
 
       {/* Model picker */}
-      <div style={{ padding: '6px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+      <div style={{ padding: '6px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0, position: 'relative' }}>
         <button onClick={() => setShowModelPicker(v => !v)}
           style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 10px', color: 'var(--text)', cursor: 'pointer', fontSize: '0.78em', display: 'flex', alignItems: 'center', gap: 6 }}>
           <span>{selectedModel.labelFull}</span>
@@ -387,7 +484,7 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
           <span style={{ marginLeft: 6, opacity: 0.4 }}>▼</span>
         </button>
         {showModelPicker && (
-          <div style={{ marginTop: 4, background: 'var(--card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, overflow: 'hidden', position: 'absolute', zIndex: 100, left: 16, right: 16 }}>
+          <div style={{ position: 'absolute', top: '100%', left: 16, right: 16, zIndex: 100, background: 'var(--card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, overflow: 'hidden' }}>
             {MODELS.map(m => (
               <button key={m.id} onClick={() => { setModel(m.id); setShowModelPicker(false) }}
                 style={{ width: '100%', padding: '9px 14px', background: model === m.id ? 'rgba(255,255,255,0.08)' : 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: '0.82em', textAlign: 'left', display: 'flex', justifyContent: 'space-between' }}>
@@ -399,21 +496,24 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
         )}
       </div>
 
-      {/* Compact stats bar */}
+      {/* Stats bar */}
       <button onClick={() => setShowStats(true)}
         style={{ padding: '4px 16px', background: 'rgba(255,255,255,0.01)', borderBottom: '1px solid rgba(255,255,255,0.03)', flexShrink: 0, fontSize: '0.68em', color: '#555', display: 'flex', gap: 8, alignItems: 'center', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}>
         <span>✍️ {todayWords} parole</span>
         <span>⏱ {fmtTime(todayTimeSeconds)}</span>
-        <span style={{ color: '#333' }}>·</span>
-        <span>lifetime: {lifetimeWords.toLocaleString()}</span>
+        {reflection && !reflection.done && (
+          <span style={{ marginLeft: 'auto', color: 'var(--theme-color)', fontWeight: 700 }}>
+            🪞 Domanda {(reflection.currentIndex) + 1}/{reflection.questions.length}
+          </span>
+        )}
       </button>
 
       {/* Reload banner */}
       {reloadBanner && (
-        <div style={{ margin: '8px 16px 0', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ margin: '6px 16px 0', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '0.75em', fontWeight: 600 }}>📊 Sessione ricaricata</div>
-            <div style={{ fontSize: '0.68em', color: '#555', marginTop: 1 }}>Contesto: ~{reloadBanner.tokens.toLocaleString()} token · €{reloadBanner.cost} (costo per ricaricare la cronologia)</div>
+            <div style={{ fontSize: '0.68em', color: '#555', marginTop: 1 }}>~{reloadBanner.tokens.toLocaleString()} token · €{reloadBanner.cost}</div>
           </div>
           <button onClick={() => setReloadBanner(null)} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1em', padding: '2px 4px' }}>✕</button>
         </div>
@@ -427,27 +527,39 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
             <div>Di cosa vuoi parlare oggi?</div>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-            <div style={{
-              maxWidth: '84%', padding: '10px 14px',
-              borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-              background: msg.role === 'user' ? 'var(--theme-color)' : 'var(--card)',
-              color: msg.role === 'user' ? '#fff' : 'var(--text)',
-              fontSize: '0.92em', lineHeight: 1.55,
-            }}>
-              {msg.role === 'assistant'
-                ? <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
-                : msg.content
-              }
-            </div>
-            {msg.role === 'assistant' && msg.usage && (
-              <div style={{ fontSize: '0.62em', color: '#444', marginTop: 3, paddingLeft: 4 }}>
-                {msg.usage.model} · {msg.usage.totalTokens} tok · €{msg.usage.costEUR?.toFixed(5)}
+        {messages.map((msg, i) => {
+          const isUser = msg.role === 'user'
+          const isReflectionQ = msg.reflection
+          const isReflectionSummary = msg.reflectionSummary
+          return (
+            <div key={i} style={{ marginBottom: msgMarginBottom, display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+              {isReflectionQ && (
+                <div style={{ fontSize: '0.65em', color: 'var(--theme-color)', marginBottom: 3, paddingLeft: 4, fontWeight: 700 }}>🪞 Domanda {reflection?.questions ? reflection.questions.indexOf(msg.content) + 1 : ''}</div>
+              )}
+              {isReflectionSummary && (
+                <div style={{ fontSize: '0.65em', color: '#a0d4a0', marginBottom: 3, paddingLeft: 4, fontWeight: 700 }}>🪞 Riassunto Riflessione</div>
+              )}
+              <div style={{
+                maxWidth: '84%', padding: msgPadding,
+                borderRadius: getBubbleRadius(prefs.bubbleStyle, msg.role),
+                background: isUser ? 'var(--theme-color)' : isReflectionQ ? 'rgba(var(--theme-color-rgb,255,200,0),0.12)' : isReflectionSummary ? 'rgba(100,160,100,0.12)' : getPsychBg(),
+                color: isUser ? '#fff' : 'var(--text)',
+                fontSize: msgFontSize, lineHeight: 1.55,
+                border: isReflectionQ ? '1px solid rgba(var(--theme-color-rgb,255,200,0),0.3)' : isReflectionSummary ? '1px solid rgba(100,200,100,0.3)' : 'none',
+              }}>
+                {!isUser
+                  ? <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+                  : msg.content
+                }
               </div>
-            )}
-          </div>
-        ))}
+              {!isUser && msg.usage && (
+                <div style={{ fontSize: '0.62em', color: '#444', marginTop: 3, paddingLeft: 4 }}>
+                  {msg.usage.model} · {msg.usage.totalTokens} tok · €{msg.usage.costEUR?.toFixed(5)}
+                </div>
+              )}
+            </div>
+          )
+        })}
         {loading && (
           <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: 'var(--card)', borderRadius: '16px 16px 16px 4px', width: 'fit-content', marginBottom: 14 }}>
             {[0, 1, 2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#555', animation: `typingDot 1.2s infinite ${i * 0.2}s` }} />)}
@@ -464,36 +576,38 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
 
       {/* Input area */}
       <div style={{ padding: '8px 16px max(20px, env(safe-area-inset-bottom, 20px))', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'var(--card-solid)', flexShrink: 0 }}>
+        {/* Interim voice text preview */}
+        {isRecording && interimText && (
+          <div style={{ fontSize: '0.82em', color: '#666', fontStyle: 'italic', marginBottom: 6, padding: '0 2px' }}>{interimText}</div>
+        )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-            placeholder="Scrivi o usa la tastiera vocale..."
-            inputMode="text"
-            rows={1}
-            style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '10px 14px', color: 'var(--text)', fontSize: '0.9em', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.4 }}
-          />
+            placeholder={isRecording ? '🎤 In ascolto...' : 'Scrivi o usa la tastiera vocale...'}
+            inputMode="text" rows={1}
+            style={{ flex: 1, background: isRecording ? 'rgba(229,57,53,0.08)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isRecording ? 'rgba(229,57,53,0.4)' : 'rgba(255,255,255,0.12)'}`, borderRadius: 12, padding: '10px 14px', color: 'var(--text)', fontSize: '0.9em', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.4 }} />
+          {/* Voice button */}
+          <button
+            onClick={isRecording ? stopVoiceInput : startVoiceInput}
+            title={isRecording ? 'Ferma registrazione' : 'Registra vocale'}
+            style={{ background: isRecording ? '#e53935' : 'rgba(255,255,255,0.08)', color: isRecording ? '#fff' : '#888', border: 'none', borderRadius: 12, padding: '10px 12px', cursor: 'pointer', fontSize: '1.1em', animation: isRecording ? 'voicePulse 1s infinite' : 'none', flexShrink: 0 }}>
+            {isRecording ? '🟥' : '🎤'}
+          </button>
           <button onClick={() => handleSend()} disabled={!input.trim() || loading}
-            style={{ background: input.trim() && !loading ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)', color: input.trim() && !loading ? '#000' : '#444', border: 'none', borderRadius: 12, padding: '10px 16px', cursor: input.trim() && !loading ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.9em' }}>
+            style={{ background: input.trim() && !loading ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)', color: input.trim() && !loading ? '#000' : '#444', border: 'none', borderRadius: 12, padding: '10px 16px', cursor: input.trim() && !loading ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.9em', flexShrink: 0 }}>
             ↑
           </button>
         </div>
-
-        {/* Profile save button */}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button
-            onClick={handleSaveToProfile}
-            disabled={messages.length < 2 || isUpdatingProfile}
-            style={{
-              background: profileEntryGenerated ? 'rgba(57,193,118,0.12)' : 'rgba(255,255,255,0.06)',
-              border: `1px solid ${profileEntryGenerated ? 'rgba(57,193,118,0.3)' : 'rgba(255,255,255,0.1)'}`,
-              borderRadius: 10, padding: '7px 12px',
-              color: profileEntryGenerated ? 'var(--success)' : 'var(--text-sec)',
-              cursor: messages.length < 2 || isUpdatingProfile ? 'default' : 'pointer',
-              fontSize: '0.8em', opacity: messages.length < 2 ? 0.4 : 1,
-            }}>
+          <button onClick={handleSaveToProfile} disabled={messages.length < 2 || isUpdatingProfile}
+            style={{ background: profileEntryGenerated ? 'rgba(57,193,118,0.12)' : 'rgba(255,255,255,0.06)', border: `1px solid ${profileEntryGenerated ? 'rgba(57,193,118,0.3)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 10, padding: '7px 12px', color: profileEntryGenerated ? 'var(--success,#4caf50)' : 'var(--text-sec)', cursor: messages.length < 2 || isUpdatingProfile ? 'default' : 'pointer', fontSize: '0.8em', opacity: messages.length < 2 ? 0.4 : 1 }}>
             {isUpdatingProfile ? '⏳ Generando...' : profileEntryGenerated ? '📅 Aggiorna profilo' : '📅 Salva nel profilo'}
+          </button>
+          <button onClick={handleExportPdf} disabled={messages.length === 0}
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '7px 12px', color: 'var(--text-sec)', cursor: messages.length === 0 ? 'default' : 'pointer', fontSize: '0.8em', opacity: messages.length === 0 ? 0.4 : 1 }}>
+            ⬇️ PDF
           </button>
         </div>
       </div>
@@ -508,23 +622,65 @@ export default function PsychPage({ sessionId, sessionData, onBack, onClose, onO
         </div>
       )}
 
+      {/* Reflection config modal */}
+      {showReflectionConfig && (
+        <>
+          <div onClick={() => setShowReflectionConfig(false)} style={{ position: 'fixed', inset: 0, zIndex: 10400, background: 'rgba(0,0,0,0.5)' }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10401, background: 'var(--bg)', borderRadius: '20px 20px 0 0', padding: '20px 20px 32px', boxShadow: '0 -8px 32px rgba(0,0,0,0.5)' }}>
+            <div style={{ fontWeight: 700, fontSize: '1.05em', marginBottom: 6 }}>🪞 Modalità Riflessione</div>
+            <div style={{ fontSize: '0.78em', color: '#666', marginBottom: 16, lineHeight: 1.5 }}>Lo psicologo ti farà domande una alla volta per guidarti in una riflessione strutturata.</div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: '0.72em', color: '#555', fontWeight: 700, marginBottom: 8 }}>Numero di domande</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[3, 5, 7, 10].map(n => (
+                  <button key={n} onClick={() => setReflectionConfig(c => ({ ...c, numQ: n }))}
+                    style={{ flex: 1, padding: '8px', background: reflectionConfig.numQ === n ? 'var(--theme-color)' : 'rgba(255,255,255,0.05)', border: `1px solid ${reflectionConfig.numQ === n ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, cursor: 'pointer', fontWeight: 700, color: reflectionConfig.numQ === n ? '#000' : '#888', fontSize: '0.88em' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: '0.72em', color: '#555', fontWeight: 700, marginBottom: 8 }}>Tema focus (opzionale)</div>
+              <input value={reflectionConfig.theme} onChange={e => setReflectionConfig(c => ({ ...c, theme: e.target.value }))}
+                placeholder="es. lavoro, relazioni, obiettivi..."
+                style={{ width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 14px', color: 'var(--text)', fontSize: '0.88em', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowReflectionConfig(false)}
+                style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: '#666', cursor: 'pointer', fontWeight: 600 }}>
+                Annulla
+              </button>
+              <button onClick={startReflection}
+                style={{ flex: 2, padding: '12px', background: 'var(--theme-color)', border: 'none', borderRadius: 12, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: '0.95em' }}>
+                Inizia riflessione
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Stats Drawer */}
       {showStats && (
-        <PsychStatsDrawer
-          onClose={() => setShowStats(false)}
-          psychStats={ps}
-          psychSessions={[]}
-          psychProfile={userData?.psychProfile}
-          todayWords={todayWords}
-          todayTimeSeconds={todayTimeSeconds}
-          todayActiveSeconds={todayActiveSeconds}
-        />
+        <PsychStatsDrawer onClose={() => setShowStats(false)} psychStats={ps} psychSessions={[]} psychProfile={userData?.psychProfile} todayWords={todayWords} todayTimeSeconds={todayTimeSeconds} todayActiveSeconds={todayActiveSeconds} />
+      )}
+
+      {/* Settings panel */}
+      {showSettings && (
+        <PsychChatSettings prefs={prefs} onPrefsChange={setPrefs} onClose={() => setShowSettings(false)} />
       )}
 
       <style>{`
         @keyframes typingDot {
           0%, 60%, 100% { opacity: 0.2; transform: scale(1); }
           30% { opacity: 1; transform: scale(1.3); }
+        }
+        @keyframes voicePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(0.92); }
         }
       `}</style>
     </div>

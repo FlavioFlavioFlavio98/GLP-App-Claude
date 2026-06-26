@@ -166,6 +166,24 @@ export default function SettingsModal() {
           </div>
         )}
 
+        {/* PSICOLOGO AI — solo Flavio */}
+        {authUserId === 'flavio' && (
+          <div className="settings-section">
+            <div className="settings-section-title">💭 Psicologo AI</div>
+            {(() => {
+              const ps = allUsersData?.flavio?.psychStats || {}
+              return (
+                <div style={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 14px' }}>
+                  <PsychStatRow label="Sessioni totali" value={ps.totalSessions || 0} />
+                  <PsychStatRow label="Messaggi totali" value={ps.totalMessages || 0} />
+                  <PsychStatRow label="Token lifetime" value={(ps.totalTokensLifetime || 0).toLocaleString()} />
+                  <PsychStatRow label="Costo totale" value={`€${(ps.totalCostEURLifetime || 0).toFixed(4)}`} />
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
         {/* MODALITÀ */}
         <div className="settings-section">
           <div className="settings-section-title">Modalità</div>
@@ -341,6 +359,15 @@ function UserColorRow({ name, color, onChange }) {
       <div className="user-color-dot" style={{ background: color }}>{name[0]}</div>
       <span className="user-color-name">{name}</span>
       <input type="color" className="user-color-picker" value={color} onChange={e => onChange(e.target.value)} title={`Colore di ${name}`} />
+    </div>
+  )
+}
+
+function PsychStatRow({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85em' }}>
+      <span style={{ color: 'var(--text-sec)' }}>{label}</span>
+      <span style={{ fontWeight: 700 }}>{value}</span>
     </div>
   )
 }

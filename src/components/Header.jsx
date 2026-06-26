@@ -3,7 +3,7 @@ import LevelBar from './LevelBar'
 import { useCountUp } from '../hooks/useCountUp'
 import { trackEvent } from '../lib/achievementLogic'
 
-export default function Header({ isReadOnly }) {
+export default function Header({ isReadOnly, onOpenPsych }) {
   const { state, actions } = useApp()
   const { currentUser, authUserId, userColors, globalData, allUsersData } = state
   const color = userColors[currentUser]
@@ -46,6 +46,12 @@ export default function Header({ isReadOnly }) {
         </div>
       </div>
       <div className="header-actions">
+        {/* Psicologo AI — solo Flavio, solo non read-only */}
+        {authUserId === 'flavio' && !isReadOnly && onOpenPsych && (
+          <button className="icon-btn" onClick={onOpenPsych} title="Psicologo AI">
+            <span style={{ fontSize: 18 }}>🧠</span>
+          </button>
+        )}
         {/* Coach — solo Flavio, solo non read-only */}
         {authUserId === 'flavio' && !isReadOnly && (
           <button className="icon-btn" onClick={() => actions.openModal('coach')} title="Coach AI">

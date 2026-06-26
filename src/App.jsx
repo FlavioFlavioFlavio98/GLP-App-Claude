@@ -56,6 +56,7 @@ import QuickExerciseModal from './modals/QuickExerciseModal'
 import ExerciseStatsModal from './modals/ExerciseStatsModal'
 import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
+import PsychPage from './modals/PsychPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
 import ScoreSparkline from './components/ScoreSparkline'
@@ -93,6 +94,7 @@ export default function App() {
 
   const [focusMode, toggleFocusMode] = useFocusMode(viewDate)
   const [levelUpInfo, setLevelUpInfo] = useState(null)
+  const [showPsychPage, setShowPsychPage] = useState(false)
   const [timeSlotFilter, setTimeSlotFilter] = useState(() => localStorage.getItem('glp_timeslot_filter') || 'all')
   const [habitSortMode, setHabitSortMode] = useState(false)
   const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
@@ -351,7 +353,7 @@ export default function App() {
 
       <WeeklyRecapCheck globalData={isReadOnly ? null : globalData} actions={actions} authUserId={authUserId} />
 
-      <Header isReadOnly={isReadOnly} />
+      <Header isReadOnly={isReadOnly} onOpenPsych={authUserId === 'flavio' && !isReadOnly ? () => setShowPsychPage(true) : undefined} />
 
       {/* Compact mood strip — always at top, today only */}
       {isToday && !isReadOnly && (
@@ -625,6 +627,9 @@ export default function App() {
       <ExerciseStatsModal />
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
+      {authUserId === 'flavio' && !isReadOnly && showPsychPage && (
+        <PsychPage onClose={() => setShowPsychPage(false)} />
+      )}
       {authUserId === 'flavio' && <AppUsageModal />}
       {authUserId === 'flavio' && <TaskModal />}
       {authUserId === 'flavio' && <TaskHistoryModal />}

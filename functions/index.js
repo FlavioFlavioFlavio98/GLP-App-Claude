@@ -7,6 +7,8 @@ const Anthropic = require('@anthropic-ai/sdk')
 admin.initializeApp()
 
 const anthropicKey = defineSecret('ANTHROPIC_KEY')
+const geminiKey = defineSecret('GEMINI_KEY')
+const { GoogleGenerativeAI } = require('@google/generative-ai')
 const ALLOWED_EMAIL = 'flavio.rossi94@gmail.com'
 const REGION = 'europe-west1'
 
@@ -314,6 +316,99 @@ Se nessuna abitudine specifica è stata discussa, restituisci {"habitUpdates": [
       habitUpdates: parsed.habitUpdates || [],
       tokensUsed: response.usage.input_tokens + response.usage.output_tokens
     }
+  }
+)
+
+// ── geminiChat ────────────────────────────────────────────────────────────────
+exports.geminiChat = onCall(
+  { region: REGION, secrets: [geminiKey], invoker: 'public' },
+  async (request) => {
+    if (!request.auth || request.auth.token.email !== ALLOWED_EMAIL)
+      throw new HttpsError('permission-denied', 'Non autorizzato')
+    const { messages, systemPrompt, model } = request.data
+    if (!messages || messages.length === 0)
+      throw new HttpsError('invalid-argument', 'messages obbligatorio')
+
+    const selectedModel = model || 'gemini-2.5-flash-lite'
+    const genAI = new GoogleGenerativeAI(geminiKey.value())
+    const geminiModel = genAI.getGenerativeModel({ model: selectedModel, systemInstruction: systemPrompt || '' })
+
+    const history = messages.slice(0, -1).map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }))
+    const chat = geminiModel.startChat({ history })
+    const lastMessage = messages[messages.length - 1].content
+    const result = await chat.sendMessage(lastMessage)
+    const response = await result.response
+    const usageMetadata = response.usageMetadata || {}
+
+    const pricingUSD = {
+      'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
+      'gemini-2.5-flash':      { input: 0.30, output: 2.50 },
+      'gemini-2.5-pro':        { input: 1.25, output: 10.00 },
+      'gemini-3.5-flash':      { input: 1.50, output: 9.00 },
+    }
+    const p = pricingUSD[selectedModel] || pricingUSD['gemini-2.5-flash-lite']
+    const inputCostUSD  = ((usageMetadata.promptTokenCount || 0) / 1_000_000) * p.input
+    const outputCostUSD = ((usageMetadata.candidatesTokenCount || 0) / 1_000_000) * p.output
+    const totalCostEUR  = (inputCostUSD + outputCostUSD) * 0.92
+
+    return {
+      content: response.text(),
+      usage: {
+        model: selectedModel,
+        inputTokens:  usageMetadata.promptTokenCount || 0,
+        outputTokens: usageMetadata.candidatesTokenCount || 0,
+        totalTokens:  usageMetadata.totalTokenCount || 0,
+        costEUR: parseFloat(totalCostEUR.toFixed(6))
+      }
+    }
+  }
+)
+
+// ── updatePsychProfile ────────────────────────────────────────────────────────
+exports.updatePsychProfile = onCall(
+  { region: REGION, secrets: [geminiKey], invoker: 'public' },
+  async (request) => {
+    if (!request.auth || request.auth.token.email !== ALLOWED_EMAIL)
+      throw new HttpsError('permission-denied', 'Non autorizzato')
+    const { sessionMessages, existingProfile, glpContext } = request.data
+    if (!sessionMessages || sessionMessages.length < 2)
+      throw new HttpsError('invalid-argument', 'sessionMessages obbligatorio')
+
+    const genAI = new GoogleGenerativeAI(geminiKey.value())
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const prompt = `Sei uno psicologo analitico. Analizza questa sessione e aggiorna il profilo psicologico di Flavio.
+
+SESSIONE CORRENTE:
+${sessionMessages.map(m => `${m.role === 'user' ? 'Flavio' : 'Psicologo'}: ${m.content}`).join('\n')}
+
+PROFILO ESISTENTE:
+${JSON.stringify(existingProfile || {}, null, 2)}
+
+DATI GLP:
+${JSON.stringify(glpContext || {}, null, 2)}
+
+Rispondi SOLO con JSON valido senza backtick:
+{
+  "narrative": "riassunto narrativo aggiornato (max 300 parole, terza persona)",
+  "coreThemes": ["tema 1", "tema 2"],
+  "emotionalPatterns": ["pattern 1"],
+  "growthAreas": ["area 1"],
+  "strengths": ["forza 1"],
+  "recentInsights": ["insight da questa sessione"],
+  "sessionSummary": "riassunto breve sessione (max 100 parole)",
+  "lastUpdated": "${new Date().toISOString()}"
+}`
+
+    const result = await model.generateContent(prompt)
+    const text = result.response.text()
+    const clean = text.replace(/```json|```/g, '').trim()
+    let parsed
+    try { parsed = JSON.parse(clean) } catch { parsed = { sessionSummary: 'Parsing error', lastUpdated: new Date().toISOString() } }
+    return { profile: parsed }
   }
 )
 

@@ -56,7 +56,7 @@ import QuickExerciseModal from './modals/QuickExerciseModal'
 import ExerciseStatsModal from './modals/ExerciseStatsModal'
 import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
-import PsychPage from './modals/PsychPage'
+import PsychSessionsPage from './modals/PsychSessionsPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
 import ScoreSparkline from './components/ScoreSparkline'
@@ -628,7 +628,7 @@ export default function App() {
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
       {authUserId === 'flavio' && !isReadOnly && showPsychPage && (
-        <PsychPage onClose={() => setShowPsychPage(false)} />
+        <PsychSessionsPage onClose={() => setShowPsychPage(false)} />
       )}
       {authUserId === 'flavio' && <AppUsageModal />}
       {authUserId === 'flavio' && <TaskModal />}

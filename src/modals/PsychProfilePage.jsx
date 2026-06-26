@@ -9,6 +9,33 @@ import { getFunctions, httpsCallable } from 'firebase/functions'
 import { getApp } from 'firebase/app'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+// Cleans up malformed field values that arrive as JSON strings or objects
+function safeText(val) {
+  if (val === null || val === undefined || val === 'null') return null
+  if (typeof val === 'object') {
+    // object accidentally stored — try to extract insights field or stringify
+    const s = val.insights || val.text || val.narrative || val.content
+    if (s && typeof s === 'string') return safeText(s)
+    return JSON.stringify(val)
+  }
+  let s = String(val).trim()
+  // Strip markdown code fences: ```json\n...\n``` or ```\n...\n```
+  s = s.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim()
+  // If still looks like a JSON object, try to parse and extract text
+  if (s.startsWith('{') && s.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(s)
+      const candidate = parsed.insights || parsed.text || parsed.narrative || parsed.content || parsed.patterns || parsed.openQuestions
+      if (candidate && typeof candidate === 'string') return candidate.trim()
+      // If no obvious text field, return all string values joined
+      const strVals = Object.values(parsed).filter(v => typeof v === 'string').join('\n')
+      if (strVals) return strVals
+    } catch { /* not parseable — show as-is */ }
+  }
+  return s || null
+}
+
 function fmtDate(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr + 'T12:00:00')
@@ -35,9 +62,12 @@ function ChipList({ items, color }) {
   if (!items?.length) return null
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-      {items.map((item, i) => (
-        <span key={i} style={{ background: color || 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: '3px 10px', fontSize: '0.75em', color: 'var(--text-sec)' }}>{item}</span>
-      ))}
+      {items.map((item, i) => {
+        const label = typeof item === 'string' ? item : (item?.name || item?.text || JSON.stringify(item))
+        return (
+          <span key={i} style={{ background: color || 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: '3px 10px', fontSize: '0.75em', color: 'var(--text-sec)' }}>{label}</span>
+        )
+      })}
     </div>
   )
 }
@@ -209,7 +239,7 @@ function DailyEntry({ dateStr, entry, onUpdate, onCorrectSave, scrollRef }) {
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', opacity: starred ? 1 : 0.3, padding: '2px 4px', color: starred ? '#f5c518' : 'var(--text)' }}>
             ⭐
           </button>
-          <button onClick={() => { setEditForm({ insights: entry.insights, patterns: entry.patterns || '', openQuestions: entry.openQuestions || '' }); setEditing(true) }}
+          <button onClick={() => { setEditForm({ insights: safeText(entry.insights) || '', patterns: safeText(entry.patterns) || '', openQuestions: safeText(entry.openQuestions) || '' }); setEditing(true) }}
             title="Modifica" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85em', opacity: 0.5, padding: '2px 4px', color: 'var(--text)' }}>
             ✏️
           </button>
@@ -244,8 +274,8 @@ function DailyEntry({ dateStr, entry, onUpdate, onCorrectSave, scrollRef }) {
         ) : (
           <>
             <EntryBlock icon="🧠" label="Insights" text={entry.insights} />
-            {entry.patterns && <EntryBlock icon="⚠️" label="Pattern emersi" text={entry.patterns} />}
-            {entry.openQuestions && <EntryBlock icon="💡" label="Domande aperte" text={entry.openQuestions} />}
+            <EntryBlock icon="⚠️" label="Pattern emersi" text={entry.patterns} />
+            <EntryBlock icon="💡" label="Domande aperte" text={entry.openQuestions} />
             {entry.connections?.length > 0 && (
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: '0.68em', color: '#555', fontWeight: 700, marginBottom: 4 }}>🔗 Connessioni</div>
@@ -296,11 +326,12 @@ const textAreaStyle = {
 }
 
 function EntryBlock({ icon, label, text }) {
-  if (!text) return null
+  const clean = safeText(text)
+  if (!clean) return null
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{ fontSize: '0.68em', color: '#555', fontWeight: 700, marginBottom: 3 }}>{icon} {label.toUpperCase()}</div>
-      <div style={{ fontSize: '0.85em', color: 'var(--text)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
+      <div style={{ fontSize: '0.85em', color: 'var(--text)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{clean}</div>
     </div>
   )
 }
@@ -436,9 +467,9 @@ export default function PsychProfilePage({ psychProfile, psychSessions, psychSta
             </button>
             {globalExpanded && (
               <div style={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.06)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px' }}>
-                {(globalSummary?.narrative || (hasOldFormat && localProfile?.narrative)) && (
-                  <div style={{ fontSize: '0.87em', color: 'var(--text)', lineHeight: 1.7, marginBottom: 14 }}>
-                    {globalSummary?.narrative || localProfile?.narrative}
+                {safeText(globalSummary?.narrative || (hasOldFormat && localProfile?.narrative)) && (
+                  <div style={{ fontSize: '0.87em', color: 'var(--text)', lineHeight: 1.7, marginBottom: 14, whiteSpace: 'pre-wrap' }}>
+                    {safeText(globalSummary?.narrative || localProfile?.narrative)}
                   </div>
                 )}
                 {(globalSummary?.coreThemes || localProfile?.coreThemes)?.length > 0 && (

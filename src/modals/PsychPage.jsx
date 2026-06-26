@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useApp } from '../lib/store'
-import { doc, updateDoc, getDoc, increment, arrayUnion } from 'firebase/firestore'
+import { doc, updateDoc, increment, arrayUnion } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { getApp } from 'firebase/app'
@@ -11,13 +11,11 @@ import PsychProfilePage from './PsychProfilePage'
 import PsychStatsDrawer from './PsychStatsDrawer'
 
 const MODELS = [
-  { id: 'gemini-2.5-flash-lite', label: '⚡ Gemini 2.5 Flash-Lite', desc: 'economico e veloce' },
-  { id: 'gemini-2.5-flash',      label: '🔵 Gemini 2.5 Flash',      desc: 'bilanciato' },
-  { id: 'gemini-2.5-pro',        label: '🟣 Gemini 2.5 Pro',         desc: 'il più intelligente' },
-  { id: 'gemini-3.5-flash',      label: '🌟 Gemini 3.5 Flash',       desc: 'frontier' },
+  { id: 'gemini-2.5-flash-lite', label: '⚡ Flash-Lite', labelFull: '⚡ Gemini 2.5 Flash-Lite', desc: 'economico e veloce' },
+  { id: 'gemini-2.5-flash',      label: '🔵 Flash',      labelFull: '🔵 Gemini 2.5 Flash',      desc: 'bilanciato' },
+  { id: 'gemini-2.5-pro',        label: '🟣 Pro',         labelFull: '🟣 Gemini 2.5 Pro',         desc: 'il più intelligente' },
+  { id: 'gemini-3.5-flash',      label: '🌟 3.5 Flash',  labelFull: '🌟 Gemini 3.5 Flash',       desc: 'frontier' },
 ]
-
-const CHAT_KEY = 'glp_psych_chat_flavio'
 
 function renderMarkdown(text) {
   if (!text) return ''
@@ -34,59 +32,75 @@ function renderMarkdown(text) {
 
 function fmtTime(seconds) {
   const s = Math.floor(seconds)
-  if (s < 3600) {
-    const m = Math.floor(s / 60)
-    const sec = s % 60
-    return `${m}:${String(sec).padStart(2, '0')}`
-  }
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  return `${h}h ${m}m`
+  if (s < 3600) { const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}` }
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
 }
 
-export default function PsychPage({ onClose }) {
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+
+// Props: sessionId, sessionData, onBack (→ sessions list), onClose (→ close all), onOpenProfile
+export default function PsychPage({ sessionId, sessionData, onBack, onClose, onOpenProfile }) {
   const { state, actions } = useApp()
-  const { authUserId, allUsersData } = state
+  const { allUsersData } = state
   const userData = allUsersData?.flavio || {}
   const dailyLogs = userData?.dailyLogs || {}
 
-  const [messages, setMessages] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(CHAT_KEY) || '[]') } catch { return [] }
-  })
+  // Load messages from sessionData (Firestore) — already passed in
+  const [messages, setMessages] = useState(() => sessionData?.messages || [])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [model, setModel] = useState('gemini-2.5-flash-lite')
+  const [error, setError] = useState(null)
+  const [model, setModel] = useState(sessionData?.model || 'gemini-2.5-flash-lite')
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showStats, setShowStats] = useState(false)
-  const [sessionStats, setSessionStats] = useState({ tokens: 0, costEUR: 0 })
+  const [sessionTitle, setSessionTitle] = useState(sessionData?.title || 'Nuova sessione')
+  const [renamingTitle, setRenamingTitle] = useState(false)
+  const [renameTmp, setRenameTmp] = useState('')
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
-  const [pinMenu, setPinMenu] = useState(null) // { x, y, text }
-  const [lastProfileUpdate, setLastProfileUpdate] = useState(() => {
-    const p = userData?.psychProfile
-    const ts = p?.globalSummary?.lastUpdated || p?.lastUpdated
-    return ts ? new Date(ts) : null
+  const [profileEntryGenerated, setProfileEntryGenerated] = useState(sessionData?.profileEntryGenerated || false)
+  const [pinMenu, setPinMenu] = useState(null)
+  const [reloadBanner, setReloadBanner] = useState(() => {
+    // Show banner only if session has existing messages
+    const hasHistory = (sessionData?.messages || []).length > 0
+    if (!hasHistory) return null
+    const chars = (sessionData.messages || []).reduce((n, m) => n + (m.content?.length || 0), 0)
+    const estTokens = Math.round(chars / 4)
+    const estCost = ((estTokens / 1_000_000) * 0.10 * 0.92).toFixed(5)
+    return { tokens: estTokens, cost: estCost }
   })
 
-  // ── Tracking state ──────────────────────────────────────────────────────────
+  // ── Tracking ──────────────────────────────────────────────────────────────
   const [todayTimeSeconds, setTodayTimeSeconds] = useState(0)
   const [todayActiveSeconds, setTodayActiveSeconds] = useState(0)
   const [todayWords, setTodayWords] = useState(0)
-  const isActiveRef = useRef(false) // true while typing or waiting for response
-  // Pending increments to batch-save
+  const isActiveRef = useRef(false)
   const pendingWords = useRef(0)
   const pendingSeconds = useRef(0)
   const pendingActiveSeconds = useRef(0)
   const lastSaveRef = useRef(Date.now())
-
+  const titleGeneratedRef = useRef(sessionData?.title && sessionData.title !== 'Nuova sessione')
   const messagesEndRef = useRef(null)
   const isUpdatingRef = useRef(false)
 
   const fns = getFunctions(getApp(), 'europe-west1')
   const geminiChatFn = httpsCallable(fns, 'geminiChat', { timeout: 60000 })
   const generateDailyEntryFn = httpsCallable(fns, 'generateDailyEntry', { timeout: 90000 })
+  const generateSessionTitleFn = httpsCallable(fns, 'generateSessionTitle', { timeout: 30000 })
 
-  // ── Total time ticker ───────────────────────────────────────────────────────
+  // Auto-dismiss reload banner after 5s
+  useEffect(() => {
+    if (!reloadBanner) return
+    const t = setTimeout(() => setReloadBanner(null), 5000)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  // Total time ticker
   useEffect(() => {
     const interval = setInterval(() => {
       setTodayTimeSeconds(prev => prev + 1)
@@ -95,53 +109,33 @@ export default function PsychPage({ onClose }) {
         setTodayActiveSeconds(prev => prev + 1)
         pendingActiveSeconds.current += 1
       }
-      // Auto-save every 60s
-      if (Date.now() - lastSaveRef.current >= 60000) {
-        flushStats()
-      }
+      if (Date.now() - lastSaveRef.current >= 60000) flushStats()
     }, 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // Mark active for 30s after loading starts/ends
   useEffect(() => {
-    if (loading) {
-      isActiveRef.current = true
-    } else {
-      const t = setTimeout(() => { isActiveRef.current = false }, 30000)
-      return () => clearTimeout(t)
-    }
+    if (loading) { isActiveRef.current = true }
+    else { const t = setTimeout(() => { isActiveRef.current = false }, 30000); return () => clearTimeout(t) }
   }, [loading])
 
-  // Mark active while typing
-  useEffect(() => {
-    if (input.trim()) {
-      isActiveRef.current = true
-    }
-  }, [input])
+  useEffect(() => { if (input.trim()) isActiveRef.current = true }, [input])
 
-  // Save stats on visibility change + unmount (no profile update — only on "Nuova sessione")
   useEffect(() => {
     const handler = async () => { if (document.hidden) await flushStats() }
     document.addEventListener('visibilitychange', handler)
-    return () => {
-      document.removeEventListener('visibilitychange', handler)
-      flushStats()
-    }
+    return () => { document.removeEventListener('visibilitychange', handler); flushStats() }
   }, [])
 
-  // Pin text — selectionchange listener
+  // Pin text selection
   useEffect(() => {
     const handler = () => {
       const sel = window.getSelection()
       const txt = sel?.toString().trim()
       if (txt && txt.length > 10) {
-        const range = sel.getRangeAt(0)
-        const rect = range.getBoundingClientRect()
+        const rect = sel.getRangeAt(0).getBoundingClientRect()
         setPinMenu({ x: rect.left + rect.width / 2, y: rect.top - 8, text: txt })
-      } else {
-        setPinMenu(null)
-      }
+      } else { setPinMenu(null) }
     }
     document.addEventListener('selectionchange', handler)
     return () => document.removeEventListener('selectionchange', handler)
@@ -152,63 +146,50 @@ export default function PsychPage({ onClose }) {
     const secs = pendingSeconds.current
     const activeSecs = pendingActiveSeconds.current
     if (words === 0 && secs === 0 && activeSecs === 0) return
-    pendingWords.current = 0
-    pendingSeconds.current = 0
-    pendingActiveSeconds.current = 0
+    pendingWords.current = 0; pendingSeconds.current = 0; pendingActiveSeconds.current = 0
     lastSaveRef.current = Date.now()
-
     const today = toDateString(new Date())
     try {
       const updates = {}
-      if (words > 0) {
-        updates['psychStats.totalWordsLifetime'] = increment(words)
-        updates[`psychStats.dailyStats.${today}.words`] = increment(words)
-      }
-      if (secs > 0) {
-        updates['psychStats.totalTimeSecondsLifetime'] = increment(secs)
-        updates[`psychStats.dailyStats.${today}.timeSeconds`] = increment(secs)
-      }
-      if (activeSecs > 0) {
-        updates['psychStats.totalActiveTimeSecondsLifetime'] = increment(activeSecs)
-        updates[`psychStats.dailyStats.${today}.activeTimeSeconds`] = increment(activeSecs)
-      }
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(doc(db, 'users', 'flavio'), updates)
-      }
-      // Update streak
-      const today2 = toDateString(new Date())
-      const dailyStats = userData?.psychStats?.dailyStats || {}
-      const todayStats = { ...dailyStats, [today2]: { timeSeconds: (dailyStats[today2]?.timeSeconds || 0) + secs } }
-      const streak = calcPsychStreak(todayStats)
-      const longestStreak = Math.max(streak, userData?.psychStats?.longestStreak || 0)
-      await updateDoc(doc(db, 'users', 'flavio'), {
-        'psychStats.currentStreak': streak,
-        'psychStats.longestStreak': longestStreak,
-        'psychStats.lastUsedDate': today2,
-      })
+      if (words > 0) { updates['psychStats.totalWordsLifetime'] = increment(words); updates[`psychStats.dailyStats.${today}.words`] = increment(words) }
+      if (secs > 0) { updates['psychStats.totalTimeSecondsLifetime'] = increment(secs); updates[`psychStats.dailyStats.${today}.timeSeconds`] = increment(secs) }
+      if (activeSecs > 0) { updates['psychStats.totalActiveTimeSecondsLifetime'] = increment(activeSecs); updates[`psychStats.dailyStats.${today}.activeTimeSeconds`] = increment(activeSecs) }
+      if (Object.keys(updates).length > 0) await updateDoc(doc(db, 'users', 'flavio'), updates)
     } catch (e) { console.warn('[PsychPage] flushStats error:', e) }
-  }, [userData])
+  }, [])
 
-  function calcPsychStreak(dailyStats) {
-    const d = new Date()
-    let streak = 0
-    for (let i = 0; i < 365; i++) {
-      const dateStr = toDateString(d)
-      if (!dailyStats[dateStr] || (dailyStats[dateStr].timeSeconds || 0) === 0) break
-      streak++
-      d.setDate(d.getDate() - 1)
-    }
-    return streak
+  // ── Save message to Firestore session ─────────────────────────────────────
+  async function saveMessage(msg, usage) {
+    const toSave = { role: msg.role, content: msg.content, timestamp: msg.timestamp || new Date().toISOString(), ...(usage ? { usage } : {}) }
+    try {
+      await updateDoc(doc(db, 'users', 'flavio'), {
+        [`psychSessions.${sessionId}.messages`]: arrayUnion(toSave),
+        [`psychSessions.${sessionId}.updatedAt`]: new Date().toISOString(),
+        [`psychSessions.${sessionId}.messageCount`]: increment(1),
+        [`psychSessions.${sessionId}.model`]: model,
+        ...(usage?.totalTokens ? { [`psychSessions.${sessionId}.totalTokens`]: increment(usage.totalTokens) } : {}),
+        ...(usage?.costEUR ? { [`psychSessions.${sessionId}.totalCostEUR`]: increment(usage.costEUR) } : {}),
+      })
+    } catch (e) { console.warn('[PsychPage] saveMessage error:', e) }
   }
 
-  useEffect(() => {
-    if (messages.length > 0) localStorage.setItem(CHAT_KEY, JSON.stringify(messages))
-  }, [messages])
+  // ── Auto-generate title after 4th message ────────────────────────────────
+  async function maybeGenerateTitle(allMsgs) {
+    if (titleGeneratedRef.current || allMsgs.length < 4) return
+    titleGeneratedRef.current = true
+    try {
+      const result = await generateSessionTitleFn({ firstMessages: allMsgs.slice(0, 4) })
+      const title = result.data.title
+      if (title) {
+        setSessionTitle(title)
+        await updateDoc(doc(db, 'users', 'flavio'), {
+          [`psychSessions.${sessionId}.title`]: title,
+        })
+      }
+    } catch (e) { console.warn('[PsychPage] generateTitle error:', e) }
+  }
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
-
+  // ── Pin selected text ─────────────────────────────────────────────────────
   async function pinSelectedText(text) {
     setPinMenu(null)
     window.getSelection()?.removeAllRanges()
@@ -218,76 +199,21 @@ export default function PsychPage({ onClose }) {
       await updateDoc(doc(db, 'users', 'flavio'), {
         [`psychProfile.dailyEntries.${today}.pinnedMoments`]: arrayUnion(pinnedMoment),
       })
-      actions.showToast('📌 Salvato nel profilo di oggi', '✅')
-    } catch (e) {
-      // If entry doesn't exist yet, create minimal stub
+    } catch {
       await updateDoc(doc(db, 'users', 'flavio'), {
-        [`psychProfile.dailyEntries.${today}`]: {
-          id: today, date: today, autoGenerated: false, starred: false,
-          insights: '', pinnedMoments: [pinnedMoment], connections: [],
-        },
+        [`psychProfile.dailyEntries.${today}`]: { id: today, date: today, autoGenerated: false, starred: false, insights: '', pinnedMoments: [pinnedMoment], connections: [] },
       })
-      actions.showToast('📌 Salvato nel profilo di oggi', '✅')
     }
+    actions.showToast('📌 Salvato nel profilo di oggi', '✅')
   }
 
-  async function generateDailyEntry(msgs) {
-    if (isUpdatingRef.current || msgs.length < 2) return
-    isUpdatingRef.current = true
-    setIsUpdatingProfile(true)
-    try {
-      const today = toDateString(new Date())
-      const existingProfile = userData?.psychProfile || {}
-      const existingEntry = existingProfile.dailyEntries?.[today] || null
-      const result = await generateDailyEntryFn({
-        sessionMessages: msgs.map(m => ({ role: m.role, content: m.content })),
-        existingEntries: existingProfile.dailyEntries || {},
-        globalSummary: existingProfile.globalSummary || null,
-        date: today,
-        existingEntry,
-      })
-      const { entry } = result.data
-      const globalUpdate = entry.globalSummaryUpdate || {}
-
-      const newEntry = {
-        id: today, date: today, autoGenerated: true,
-        starred: existingEntry?.starred || false,
-        insights: entry.insights || '',
-        patterns: entry.patterns || null,
-        openQuestions: entry.openQuestions || null,
-        connections: entry.connections || [],
-        pinnedMoments: existingEntry?.pinnedMoments || [],
-        corrections: existingEntry?.corrections || [],
-      }
-
-      const updates = {
-        [`psychProfile.dailyEntries.${today}`]: newEntry,
-      }
-      if (globalUpdate.narrative) {
-        updates['psychProfile.globalSummary'] = { ...globalUpdate, lastUpdated: new Date().toISOString() }
-        // Update themes in stats
-        const themes = [...(globalUpdate.coreThemes || []), ...(globalUpdate.emotionalPatterns || [])]
-        updates['psychStats.topThemes'] = themes
-        updates['psychStats.profileUpdatesCount'] = increment(1)
-      }
-      await updateDoc(doc(db, 'users', 'flavio'), updates)
-      setLastProfileUpdate(new Date())
-      actions.showToast('📅 Entry del giorno salvato', '✅')
-    } catch (e) {
-      console.error('[PsychPage] generateDailyEntry failed:', e)
-      actions.showToast('Errore generazione entry: ' + (e.message || 'Riprova'), '❌')
-    } finally {
-      isUpdatingRef.current = false
-      setIsUpdatingProfile(false)
-    }
-  }
-
+  // ── handleSend with retry ─────────────────────────────────────────────────
   async function handleSend(text) {
     const content = (text || input).trim()
     if (!content || loading) return
     setInput('')
+    setError(null)
 
-    // Count words
     const wordCount = content.split(/\s+/).filter(Boolean).length
     setTodayWords(prev => prev + wordCount)
     pendingWords.current += wordCount
@@ -298,102 +224,125 @@ export default function PsychPage({ onClose }) {
     setMessages(newMessages)
     setLoading(true)
 
+    // Save user message to Firestore
+    saveMessage(userMsg)
+
+    const psychProfile = userData?.psychProfile || null
+    const glpContext = buildGlpContext(userData, dailyLogs)
+    const systemPrompt = buildPsychSystemPrompt(psychProfile, glpContext)
+
+    let lastErr
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const result = await geminiChatFn({
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          systemPrompt,
+          model,
+        })
+        const { content: reply, usage } = result.data
+        const assistantMsg = { role: 'assistant', content: reply, usage, timestamp: new Date().toISOString() }
+        const finalMessages = [...newMessages, assistantMsg]
+        setMessages(finalMessages)
+
+        // Save assistant message
+        saveMessage(assistantMsg, usage)
+
+        // Update daily cost stats
+        const today = toDateString(new Date())
+        updateDoc(doc(db, 'users', 'flavio'), {
+          [`psychStats.dailyStats.${today}.costEUR`]: increment(usage?.costEUR || 0),
+          [`psychStats.dailyStats.${today}.messages`]: increment(1),
+          'psychStats.totalMessages': increment(1),
+        }).catch(() => {})
+
+        // Auto-generate title in background
+        maybeGenerateTitle(finalMessages)
+
+        setLoading(false)
+        return
+      } catch (err) {
+        lastErr = err
+        console.error(`[PsychPage] handleSend attempt ${attempt} failed:`, err)
+        if (attempt < 3) await sleep(1000 * attempt)
+      }
+    }
+
+    setLoading(false)
+    setError('Errore nella risposta. Riprova.')
+    console.error('[PsychPage] Errore definitivo dopo 3 tentativi:', lastErr)
+  }
+
+  // ── Salva nel profilo ─────────────────────────────────────────────────────
+  async function handleSaveToProfile() {
+    if (isUpdatingRef.current || messages.length < 2) return
+    isUpdatingRef.current = true
+    setIsUpdatingProfile(true)
     try {
-      const psychProfile = userData?.psychProfile || null
-      const glpContext = buildGlpContext(userData, dailyLogs)
-      const systemPrompt = buildPsychSystemPrompt(psychProfile, glpContext)
-      const result = await geminiChatFn({
-        messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-        systemPrompt,
-        model,
-      })
-      const { content: reply, usage } = result.data
-      const assistantMsg = { role: 'assistant', content: reply, usage, timestamp: new Date().toISOString() }
-      setMessages(prev => [...prev, assistantMsg])
-      setSessionStats(prev => ({
-        tokens: prev.tokens + (usage?.totalTokens || 0),
-        costEUR: parseFloat((prev.costEUR + (usage?.costEUR || 0)).toFixed(6)),
-      }))
-      // Update daily cost
       const today = toDateString(new Date())
-      await updateDoc(doc(db, 'users', 'flavio'), {
-        [`psychStats.dailyStats.${today}.costEUR`]: increment(usage?.costEUR || 0),
-        [`psychStats.dailyStats.${today}.messages`]: increment(1),
-        'psychStats.totalMessages': increment(1),
+      const existingProfile = userData?.psychProfile || {}
+      const existingEntry = existingProfile.dailyEntries?.[today] || null
+      const result = await generateDailyEntryFn({
+        sessionMessages: messages.map(m => ({ role: m.role, content: m.content })),
+        existingEntries: existingProfile.dailyEntries || {},
+        globalSummary: existingProfile.globalSummary || null,
+        date: today,
+        existingEntry,
       })
+      const { entry } = result.data
+      const globalUpdate = entry.globalSummaryUpdate || {}
+      const newEntry = {
+        id: today, date: today, autoGenerated: true,
+        starred: existingEntry?.starred || false,
+        insights: entry.insights || '',
+        patterns: entry.patterns || null,
+        openQuestions: entry.openQuestions || null,
+        connections: entry.connections || [],
+        pinnedMoments: existingEntry?.pinnedMoments || [],
+        corrections: existingEntry?.corrections || [],
+      }
+      const updates = { [`psychProfile.dailyEntries.${today}`]: newEntry }
+      if (globalUpdate.narrative) {
+        updates['psychProfile.globalSummary'] = { ...globalUpdate, lastUpdated: new Date().toISOString() }
+        updates['psychStats.topThemes'] = [...(globalUpdate.coreThemes || []), ...(globalUpdate.emotionalPatterns || [])]
+        updates['psychStats.profileUpdatesCount'] = increment(1)
+      }
+      // Mark session as having generated an entry
+      updates[`psychSessions.${sessionId}.profileEntryGenerated`] = true
+      await updateDoc(doc(db, 'users', 'flavio'), updates)
+      setProfileEntryGenerated(true)
+      actions.showToast('📅 Entry salvato nel profilo psicologico', '✅')
     } catch (e) {
+      console.error('[PsychPage] saveToProfile failed:', e)
       actions.showToast('Errore: ' + (e.message || 'Riprova'), '❌')
     } finally {
-      setLoading(false)
+      isUpdatingRef.current = false
+      setIsUpdatingProfile(false)
     }
   }
 
-  async function handleNewSession() {
-    if (!window.confirm('Iniziare una nuova sessione? La chat sarà resettata.')) return
-    await flushStats()
-    if (messages.length >= 2) {
-      try {
-        // 1. Save session metadata
-        const sessionEntry = {
-          id: `sess_${Date.now()}`,
-          date: toDateString(new Date()),
-          model,
-          messageCount: messages.length,
-          totalTokens: sessionStats.tokens,
-          totalCostEUR: sessionStats.costEUR,
-          words: todayWords,
-          durationSeconds: todayTimeSeconds,
-        }
-        const snap = await getDoc(doc(db, 'users', 'flavio'))
-        const existingSessions = snap.data()?.psychSessions || []
-        await updateDoc(doc(db, 'users', 'flavio'), {
-          psychSessions: [...existingSessions.slice(-49), sessionEntry],
-          'psychStats.totalTokensLifetime': increment(sessionStats.tokens),
-          'psychStats.totalCostEURLifetime': increment(sessionStats.costEUR),
-          'psychStats.totalSessions': increment(1),
-          [`psychStats.dailyStats.${toDateString(new Date())}.sessions`]: increment(1),
-        })
-        // 2. Generate daily diary entry
-        await generateDailyEntry(messages)
-      } catch (e) { console.warn('[PsychPage] session save failed:', e) }
-    }
-    setMessages([])
-    setSessionStats({ tokens: 0, costEUR: 0 })
-    setTodayWords(0)
-    setTodayTimeSeconds(0)
-    setTodayActiveSeconds(0)
-    localStorage.removeItem(CHAT_KEY)
+  // ── Rename title ──────────────────────────────────────────────────────────
+  async function saveTitle() {
+    const t = renameTmp.trim()
+    if (!t) { setRenamingTitle(false); return }
+    setSessionTitle(t)
+    setRenamingTitle(false)
+    await updateDoc(doc(db, 'users', 'flavio'), {
+      [`psychSessions.${sessionId}.title`]: t,
+    })
   }
 
   const selectedModel = MODELS.find(m => m.id === model) || MODELS[0]
-
-  const profileUpdateLabel = lastProfileUpdate
-    ? (() => {
-        const now = new Date()
-        const diff = now - lastProfileUpdate
-        const mins = Math.floor(diff / 60000)
-        if (mins < 1) return 'pochi secondi fa'
-        if (mins < 60) return `${mins} min fa`
-        const today = toDateString(now)
-        const updateDay = toDateString(lastProfileUpdate)
-        if (today === updateDay) return `oggi alle ${lastProfileUpdate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
-        return lastProfileUpdate.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
-      })()
-    : null
-
-  // Lifetime stats from Firestore + today's running totals
   const ps = userData?.psychStats || {}
-  const lifetimeWords = (ps.totalWordsLifetime || 0) + pendingWords.current
-  const lifetimeTime = ps.totalTimeSecondsLifetime || 0
+  const lifetimeWords = (ps.totalWordsLifetime || 0)
 
   if (showProfile) {
     return (
       <PsychProfilePage
         psychProfile={userData?.psychProfile}
-        psychSessions={userData?.psychSessions || []}
+        psychSessions={[]}
         psychStats={ps}
         onClose={() => setShowProfile(false)}
-        authUserId={authUserId}
+        authUserId="flavio"
       />
     )
   }
@@ -402,59 +351,73 @@ export default function PsychPage({ onClose }) {
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
 
       {/* Header */}
-      <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: '1.5em', cursor: 'pointer', padding: '4px 8px 4px 0', lineHeight: 1 }}>←</button>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '1.05em' }}>🧠 Psicologo AI</div>
-            <div style={{ fontSize: '0.72em', color: 'var(--text-sec)' }}>Spazio personale di Flavio</div>
-          </div>
+      <div style={{ padding: '10px 16px 8px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+        <button onClick={onBack || onClose} style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: '1.4em', cursor: 'pointer', padding: '4px 8px 4px 0', lineHeight: 1, flexShrink: 0 }}>←</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {renamingTitle ? (
+            <input
+              value={renameTmp}
+              onChange={e => setRenameTmp(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setRenamingTitle(false) }}
+              onBlur={saveTitle}
+              autoFocus
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--theme-color)', borderRadius: 8, padding: '4px 8px', color: 'var(--text)', fontSize: '0.9em', fontWeight: 700, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}
+            />
+          ) : (
+            <div style={{ fontWeight: 700, fontSize: '0.95em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sessionTitle}</div>
+          )}
+          <div style={{ fontSize: '0.68em', color: 'var(--text-sec)' }}>{selectedModel.label}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setShowStats(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '0.95em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📊</button>
-          <button onClick={() => setShowProfile(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '1em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</button>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button onClick={() => { setRenameTmp(sessionTitle); setRenamingTitle(true) }} title="Rinomina"
+            style={{ background: 'none', border: 'none', color: 'var(--text-sec)', cursor: 'pointer', fontSize: '0.9em', padding: '4px 6px', opacity: 0.6 }}>✏️</button>
+          <button onClick={() => setShowStats(true)}
+            style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: '0.85em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📊</button>
+          <button onClick={() => setShowProfile(true)}
+            style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: '0.9em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</button>
         </div>
       </div>
 
       {/* Model picker */}
-      <div style={{ padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <button
-          onClick={() => setShowModelPicker(v => !v)}
-          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '7px 12px', color: 'var(--text)', cursor: 'pointer', fontSize: '0.82em', display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}
-        >
-          <span>{selectedModel.label}</span>
-          <span style={{ color: '#666', fontSize: '0.85em' }}>· {selectedModel.desc}</span>
-          <span style={{ marginLeft: 'auto', opacity: 0.5 }}>▼</span>
+      <div style={{ padding: '6px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+        <button onClick={() => setShowModelPicker(v => !v)}
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 10px', color: 'var(--text)', cursor: 'pointer', fontSize: '0.78em', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>{selectedModel.labelFull}</span>
+          <span style={{ color: '#555', fontSize: '0.85em' }}>· {selectedModel.desc}</span>
+          <span style={{ marginLeft: 6, opacity: 0.4 }}>▼</span>
         </button>
         {showModelPicker && (
-          <div style={{ marginTop: 6, background: 'var(--card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ marginTop: 4, background: 'var(--card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, overflow: 'hidden', position: 'absolute', zIndex: 100, left: 16, right: 16 }}>
             {MODELS.map(m => (
               <button key={m.id} onClick={() => { setModel(m.id); setShowModelPicker(false) }}
-                style={{ width: '100%', padding: '10px 14px', background: model === m.id ? 'rgba(255,255,255,0.08)' : 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: '0.85em', textAlign: 'left', display: 'flex', justifyContent: 'space-between' }}>
-                <span>{m.label}</span>
-                <span style={{ color: '#666', fontSize: '0.85em' }}>{m.desc}</span>
+                style={{ width: '100%', padding: '9px 14px', background: model === m.id ? 'rgba(255,255,255,0.08)' : 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: '0.82em', textAlign: 'left', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{m.labelFull}</span>
+                <span style={{ color: '#555', fontSize: '0.85em' }}>{m.desc}</span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Compact stats widget — clickable */}
-      <button
-        onClick={() => setShowStats(true)}
-        style={{ padding: '5px 16px', background: 'rgba(255,255,255,0.015)', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0, fontSize: '0.7em', color: '#555', display: 'flex', gap: 8, alignItems: 'center', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
-      >
+      {/* Compact stats bar */}
+      <button onClick={() => setShowStats(true)}
+        style={{ padding: '4px 16px', background: 'rgba(255,255,255,0.01)', borderBottom: '1px solid rgba(255,255,255,0.03)', flexShrink: 0, fontSize: '0.68em', color: '#555', display: 'flex', gap: 8, alignItems: 'center', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}>
         <span>✍️ {todayWords} parole</span>
-        <span>⏱ {fmtTime(todayTimeSeconds)} (attivo {fmtTime(todayActiveSeconds)})</span>
-        <span style={{ color: '#3a3a3a' }}>•</span>
-        <span>lifetime: {lifetimeWords.toLocaleString()} parole · {fmtTime(lifetimeTime)}</span>
+        <span>⏱ {fmtTime(todayTimeSeconds)}</span>
+        <span style={{ color: '#333' }}>·</span>
+        <span>lifetime: {lifetimeWords.toLocaleString()}</span>
       </button>
 
-      {/* Entry generation indicator */}
-      <div style={{ padding: '4px 16px', fontSize: '0.68em', color: '#444', flexShrink: 0 }}>
-        📓 {profileUpdateLabel ? `Ultimo entry: ${profileUpdateLabel}` : 'Nessun entry — clicca "Nuova sessione" per generarlo'}
-        {isUpdatingProfile && <span style={{ color: 'var(--theme-color)' }}> — generando entry...</span>}
-      </div>
+      {/* Reload banner */}
+      {reloadBanner && (
+        <div style={{ margin: '8px 16px 0', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.75em', fontWeight: 600 }}>📊 Sessione ricaricata</div>
+            <div style={{ fontSize: '0.68em', color: '#555', marginTop: 1 }}>Contesto: ~{reloadBanner.tokens.toLocaleString()} token · €{reloadBanner.cost} (costo per ricaricare la cronologia)</div>
+          </div>
+          <button onClick={() => setReloadBanner(null)} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1em', padding: '2px 4px' }}>✕</button>
+        </div>
+      )}
 
       {/* Chat area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
@@ -467,7 +430,8 @@ export default function PsychPage({ onClose }) {
         {messages.map((msg, i) => (
           <div key={i} style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
             <div style={{
-              maxWidth: '84%', padding: '10px 14px', borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+              maxWidth: '84%', padding: '10px 14px',
+              borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
               background: msg.role === 'user' ? 'var(--theme-color)' : 'var(--card)',
               color: msg.role === 'user' ? '#fff' : 'var(--text)',
               fontSize: '0.92em', lineHeight: 1.55,
@@ -489,11 +453,17 @@ export default function PsychPage({ onClose }) {
             {[0, 1, 2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#555', animation: `typingDot 1.2s infinite ${i * 0.2}s` }} />)}
           </div>
         )}
+        {error && (
+          <div style={{ background: 'rgba(229,57,53,0.1)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 12, padding: '10px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.83em', color: '#e57373' }}>{error}</span>
+            <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: '#e57373', cursor: 'pointer', fontSize: '0.9em', padding: '0 4px' }}>✕</button>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div style={{ padding: '10px 16px max(20px, env(safe-area-inset-bottom, 20px))', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'var(--card-solid)', flexShrink: 0 }}>
+      {/* Input area */}
+      <div style={{ padding: '8px 16px max(20px, env(safe-area-inset-bottom, 20px))', borderTop: '1px solid rgba(255,255,255,0.08)', background: 'var(--card-solid)', flexShrink: 0 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={input}
@@ -509,17 +479,28 @@ export default function PsychPage({ onClose }) {
             ↑
           </button>
         </div>
+
+        {/* Profile save button */}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button onClick={handleNewSession}
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '7px 12px', color: 'var(--text-sec)', cursor: 'pointer', fontSize: '0.8em' }}>
-            🔄 Nuova sessione
+          <button
+            onClick={handleSaveToProfile}
+            disabled={messages.length < 2 || isUpdatingProfile}
+            style={{
+              background: profileEntryGenerated ? 'rgba(57,193,118,0.12)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${profileEntryGenerated ? 'rgba(57,193,118,0.3)' : 'rgba(255,255,255,0.1)'}`,
+              borderRadius: 10, padding: '7px 12px',
+              color: profileEntryGenerated ? 'var(--success)' : 'var(--text-sec)',
+              cursor: messages.length < 2 || isUpdatingProfile ? 'default' : 'pointer',
+              fontSize: '0.8em', opacity: messages.length < 2 ? 0.4 : 1,
+            }}>
+            {isUpdatingProfile ? '⏳ Generando...' : profileEntryGenerated ? '📅 Aggiorna profilo' : '📅 Salva nel profilo'}
           </button>
         </div>
       </div>
 
-      {/* Pin menu — appears when text is selected */}
+      {/* Pin menu */}
       {pinMenu && (
-        <div style={{ position: 'fixed', left: Math.min(Math.max(pinMenu.x - 70, 8), window.innerWidth - 148), top: Math.max(pinMenu.y - 44, 8), zIndex: 10500, pointerEvents: 'all' }}>
+        <div style={{ position: 'fixed', left: Math.min(Math.max(pinMenu.x - 70, 8), window.innerWidth - 148), top: Math.max(pinMenu.y - 44, 8), zIndex: 10500 }}>
           <button onPointerDown={e => { e.preventDefault(); pinSelectedText(pinMenu.text) }}
             style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '7px 14px', color: 'var(--text)', cursor: 'pointer', fontSize: '0.82em', fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.6)', whiteSpace: 'nowrap' }}>
             📌 Ricorda questo
@@ -532,7 +513,7 @@ export default function PsychPage({ onClose }) {
         <PsychStatsDrawer
           onClose={() => setShowStats(false)}
           psychStats={ps}
-          psychSessions={userData?.psychSessions || []}
+          psychSessions={[]}
           psychProfile={userData?.psychProfile}
           todayWords={todayWords}
           todayTimeSeconds={todayTimeSeconds}

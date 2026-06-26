@@ -450,11 +450,12 @@ ${existingBlock}
 Genera un entry dettagliato e completo — scrivi quanto serve per catturare tutto ciò che è rilevante per le sessioni future. Non limitare la lunghezza se ci sono contenuti importanti.
 Cerca connessioni con entry passati se esistono pattern ricorrenti.
 
-Rispondi SOLO con JSON valido senza backtick:
+IMPORTANTE: Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza delimitatori markdown. I valori dei campi devono essere STRINGHE DI TESTO PURO, non oggetti o array JSON annidati.
+
 {
-  "insights": "🧠 Cosa è emerso oggi su Flavio — testo narrativo dettagliato",
-  "patterns": "⚠️ Pattern comportamentali o emotivi emersi — null se nessuno",
-  "openQuestions": "💡 Domande aperte da esplorare nelle prossime sessioni — null se nessuno",
+  "insights": "testo narrativo dettagliato su cosa è emerso oggi — STRINGA PURA, non JSON",
+  "patterns": "pattern comportamentali o emotivi emersi — STRINGA PURA oppure null",
+  "openQuestions": "domande aperte da esplorare — STRINGA PURA oppure null",
   "connections": [
     { "date": "YYYY-MM-DD", "note": "descrizione connessione con entry passato" }
   ],
@@ -470,9 +471,21 @@ Rispondi SOLO con JSON valido senza backtick:
 
     const result = await model.generateContent(prompt)
     const text = result.response.text()
-    const clean = text.replace(/```json|```/g, '').trim()
+    const clean = text.replace(/```json\n?|```\n?/g, '').trim()
     let parsed
     try { parsed = JSON.parse(clean) } catch { parsed = { insights: text, connections: [] } }
+
+    // Sanitize: ensure text fields are plain strings, not nested JSON/objects
+    function toPlainString(val) {
+      if (val === null || val === undefined) return null
+      if (typeof val === 'object') return JSON.stringify(val)
+      const s = String(val)
+      return s.replace(/^```json\n?|^```\n?|```$/g, '').replace(/^["']|["']$/g, '').trim() || null
+    }
+    parsed.insights = toPlainString(parsed.insights)
+    parsed.patterns = toPlainString(parsed.patterns)
+    parsed.openQuestions = toPlainString(parsed.openQuestions)
+
     return { entry: parsed }
   }
 )
@@ -516,6 +529,30 @@ Rispondi SOLO con JSON valido senza backtick:
     let parsed
     try { parsed = JSON.parse(clean) } catch { parsed = { updatedInsights: currentEntry.insights, changesSummary: 'Errore nel parsing' } }
     return { correctedEntry: parsed }
+  }
+)
+
+// ── generateSessionTitle ─────────────────────────────────────────────────────
+exports.generateSessionTitle = onCall(
+  { region: REGION, secrets: [geminiKey], invoker: 'public' },
+  async (request) => {
+    if (!request.auth || request.auth.token.email !== ALLOWED_EMAIL)
+      throw new HttpsError('permission-denied', 'Non autorizzato')
+    const { firstMessages } = request.data
+    if (!firstMessages || firstMessages.length === 0)
+      throw new HttpsError('invalid-argument', 'firstMessages obbligatorio')
+
+    const genAI = new GoogleGenerativeAI(geminiKey.value())
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const prompt = `Genera un titolo breve (max 6 parole) per questa sessione di chat psicologica basandoti sui primi messaggi. Il titolo deve catturare il tema principale della conversazione. Rispondi SOLO con il titolo, nessun altro testo, nessuna punteggiatura finale.
+
+PRIMI MESSAGGI:
+${firstMessages.slice(0, 4).map(m => `${m.role === 'user' ? 'Flavio' : 'Psicologo'}: ${m.content.slice(0, 200)}`).join('\n')}`
+
+    const result = await model.generateContent(prompt)
+    const title = result.response.text().trim().replace(/^["']|["']$/g, '')
+    return { title }
   }
 )
 

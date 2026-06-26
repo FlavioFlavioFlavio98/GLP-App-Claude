@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useApp } from '../lib/store'
-import { doc, updateDoc, getDoc } from 'firebase/firestore'
+import { doc, updateDoc, getDoc, increment } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { getApp } from 'firebase/app'
@@ -8,6 +8,7 @@ import { toDateString } from '../lib/habitLogic'
 import { buildPsychSystemPrompt } from '../lib/psychPrompt'
 import { buildGlpContext } from '../lib/psychContext'
 import PsychProfilePage from './PsychProfilePage'
+import PsychStatsDrawer from './PsychStatsDrawer'
 
 const MODELS = [
   { id: 'gemini-2.5-flash-lite', label: '⚡ Gemini 2.5 Flash-Lite', desc: 'economico e veloce' },
@@ -31,6 +32,18 @@ function renderMarkdown(text) {
     .replace(/\n/g, '<br/>')
 }
 
+function fmtTime(seconds) {
+  const s = Math.floor(seconds)
+  if (s < 3600) {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${String(sec).padStart(2, '0')}`
+  }
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  return `${h}h ${m}m`
+}
+
 export default function PsychPage({ onClose }) {
   const { state, actions } = useApp()
   const { authUserId, allUsersData } = state
@@ -45,18 +58,136 @@ export default function PsychPage({ onClose }) {
   const [model, setModel] = useState('gemini-2.5-flash-lite')
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [showStats, setShowStats] = useState(false)
   const [sessionStats, setSessionStats] = useState({ tokens: 0, costEUR: 0 })
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
   const [lastProfileUpdate, setLastProfileUpdate] = useState(() => {
     const p = userData?.psychProfile
     return p?.lastUpdated ? new Date(p.lastUpdated) : null
   })
+
+  // ── Tracking state ──────────────────────────────────────────────────────────
+  const [todayTimeSeconds, setTodayTimeSeconds] = useState(0)
+  const [todayActiveSeconds, setTodayActiveSeconds] = useState(0)
+  const [todayWords, setTodayWords] = useState(0)
+  const isActiveRef = useRef(false) // true while typing or waiting for response
+  // Pending increments to batch-save
+  const pendingWords = useRef(0)
+  const pendingSeconds = useRef(0)
+  const pendingActiveSeconds = useRef(0)
+  const lastSaveRef = useRef(Date.now())
+
   const messagesEndRef = useRef(null)
   const isUpdatingRef = useRef(false)
 
   const fns = getFunctions(getApp(), 'europe-west1')
   const geminiChatFn = httpsCallable(fns, 'geminiChat', { timeout: 60000 })
   const updatePsychProfileFn = httpsCallable(fns, 'updatePsychProfile', { timeout: 60000 })
+
+  // ── Total time ticker ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTodayTimeSeconds(prev => prev + 1)
+      pendingSeconds.current += 1
+      if (isActiveRef.current) {
+        setTodayActiveSeconds(prev => prev + 1)
+        pendingActiveSeconds.current += 1
+      }
+      // Auto-save every 60s
+      if (Date.now() - lastSaveRef.current >= 60000) {
+        flushStats()
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Mark active for 30s after loading starts/ends
+  useEffect(() => {
+    if (loading) {
+      isActiveRef.current = true
+    } else {
+      const t = setTimeout(() => { isActiveRef.current = false }, 30000)
+      return () => clearTimeout(t)
+    }
+  }, [loading])
+
+  // Mark active while typing
+  useEffect(() => {
+    if (input.trim()) {
+      isActiveRef.current = true
+    }
+  }, [input])
+
+  // Save stats on visibility change + unmount
+  useEffect(() => {
+    const handler = async () => {
+      if (document.hidden) {
+        await flushStats()
+        if (messages.length > 2 && !isUpdatingRef.current) {
+          await triggerProfileUpdate()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => {
+      document.removeEventListener('visibilitychange', handler)
+      flushStats()
+    }
+  }, [messages])
+
+  const flushStats = useCallback(async () => {
+    const words = pendingWords.current
+    const secs = pendingSeconds.current
+    const activeSecs = pendingActiveSeconds.current
+    if (words === 0 && secs === 0 && activeSecs === 0) return
+    pendingWords.current = 0
+    pendingSeconds.current = 0
+    pendingActiveSeconds.current = 0
+    lastSaveRef.current = Date.now()
+
+    const today = toDateString(new Date())
+    try {
+      const updates = {}
+      if (words > 0) {
+        updates['psychStats.totalWordsLifetime'] = increment(words)
+        updates[`psychStats.dailyStats.${today}.words`] = increment(words)
+      }
+      if (secs > 0) {
+        updates['psychStats.totalTimeSecondsLifetime'] = increment(secs)
+        updates[`psychStats.dailyStats.${today}.timeSeconds`] = increment(secs)
+      }
+      if (activeSecs > 0) {
+        updates['psychStats.totalActiveTimeSecondsLifetime'] = increment(activeSecs)
+        updates[`psychStats.dailyStats.${today}.activeTimeSeconds`] = increment(activeSecs)
+      }
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(doc(db, 'users', 'flavio'), updates)
+      }
+      // Update streak
+      const today2 = toDateString(new Date())
+      const dailyStats = userData?.psychStats?.dailyStats || {}
+      const todayStats = { ...dailyStats, [today2]: { timeSeconds: (dailyStats[today2]?.timeSeconds || 0) + secs } }
+      const streak = calcPsychStreak(todayStats)
+      const longestStreak = Math.max(streak, userData?.psychStats?.longestStreak || 0)
+      await updateDoc(doc(db, 'users', 'flavio'), {
+        'psychStats.currentStreak': streak,
+        'psychStats.longestStreak': longestStreak,
+        'psychStats.lastUsedDate': today2,
+      })
+    } catch (e) { console.warn('[PsychPage] flushStats error:', e) }
+  }, [userData])
+
+  function calcPsychStreak(dailyStats) {
+    const d = new Date()
+    let streak = 0
+    for (let i = 0; i < 365; i++) {
+      const dateStr = toDateString(d)
+      if (!dailyStats[dateStr] || (dailyStats[dateStr].timeSeconds || 0) === 0) break
+      streak++
+      d.setDate(d.getDate() - 1)
+    }
+    return streak
+  }
 
   useEffect(() => {
     if (messages.length > 0) localStorage.setItem(CHAT_KEY, JSON.stringify(messages))
@@ -65,17 +196,6 @@ export default function PsychPage({ onClose }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
-
-  // Update profile on page hide
-  useEffect(() => {
-    const handler = async () => {
-      if (document.hidden && messages.length > 2 && !isUpdatingRef.current) {
-        await triggerProfileUpdate()
-      }
-    }
-    document.addEventListener('visibilitychange', handler)
-    return () => document.removeEventListener('visibilitychange', handler)
-  }, [messages])
 
   async function triggerProfileUpdate() {
     if (isUpdatingRef.current || messages.length < 3) return
@@ -88,7 +208,14 @@ export default function PsychPage({ onClose }) {
         existingProfile: userData?.psychProfile || {},
         glpContext,
       })
-      await updateDoc(doc(db, 'users', 'flavio'), { psychProfile: result.data.profile })
+      const newProfile = result.data.profile
+      await updateDoc(doc(db, 'users', 'flavio'), { psychProfile: newProfile })
+      // Update themes in stats
+      const themes = [...(newProfile.coreThemes || []), ...(newProfile.emotionalPatterns || [])]
+      await updateDoc(doc(db, 'users', 'flavio'), {
+        'psychStats.topThemes': themes,
+        'psychStats.profileUpdatesCount': increment(1),
+      })
       setLastProfileUpdate(new Date())
       actions.showToast('🧠 Profilo psicologico aggiornato', '✅')
     } catch (e) {
@@ -103,6 +230,12 @@ export default function PsychPage({ onClose }) {
     const content = (text || input).trim()
     if (!content || loading) return
     setInput('')
+
+    // Count words
+    const wordCount = content.split(/\s+/).filter(Boolean).length
+    setTodayWords(prev => prev + wordCount)
+    pendingWords.current += wordCount
+    isActiveRef.current = true
 
     const userMsg = { role: 'user', content, timestamp: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
@@ -125,6 +258,13 @@ export default function PsychPage({ onClose }) {
         tokens: prev.tokens + (usage?.totalTokens || 0),
         costEUR: parseFloat((prev.costEUR + (usage?.costEUR || 0)).toFixed(6)),
       }))
+      // Update daily cost
+      const today = toDateString(new Date())
+      await updateDoc(doc(db, 'users', 'flavio'), {
+        [`psychStats.dailyStats.${today}.costEUR`]: increment(usage?.costEUR || 0),
+        [`psychStats.dailyStats.${today}.messages`]: increment(1),
+        'psychStats.totalMessages': increment(1),
+      })
     } catch (e) {
       actions.showToast('Errore: ' + (e.message || 'Riprova'), '❌')
     } finally {
@@ -134,7 +274,7 @@ export default function PsychPage({ onClose }) {
 
   async function handleNewSession() {
     if (!window.confirm('Iniziare una nuova sessione? La chat sarà resettata.')) return
-    // Save session summary + update profile
+    await flushStats()
     if (messages.length >= 2) {
       try {
         const sessionEntry = {
@@ -144,26 +284,27 @@ export default function PsychPage({ onClose }) {
           messageCount: messages.length,
           totalTokens: sessionStats.tokens,
           totalCostEUR: sessionStats.costEUR,
+          words: todayWords,
+          durationSeconds: todayTimeSeconds,
         }
-        // Read existing sessions
         const snap = await getDoc(doc(db, 'users', 'flavio'))
         const existingSessions = snap.data()?.psychSessions || []
-        const existingStats = snap.data()?.psychStats || { totalTokensLifetime: 0, totalCostEURLifetime: 0, totalSessions: 0, totalMessages: 0 }
-        const newStats = {
-          totalTokensLifetime: (existingStats.totalTokensLifetime || 0) + sessionStats.tokens,
-          totalCostEURLifetime: parseFloat(((existingStats.totalCostEURLifetime || 0) + sessionStats.costEUR).toFixed(6)),
-          totalSessions: (existingStats.totalSessions || 0) + 1,
-          totalMessages: (existingStats.totalMessages || 0) + messages.length,
-        }
+        const existingStats = snap.data()?.psychStats || {}
         await updateDoc(doc(db, 'users', 'flavio'), {
           psychSessions: [...existingSessions.slice(-49), sessionEntry],
-          psychStats: newStats,
+          'psychStats.totalTokensLifetime': increment(sessionStats.tokens),
+          'psychStats.totalCostEURLifetime': increment(sessionStats.costEUR),
+          'psychStats.totalSessions': increment(1),
+          [`psychStats.dailyStats.${toDateString(new Date())}.sessions`]: increment(1),
         })
         await triggerProfileUpdate()
       } catch (e) { console.warn('[PsychPage] session save failed:', e) }
     }
     setMessages([])
     setSessionStats({ tokens: 0, costEUR: 0 })
+    setTodayWords(0)
+    setTodayTimeSeconds(0)
+    setTodayActiveSeconds(0)
     localStorage.removeItem(CHAT_KEY)
   }
 
@@ -183,12 +324,17 @@ export default function PsychPage({ onClose }) {
       })()
     : null
 
+  // Lifetime stats from Firestore + today's running totals
+  const ps = userData?.psychStats || {}
+  const lifetimeWords = (ps.totalWordsLifetime || 0) + pendingWords.current
+  const lifetimeTime = ps.totalTimeSecondsLifetime || 0
+
   if (showProfile) {
     return (
       <PsychProfilePage
         psychProfile={userData?.psychProfile}
         psychSessions={userData?.psychSessions || []}
-        psychStats={userData?.psychStats || {}}
+        psychStats={ps}
         onClose={() => setShowProfile(false)}
         authUserId={authUserId}
       />
@@ -207,14 +353,17 @@ export default function PsychPage({ onClose }) {
             <div style={{ fontSize: '0.72em', color: 'var(--text-sec)' }}>Spazio personale di Flavio</div>
           </div>
         </div>
-        <button onClick={() => setShowProfile(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', fontSize: '1.1em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowStats(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '0.95em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📊</button>
+          <button onClick={() => setShowProfile(true)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: 'var(--text)', borderRadius: '50%', width: 34, height: 34, cursor: 'pointer', fontSize: '1em', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</button>
+        </div>
       </div>
 
       {/* Model picker */}
       <div style={{ padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
         <button
           onClick={() => setShowModelPicker(v => !v)}
-          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '7px 12px', color: 'var(--text)', cursor: 'pointer', fontSize: '0.82em', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '7px 12px', color: 'var(--text)', cursor: 'pointer', fontSize: '0.82em', display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}
         >
           <span>{selectedModel.label}</span>
           <span style={{ color: '#666', fontSize: '0.85em' }}>· {selectedModel.desc}</span>
@@ -233,16 +382,20 @@ export default function PsychPage({ onClose }) {
         )}
       </div>
 
-      {/* Stats bar */}
-      <div style={{ padding: '6px 16px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0, fontSize: '0.7em', color: '#555', display: 'flex', gap: 10 }}>
-        <span>Sessione: {sessionStats.tokens.toLocaleString()} tok · €{sessionStats.costEUR.toFixed(4)}</span>
-        <span>·</span>
-        <span>Lifetime: {(userData?.psychStats?.totalTokensLifetime || 0).toLocaleString()} tok · €{(userData?.psychStats?.totalCostEURLifetime || 0).toFixed(4)}</span>
-      </div>
+      {/* Compact stats widget — clickable */}
+      <button
+        onClick={() => setShowStats(true)}
+        style={{ padding: '5px 16px', background: 'rgba(255,255,255,0.015)', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0, fontSize: '0.7em', color: '#555', display: 'flex', gap: 8, alignItems: 'center', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+      >
+        <span>✍️ {todayWords} parole</span>
+        <span>⏱ {fmtTime(todayTimeSeconds)} (attivo {fmtTime(todayActiveSeconds)})</span>
+        <span style={{ color: '#3a3a3a' }}>•</span>
+        <span>lifetime: {lifetimeWords.toLocaleString()} parole · {fmtTime(lifetimeTime)}</span>
+      </button>
 
       {/* Profile update indicator */}
-      <div style={{ padding: '5px 16px', fontSize: '0.7em', color: '#555', flexShrink: 0 }}>
-        🧠 {profileUpdateLabel ? `Profilo aggiornato: ${profileUpdateLabel}` : 'Profilo non ancora generato'}
+      <div style={{ padding: '4px 16px', fontSize: '0.68em', color: '#444', flexShrink: 0 }}>
+        🧠 {profileUpdateLabel ? `Profilo: ${profileUpdateLabel}` : 'Profilo non generato'}
         {isUpdatingProfile && ' — aggiornando...'}
       </div>
 
@@ -276,7 +429,7 @@ export default function PsychPage({ onClose }) {
         ))}
         {loading && (
           <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: 'var(--card)', borderRadius: '16px 16px 16px 4px', width: 'fit-content', marginBottom: 14 }}>
-            {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#555', animation: `typingDot 1.2s infinite ${i * 0.2}s` }} />)}
+            {[0, 1, 2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#555', animation: `typingDot 1.2s infinite ${i * 0.2}s` }} />)}
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -306,6 +459,19 @@ export default function PsychPage({ onClose }) {
           </button>
         </div>
       </div>
+
+      {/* Stats Drawer */}
+      {showStats && (
+        <PsychStatsDrawer
+          onClose={() => setShowStats(false)}
+          psychStats={ps}
+          psychSessions={userData?.psychSessions || []}
+          psychProfile={userData?.psychProfile}
+          todayWords={todayWords}
+          todayTimeSeconds={todayTimeSeconds}
+          todayActiveSeconds={todayActiveSeconds}
+        />
+      )}
 
       <style>{`
         @keyframes typingDot {

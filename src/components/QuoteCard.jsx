@@ -42,19 +42,19 @@ export default function QuoteCard() {
       style={{
         background: 'rgba(var(--theme-color-rgb, 255,200,0), 0.05)',
         border: '1px solid var(--theme-glow, rgba(255,200,0,0.2))',
-        borderRadius: 14,
-        padding: 16,
-        marginBottom: 14,
+        borderRadius: 10,
+        padding: '10px 14px',
+        marginBottom: 8,
         opacity: visible ? 1 : 0,
         transition: 'opacity 0.3s',
       }}
     >
       <div style={{
         fontStyle: 'italic',
-        fontSize: '0.92em',
+        fontSize: '0.85em',
         color: 'var(--text-sec)',
-        lineHeight: 1.5,
-        marginBottom: 6,
+        lineHeight: 1.45,
+        marginBottom: 5,
       }}>
         "{currentQuote.text}"
       </div>
@@ -63,7 +63,7 @@ export default function QuoteCard() {
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
-        <span style={{ fontSize: '0.75em', color: '#666' }}>— {currentQuote.author}</span>
+        <span style={{ fontSize: '0.72em', color: '#666' }}>— {currentQuote.author}</span>
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             onClick={handleLike}

@@ -22,7 +22,6 @@ import AnimatedNumber from './components/AnimatedNumber'
 import TrendRow from './components/TrendRow'
 import GoalSection from './components/GoalSection'
 import HabitSearch from './components/HabitSearch'
-import EnergyBanner from './components/EnergyBanner'
 
 import AddModal from './modals/AddModal'
 import EditModal from './modals/EditModal'
@@ -61,7 +60,6 @@ import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
 import ScoreSparkline from './components/ScoreSparkline'
 import QuoteCard from './components/QuoteCard'
-import CheckInBanner from './components/CheckInBanner'
 import { trackAppOpen } from './lib/trackAppOpen'
 import TaskSection from './components/TaskSection'
 import TaskModal from './modals/TaskModal'
@@ -286,13 +284,8 @@ export default function App() {
     return true
   }
 
-  const IMPORTANCE_ORDER = { high: 0, medium: 1, low: 2 }
-  const sortedRegular = [...regular].sort((a, b) =>
-    (IMPORTANCE_ORDER[a.importance || 'medium'] - IMPORTANCE_ORDER[b.importance || 'medium'])
-  )
-  const sortedBonus = [...bonus].sort((a, b) =>
-    (IMPORTANCE_ORDER[a.importance || 'medium'] - IMPORTANCE_ORDER[b.importance || 'medium'])
-  )
+  const sortedRegular = regular
+  const sortedBonus = bonus
 
   const doneRegularCount = regular.filter(h => {
     const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
@@ -448,8 +441,6 @@ export default function App() {
       {/* Quote Card — solo Flavio */}
       {authUserId === 'flavio' && !isReadOnly && <QuoteCard />}
 
-      {/* Check-in mattino/mezzogiorno/sera — solo Flavio */}
-      {authUserId === 'flavio' && !isReadOnly && <CheckInBanner />}
 
 
       {/* Daily Insight Card — solo Flavio */}
@@ -476,6 +467,9 @@ export default function App() {
       )}
 
       <GoalSection habits={globalData.habits} />
+
+      {/* Task section — solo Flavio, non read-only */}
+      {authUserId === 'flavio' && !isReadOnly && <TaskSection minimalMode={minimalMode} />}
 
       {/* Search */}
       <SearchSection />
@@ -566,9 +560,6 @@ export default function App() {
           </div>
         </>
       )}
-
-      {/* Task section — solo Flavio, non read-only */}
-      {authUserId === 'flavio' && !isReadOnly && <TaskSection minimalMode={minimalMode} />}
 
       {!minimalMode && (
         <>

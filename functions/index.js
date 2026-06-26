@@ -412,6 +412,113 @@ Rispondi SOLO con JSON valido senza backtick:
   }
 )
 
+// ── generateDailyEntry ────────────────────────────────────────────────────────
+exports.generateDailyEntry = onCall(
+  { region: REGION, secrets: [geminiKey], invoker: 'public' },
+  async (request) => {
+    if (!request.auth || request.auth.token.email !== ALLOWED_EMAIL)
+      throw new HttpsError('permission-denied', 'Non autorizzato')
+    const { sessionMessages, existingEntries, globalSummary, date, existingEntry } = request.data
+    if (!sessionMessages || sessionMessages.length < 2)
+      throw new HttpsError('invalid-argument', 'sessionMessages obbligatorio')
+
+    const genAI = new GoogleGenerativeAI(geminiKey.value())
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const recentEntries = Object.entries(existingEntries || {})
+      .sort(([a], [b]) => b.localeCompare(a))
+      .slice(0, 10)
+      .map(([d, e]) => `${d}: ${e.insights || ''}`)
+      .join('\n')
+
+    const existingBlock = existingEntry
+      ? `\nATTENZIONE: Esiste già un entry per oggi. Integralo con le nuove informazioni invece di sovrascriverlo:\n${JSON.stringify(existingEntry)}`
+      : ''
+
+    const prompt = `Sei uno psicologo analitico. Analizza questa sessione e genera l'entry del diario psicologico per oggi (${date}).
+
+SESSIONE DI OGGI:
+${sessionMessages.map(m => `${m.role === 'user' ? 'Flavio' : 'Psicologo'}: ${m.content}`).join('\n')}
+
+PROFILO GLOBALE ESISTENTE:
+${JSON.stringify(globalSummary || {}, null, 2)}
+
+ENTRY RECENTI (ultimi 10 giorni):
+${recentEntries}
+${existingBlock}
+
+Genera un entry dettagliato e completo — scrivi quanto serve per catturare tutto ciò che è rilevante per le sessioni future. Non limitare la lunghezza se ci sono contenuti importanti.
+Cerca connessioni con entry passati se esistono pattern ricorrenti.
+
+Rispondi SOLO con JSON valido senza backtick:
+{
+  "insights": "🧠 Cosa è emerso oggi su Flavio — testo narrativo dettagliato",
+  "patterns": "⚠️ Pattern comportamentali o emotivi emersi — null se nessuno",
+  "openQuestions": "💡 Domande aperte da esplorare nelle prossime sessioni — null se nessuno",
+  "connections": [
+    { "date": "YYYY-MM-DD", "note": "descrizione connessione con entry passato" }
+  ],
+  "globalSummaryUpdate": {
+    "narrative": "riassunto globale aggiornato integrando tutti gli entry (max 400 parole)",
+    "coreThemes": ["tema 1", "tema 2"],
+    "emotionalPatterns": ["pattern 1"],
+    "growthAreas": ["area 1"],
+    "strengths": ["forza 1"],
+    "lastUpdated": "${new Date().toISOString()}"
+  }
+}`
+
+    const result = await model.generateContent(prompt)
+    const text = result.response.text()
+    const clean = text.replace(/```json|```/g, '').trim()
+    let parsed
+    try { parsed = JSON.parse(clean) } catch { parsed = { insights: text, connections: [] } }
+    return { entry: parsed }
+  }
+)
+
+// ── correctDailyEntry ─────────────────────────────────────────────────────────
+exports.correctDailyEntry = onCall(
+  { region: REGION, secrets: [geminiKey], invoker: 'public' },
+  async (request) => {
+    if (!request.auth || request.auth.token.email !== ALLOWED_EMAIL)
+      throw new HttpsError('permission-denied', 'Non autorizzato')
+    const { entryDate, currentEntry, correction } = request.data
+    if (!correction || !currentEntry)
+      throw new HttpsError('invalid-argument', 'correction e currentEntry obbligatori')
+
+    const genAI = new GoogleGenerativeAI(geminiKey.value())
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const prompt = `Sei uno psicologo. L'utente vuole correggere un'informazione nel profilo psicologico.
+
+ENTRY ORIGINALE DEL ${entryDate}:
+Insights: ${currentEntry.insights || ''}
+Pattern: ${currentEntry.patterns || ''}
+Domande aperte: ${currentEntry.openQuestions || ''}
+
+CORREZIONE DELL'UTENTE:
+"${correction}"
+
+Elabora la correzione, capisci cosa va cambiato e aggiorna l'entry.
+
+Rispondi SOLO con JSON valido senza backtick:
+{
+  "updatedInsights": "insights aggiornati con la correzione applicata",
+  "updatedPatterns": "pattern aggiornati o null se invariati",
+  "updatedOpenQuestions": "domande aperte aggiornate o null se invariate",
+  "changesSummary": "Spiegazione chiara e concisa di cosa ho cambiato e perché"
+}`
+
+    const result = await model.generateContent(prompt)
+    const text = result.response.text()
+    const clean = text.replace(/```json|```/g, '').trim()
+    let parsed
+    try { parsed = JSON.parse(clean) } catch { parsed = { updatedInsights: currentEntry.insights, changesSummary: 'Errore nel parsing' } }
+    return { correctedEntry: parsed }
+  }
+)
+
 // ── generateDailyInsight ──────────────────────────────────────────────────────
 exports.generateDailyInsight = onCall(
   { region: REGION, secrets: [anthropicKey], invoker: 'public' },

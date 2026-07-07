@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { signInWithPopup } from 'firebase/auth'
+import { signInWithPopup, signInWithCredential, GoogleAuthProvider } from 'firebase/auth'
+import { Capacitor } from '@capacitor/core'
 import { auth, googleProvider, ALLOWED_EMAILS, EMAIL_TO_USER } from '../lib/firebase'
 import { THEMES } from '../lib/themes'
 
@@ -24,8 +25,22 @@ export default function LoginScreen({ onLogin }) {
     setLoading(true)
     setError('')
     try {
-      const result = await signInWithPopup(auth, googleProvider)
-      const email = result.user.email
+      let email
+
+      if (Capacitor.isNativePlatform()) {
+        // Native Google Sign-In (Android) — bypasses WebView OAuth issues
+        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+        const nativeResult = await FirebaseAuthentication.signInWithGoogle()
+        const idToken = nativeResult.credential?.idToken
+        if (!idToken) throw new Error('No idToken from native Google Sign-In')
+        const credential = GoogleAuthProvider.credential(idToken)
+        const result = await signInWithCredential(auth, credential)
+        email = result.user.email
+      } else {
+        // Web popup
+        const result = await signInWithPopup(auth, googleProvider)
+        email = result.user.email
+      }
 
       if (!ALLOWED_EMAILS.includes(email)) {
         const { signOut } = await import('firebase/auth')
@@ -35,7 +50,6 @@ export default function LoginScreen({ onLogin }) {
         return
       }
 
-      // Successful login — store handles the rest via onAuthStateChanged
       onLogin?.(email)
     } catch (e) {
       if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {

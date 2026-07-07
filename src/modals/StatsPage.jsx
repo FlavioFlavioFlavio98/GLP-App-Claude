@@ -1580,8 +1580,8 @@ function TaskStatsSection({ userData }) {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       return {
         label: MONTH_NAMES[d.getMonth()],
-        completedCount: completed.filter(t => t.completedAt?.startsWith(key)).length,
-        expiredCount: expired.filter(t => t.expiredAt?.startsWith(key)).length,
+        completedCount: completed.filter(t => typeof t.completedAt === 'string' && t.completedAt.startsWith(key)).length,
+        expiredCount: expired.filter(t => typeof t.expiredAt === 'string' && t.expiredAt.startsWith(key)).length,
       }
     })
   })()
@@ -1599,8 +1599,8 @@ function TaskStatsSection({ userData }) {
   const thisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const lastD = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const lastKey = `${lastD.getFullYear()}-${String(lastD.getMonth() + 1).padStart(2, '0')}`
-  const thisComp = completed.filter(t => t.completedAt?.startsWith(thisKey)).length
-  const lastComp = completed.filter(t => t.completedAt?.startsWith(lastKey)).length
+  const thisComp = completed.filter(t => typeof t.completedAt === 'string' && t.completedAt.startsWith(thisKey)).length
+  const lastComp = completed.filter(t => typeof t.completedAt === 'string' && t.completedAt.startsWith(lastKey)).length
 
   if (tasks.length === 0) return (
     <div className="empty-state" style={{ marginTop: 40 }}>

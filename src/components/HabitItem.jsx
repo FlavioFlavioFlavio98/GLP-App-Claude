@@ -4,6 +4,38 @@ import { getItemValueAtDate, calculateStreak, calcNumericPoints } from '../lib/h
 import { calcQualityScore } from '../lib/statsLogic'
 import { TIME_SLOT_OPTS } from '../lib/timeSlots'
 
+// ---- Widget per abitudini auto-sincronizzate da Google Fit ----
+function AutoFitWidget({ habitId, habit, habitValues, viewDate }) {
+  const cfg = habit.numericConfig
+  const value = habitValues?.[habitId]
+
+  if (value !== undefined) {
+    const pts = calcNumericPoints(parseFloat(value), cfg)
+    const ptsColor = pts >= 0 ? 'var(--success)' : 'var(--danger)'
+    const unit = cfg?.unit || ''
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <span style={{ fontSize: '0.72em', color: '#888' }}>📱</span>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9em', color: 'var(--theme-color)' }}>
+            {unit === 'ore' ? parseFloat(value).toFixed(1) : Math.round(value)} {unit}
+          </div>
+          <div style={{ fontSize: '0.7em', color: ptsColor, fontWeight: 700 }}>
+            {pts >= 0 ? '+' : ''}{pts} pt
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+      <span style={{ fontSize: '0.72em', color: '#888' }}>📱</span>
+      <span style={{ fontSize: '0.72em', color: '#555', fontStyle: 'italic' }}>In attesa...</span>
+    </div>
+  )
+}
+
 // ---- Widget per abitudini numeriche ----
 function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
   const { actions } = useApp()
@@ -127,6 +159,7 @@ export default function HabitItem({
   const isMulti = getItemValueAtDate(habit, 'isMulti', viewDate)
   const description = getItemValueAtDate(habit, 'description', viewDate)
   const isIf = habit.type === 'if'
+  const isAutoFit = habit.type === 'auto_fit'
   const isNumeric = Boolean(habit.numericType && habit.numericConfig)
   const importance = habit.importance || 'medium'
   const tsOpt = habit.timeSlot ? TIME_SLOT_OPTS.find(o => o.v === habit.timeSlot) : null
@@ -327,7 +360,9 @@ export default function HabitItem({
             <button className="btn-icon" onClick={() => actions.openModal('edit', { id: habit.id, type: 'habit' })}>
               <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
             </button>
-            {isNumeric ? (
+            {isAutoFit ? (
+              <AutoFitWidget habitId={stableId} habit={habit} habitValues={habitValues} viewDate={viewDate} />
+            ) : isNumeric ? (
               <NumericWidget
                 habit={habit}
                 stableId={stableId}

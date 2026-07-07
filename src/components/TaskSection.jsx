@@ -46,7 +46,7 @@ export default function TaskSection({ minimalMode }) {
     })
 
   const completedToday = allTasks
-    .filter(t => t.status === 'completed' && t.completedAt?.startsWith(todayStr))
+    .filter(t => t.status === 'completed' && typeof t.completedAt === 'string' && t.completedAt.startsWith(todayStr))
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''))
 
   const totalCount = activeTasks.length + completedToday.length

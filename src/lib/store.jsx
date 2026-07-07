@@ -1462,7 +1462,7 @@ export function AppProvider({ children }) {
         .reduce((s, h) => s + (h.reward || 0), 0)
 
       const completedCheckIns = ['morning', 'midday', 'evening'].filter(s => checkIns[s]?.done).length
-      const tasksCompletedToday = (globalData.tasks || []).filter(t => t.status === 'completed' && t.completedAt?.startsWith(date)).length
+      const tasksCompletedToday = (globalData.tasks || []).filter(t => t.status === 'completed' && typeof t.completedAt === 'string' && t.completedAt.startsWith(date)).length
 
       const updatedList = [...(globalData.missions.list || [])]
       let changed = false

@@ -55,6 +55,7 @@ import QuickExerciseModal from './modals/QuickExerciseModal'
 import ExerciseStatsModal from './modals/ExerciseStatsModal'
 import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
+import HealthPage from './modals/HealthPage'
 import PsychSessionsPage from './modals/PsychSessionsPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
@@ -66,6 +67,9 @@ import TaskModal from './modals/TaskModal'
 import TaskHistoryModal from './modals/TaskHistoryModal'
 import QuotesModal from './modals/QuotesModal'
 import HabitDiaryPage from './modals/HabitDiaryPage'
+import BottomNav from './components/BottomNav'
+import WorkoutTab from './components/WorkoutTab'
+import StatsTabContent from './components/StatsTabContent'
 
 // Focus mode: persists per-day in localStorage
 function useFocusMode(viewDate) {
@@ -89,6 +93,7 @@ export default function App() {
   const { state, actions } = useApp()
   const { authStatus, authUserId, viewUserId, currentUser, globalData, allUsersData, viewDate, theme, userColors, density, pendingAchievements, minimalMode, wakeLockEnabled } = state
   const isReadOnly = viewUserId !== authUserId
+  const isNative = window.Capacitor?.isNativePlatform?.() || false
 
   const [focusMode, toggleFocusMode] = useFocusMode(viewDate)
   const [levelUpInfo, setLevelUpInfo] = useState(null)
@@ -98,6 +103,12 @@ export default function App() {
   const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
   const [bonusExpanded, setBonusExpanded] = useState(() => localStorage.getItem('glp_bonus_expanded') === 'true')
   const [voiceNoteHabit, setVoiceNoteHabit] = useState(null)
+  const [currentTab, setCurrentTab] = useState(() => localStorage.getItem('glp_tab') || 'oggi')
+
+  function changeTab(tab) {
+    setCurrentTab(tab)
+    localStorage.setItem('glp_tab', tab)
+  }
   const fcmInitialized = useRef(false)
   const wakeLockRef = useRef(null)
 
@@ -258,7 +269,7 @@ export default function App() {
   // Punti task completate nel viewDate (solo Flavio)
   const taskPts = authUserId === 'flavio'
     ? (globalData.tasks || [])
-        .filter(t => t.status === 'completed' && t.completedAt?.startsWith(viewDate))
+        .filter(t => t.status === 'completed' && typeof t.completedAt === 'string' && t.completedAt.startsWith(viewDate))
         .reduce((sum, t) => sum + (parseInt(t.reward) || 0), 0)
     : 0
 
@@ -322,159 +333,9 @@ export default function App() {
 
   const allRegularDone = regular.length > 0 && filteredRegular.length === 0
 
-  return (
+  // ── Habits section shared JSX (reused in oggi + abitudini tabs) ──
+  const habitsSectionJSX = (
     <>
-      {/* Read-only banner */}
-      {isReadOnly && (
-        <div style={{
-          background: 'rgba(239,159,39,0.15)', border: '1px solid rgba(239,159,39,0.4)',
-          borderRadius: 10, padding: '10px 16px', marginBottom: 12,
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span>👁</span>
-          <span style={{ flex: 1, fontSize: '0.82em', color: '#EF9F27' }}>
-            Stai visualizzando i dati di <strong>{currentUser === 'flavio' ? 'Flavio' : 'Simona'}</strong> — sola lettura
-          </span>
-          <button
-            onClick={() => actions.restoreOwnUser()}
-            style={{ background: '#EF9F27', color: '#000', border: 'none', borderRadius: 8, padding: '5px 12px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78em' }}
-          >
-            Torna ai miei dati
-          </button>
-        </div>
-      )}
-
-      <WeeklyRecapCheck globalData={isReadOnly ? null : globalData} actions={actions} authUserId={authUserId} />
-
-      <Header isReadOnly={isReadOnly} onOpenPsych={authUserId === 'flavio' && !isReadOnly ? () => setShowPsychPage(true) : undefined} />
-
-      {/* Compact mood strip — always at top, today only */}
-      {isToday && !isReadOnly && (
-        <CompactMoodStrip globalData={globalData} authUserId={authUserId} actions={actions} />
-      )}
-
-      {/* Minimal mode banner */}
-      {minimalMode && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 12px', background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 10, fontSize: '0.75em', color: '#EF9F27' }}>
-          <span className="material-icons-round" style={{ fontSize: 14 }}>filter_list</span>
-          <span style={{ flex: 1 }}>Modalità minimalista attiva</span>
-          <button onClick={() => actions.setMinimalMode(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF9F27', fontWeight: 700, fontSize: '0.9em', padding: 0 }}>Mostra tutto</button>
-        </div>
-      )}
-
-      <DateNav />
-
-      {authUserId === 'flavio' ? (
-        <div style={{ margin: '8px 0' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
-            <div style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#4caf50', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>💚 Guadagni</div>
-              {totalHabitPoints > 0 && <DailySumRow label="Abitudini" value={`+${totalHabitPoints}`} color="#4caf50" />}
-              {taskPts > 0 && <DailySumRow label="Task 📋" value={`+${taskPts}`} color="#4caf50" />}
-              {extraPts > 0 && <DailySumRow label="Extra 💪" value={`+${extraPts}`} color="#4caf50" />}
-              {checkInPts > 0 && <DailySumRow label="Check-in ✅" value={`+${checkInPts}`} color="#4caf50" />}
-              {(totalHabitPoints + taskPts + extraPts + checkInPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
-              <div style={{ borderTop: '1px solid rgba(76,175,80,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts + checkInPts}`} color="#4caf50" bold />
-              </div>
-            </div>
-            <div style={{ background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#e53935', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>🔴 Costi</div>
-              {purchaseCost > 0 && <DailySumRow label="Premi" value={`-${purchaseCost}`} color="#e53935" />}
-              {penaltyCost > 0 && <DailySumRow label="Penalità" value={`-${penaltyCost}`} color="#e53935" />}
-              <DailySumRow label="Task scad." value={`-${expiredTaskCost}`} color={expiredTaskCost > 0 ? '#e53935' : '#3a3a3a'} />
-              {trackedItems.filter(ti => ti.cost > 0).map(ti => (
-                <DailySumRow key={ti.id} label={ti.name} value={`-${ti.cost}`} color="#e53935" />
-              ))}
-              <div style={{ borderTop: '1px solid rgba(229,57,53,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`-${dailySpent + expiredTaskCost}`} color="#e53935" bold />
-              </div>
-            </div>
-          </div>
-          <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-            <div style={{ fontSize: '0.58em', color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 2 }}>NETTO OGGI</div>
-            <span
-              key={net}
-              className="netto-animated"
-              style={{
-                fontWeight: 800, fontSize: '2.2em',
-                color: net < 0 ? '#e53935' : net === 0 ? '#EF9F27' : '#4caf50',
-              }}
-            >
-              {net > 0 ? '+' : ''}{net}pt
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 4 }}>
-              <ScoreSparkline habits={globalData?.habits} rewards={globalData?.rewards} dailyLogs={globalData?.dailyLogs} />
-              {(() => { const pd = countPerfectDays(globalData?.habits, globalData?.dailyLogs); return pd > 0 ? <span style={{ fontSize: '0.72em', color: '#ffd700', fontWeight: 700 }}>⭐ {pd} giorni perfetti</span> : null })()}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="daily-summary">
-          <div className="sum-item">
-            <div className="sum-label">Abitudini</div>
-            <AnimatedNumber value={totalHabitPoints} className="sum-val sum-earn" prefix="+" />
-          </div>
-          {extraPts > 0 && (
-            <div className="sum-item">
-              <div className="sum-label">Extra 💪</div>
-              <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
-            </div>
-          )}
-          <div className="sum-item">
-            <div className="sum-label">Spesi/Pen</div>
-            <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />
-          </div>
-          <div className="sum-item">
-            <div className="sum-label">Netto</div>
-            <AnimatedNumber
-              value={net}
-              className={`sum-val ${net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'}`}
-              prefix={net > 0 ? '+' : ''}
-            />
-          </div>
-        </div>
-      )}
-
-      <TrendRow userData={globalData} />
-
-      {/* Quote Card — solo Flavio */}
-      {authUserId === 'flavio' && !isReadOnly && <QuoteCard />}
-
-
-
-      {/* Daily Insight Card — solo Flavio */}
-      {authUserId === 'flavio' && !isReadOnly && (
-        <DailyInsightCard
-          userData={globalData}
-          dailyLogs={globalData.dailyLogs || {}}
-          tags={globalData.tags || []}
-          onOpenCoach={(insightText) => actions.openModal('coach', { prefill: insightText })}
-        />
-      )}
-
-      {/* Journal + Insight (today only, not read-only) */}
-      {isToday && !isReadOnly && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <JournalButton globalData={globalData} onOpen={() => actions.openModal('journal')} />
-          <button
-            onClick={() => actions.openModal('insights')}
-            style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: '6px 12px', cursor: 'pointer', fontSize: '0.75em', color: '#666' }}
-          >
-            💡
-          </button>
-        </div>
-      )}
-
-      <GoalSection habits={globalData.habits} />
-
-      {/* Task section — solo Flavio, non read-only */}
-      {authUserId === 'flavio' && !isReadOnly && <TaskSection minimalMode={minimalMode} />}
-
-      {/* Search */}
-      <SearchSection />
-
-      {/* Section header */}
       <div className="section-header">
         <button
           onClick={() => { const next = !habitsExpanded; setHabitsExpanded(next); localStorage.setItem('glp_habits_expanded', String(next)) }}
@@ -515,23 +376,14 @@ export default function App() {
 
       {habitsExpanded && (
         <>
-          {/* Sort mode banner */}
           {habitSortMode && (
-            <div style={{
-              background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)',
-              borderRadius: 10, padding: '8px 14px', marginBottom: 10,
-              fontSize: '0.78em', color: '#EF9F27', display: 'flex', alignItems: 'center', gap: 8,
-            }}>
+            <div style={{ background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 10, padding: '8px 14px', marginBottom: 10, fontSize: '0.78em', color: '#EF9F27', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="material-icons-round" style={{ fontSize: 16 }}>swap_vert</span>
               Modalità ordinamento attiva — trascina per riordinare
             </div>
           )}
-
           {isToday && !isReadOnly && !habitSortMode && <ReminderBanner pendingCount={pendingCount} />}
-
-          {/* Time slot filter chips — nascosto in sort mode */}
           {!habitSortMode && <TimeSlotFilter value={timeSlotFilter} onChange={v => { setTimeSlotFilter(v); localStorage.setItem('glp_timeslot_filter', v) }} />}
-
           <div className={`habit-density-${density}`}>
             {allRegularDone && !habitSortMode ? (
               <div className="focus-complete">Tutto completato oggi! 🎉</div>
@@ -540,7 +392,6 @@ export default function App() {
             ) : (
               <SortableHabitList habits={habitSortMode ? regular : filteredRegular} itemProps={{ ...itemProps, sortMode: habitSortMode }} sortMode={habitSortMode} />
             )}
-
             {!habitSortMode && !minimalMode && (
               <div>
                 <button
@@ -560,35 +411,183 @@ export default function App() {
           </div>
         </>
       )}
+    </>
+  )
 
-      {!minimalMode && (
-        <>
-          <Accordion label={<><span className="material-icons-round" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>redeem</span>Negozio Premi</>} defaultOpen={false}>
-            <ShopList />
-          </Accordion>
-          <PurchasedList />
-        </>
+  return (
+    <>
+      <WeeklyRecapCheck globalData={isReadOnly ? null : globalData} actions={actions} authUserId={authUserId} />
+
+      {/* ── HEADER FISSO (sempre visibile su tutte le tab) ── */}
+      {isReadOnly && (
+        <div style={{ background: 'rgba(239,159,39,0.15)', border: '1px solid rgba(239,159,39,0.4)', borderRadius: 10, padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span>👁</span>
+          <span style={{ flex: 1, fontSize: '0.82em', color: '#EF9F27' }}>
+            Stai visualizzando i dati di <strong>{currentUser === 'flavio' ? 'Flavio' : 'Simona'}</strong> — sola lettura
+          </span>
+          <button onClick={() => actions.restoreOwnUser()} style={{ background: '#EF9F27', color: '#000', border: 'none', borderRadius: 8, padding: '5px 12px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78em' }}>
+            Torna ai miei dati
+          </button>
+        </div>
       )}
 
-      {!isReadOnly && (
-        <button className="fab" onClick={() => actions.openModal('add')}>
-          <span className="material-icons-round">add</span>
-        </button>
+      <Header isReadOnly={isReadOnly} onOpenPsych={authUserId === 'flavio' && !isReadOnly ? () => setShowPsychPage(true) : undefined} />
+
+      {!isNative && isToday && !isReadOnly && (
+        <CompactMoodStrip globalData={globalData} authUserId={authUserId} actions={actions} />
       )}
 
-      {/* FAB secondario esercizi — solo Flavio, solo non-readOnly */}
-      {authUserId === 'flavio' && !isReadOnly && (
-        <ExerciseFab actions={actions} />
+      {minimalMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 12px', background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 10, fontSize: '0.75em', color: '#EF9F27' }}>
+          <span className="material-icons-round" style={{ fontSize: 14 }}>filter_list</span>
+          <span style={{ flex: 1 }}>Modalità minimalista attiva</span>
+          <button onClick={() => actions.setMinimalMode(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF9F27', fontWeight: 700, fontSize: '0.9em', padding: 0 }}>Mostra tutto</button>
+        </div>
       )}
 
-      {/* FAB terziario task — solo Flavio, solo non-readOnly */}
-      {authUserId === 'flavio' && !isReadOnly && (
-        <TaskFab actions={actions} />
+      <DateNav />
+
+      {/* ── CARD GUADAGNI/COSTI/NETTO (sempre visibile su tutte le tab) ── */}
+      {authUserId === 'flavio' ? (
+        <div style={{ margin: '8px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
+            <div style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#4caf50', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>💚 Guadagni</div>
+              {totalHabitPoints > 0 && <DailySumRow label="Abitudini" value={`+${totalHabitPoints}`} color="#4caf50" />}
+              {taskPts > 0 && <DailySumRow label="Task 📋" value={`+${taskPts}`} color="#4caf50" />}
+              {extraPts > 0 && <DailySumRow label="Extra 💪" value={`+${extraPts}`} color="#4caf50" />}
+              {checkInPts > 0 && <DailySumRow label="Check-in ✅" value={`+${checkInPts}`} color="#4caf50" />}
+              {(totalHabitPoints + taskPts + extraPts + checkInPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
+              <div style={{ borderTop: '1px solid rgba(76,175,80,0.2)', marginTop: 4, paddingTop: 4 }}>
+                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts + checkInPts}`} color="#4caf50" bold />
+              </div>
+            </div>
+            <div style={{ background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#e53935', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>🔴 Costi</div>
+              {purchaseCost > 0 && <DailySumRow label="Premi" value={`-${purchaseCost}`} color="#e53935" />}
+              {penaltyCost > 0 && <DailySumRow label="Penalità" value={`-${penaltyCost}`} color="#e53935" />}
+              <DailySumRow label="Task scad." value={`-${expiredTaskCost}`} color={expiredTaskCost > 0 ? '#e53935' : '#3a3a3a'} />
+              {trackedItems.filter(ti => ti.cost > 0).map(ti => (
+                <DailySumRow key={ti.id} label={ti.name} value={`-${ti.cost}`} color="#e53935" />
+              ))}
+              <div style={{ borderTop: '1px solid rgba(229,57,53,0.2)', marginTop: 4, paddingTop: 4 }}>
+                <DailySumRow label="Totale" value={`-${dailySpent + expiredTaskCost}`} color="#e53935" bold />
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
+            <div style={{ fontSize: '0.58em', color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 2 }}>NETTO OGGI</div>
+            <span key={net} className="netto-animated" style={{ fontWeight: 800, fontSize: '2.2em', color: net < 0 ? '#e53935' : net === 0 ? '#EF9F27' : '#4caf50' }}>
+              {net > 0 ? '+' : ''}{net}pt
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 4 }}>
+              <ScoreSparkline habits={globalData?.habits} rewards={globalData?.rewards} dailyLogs={globalData?.dailyLogs} />
+              {(() => { const pd = countPerfectDays(globalData?.habits, globalData?.dailyLogs); return pd > 0 ? <span style={{ fontSize: '0.72em', color: '#ffd700', fontWeight: 700 }}>⭐ {pd} giorni perfetti</span> : null })()}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="daily-summary">
+          <div className="sum-item">
+            <div className="sum-label">Abitudini</div>
+            <AnimatedNumber value={totalHabitPoints} className="sum-val sum-earn" prefix="+" />
+          </div>
+          {extraPts > 0 && (
+            <div className="sum-item">
+              <div className="sum-label">Extra 💪</div>
+              <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
+            </div>
+          )}
+          <div className="sum-item">
+            <div className="sum-label">Spesi/Pen</div>
+            <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />
+          </div>
+          <div className="sum-item">
+            <div className="sum-label">Netto</div>
+            <AnimatedNumber value={net} className={`sum-val ${net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'}`} prefix={net > 0 ? '+' : ''} />
+          </div>
+        </div>
       )}
+
+      {/* ── CONTENUTO TAB (scrollabile, con padding per bottom nav) ── */}
+      <div style={{ paddingBottom: 68 }}>
+
+        {/* ───────── TAB: OGGI ───────── */}
+        {currentTab === 'oggi' && (
+          <>
+            <TrendRow userData={globalData} />
+
+            {/* Quick actions: journal, insight */}
+            {isToday && !isReadOnly && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <JournalButton globalData={globalData} onOpen={() => actions.openModal('journal')} />
+                <button onClick={() => actions.openModal('insights')} style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: '6px 12px', cursor: 'pointer', fontSize: '0.75em', color: '#666' }}>
+                  💡
+                </button>
+              </div>
+            )}
+
+            {/* Task di oggi */}
+            {authUserId === 'flavio' && !isReadOnly && <TaskSection minimalMode={minimalMode} />}
+
+            {/* Abitudini di oggi */}
+            {habitsSectionJSX}
+          </>
+        )}
+
+        {/* ───────── TAB: ABITUDINI ───────── */}
+        {currentTab === 'abitudini' && (
+          <>
+            <GoalSection habits={globalData.habits} />
+            <SearchSection />
+            {habitsSectionJSX}
+            {!minimalMode && (
+              <>
+                <Accordion label={<><span className="material-icons-round" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>redeem</span>Negozio Premi</>} defaultOpen={false}>
+                  <ShopList />
+                </Accordion>
+                <PurchasedList />
+              </>
+            )}
+            {!isReadOnly && (
+              <button className="fab" onClick={() => actions.openModal('add')}>
+                <span className="material-icons-round">add</span>
+              </button>
+            )}
+          </>
+        )}
+
+        {/* ───────── TAB: TASK ───────── */}
+        {currentTab === 'task' && (
+          <>
+            {authUserId === 'flavio' && !isReadOnly
+              ? <>
+                  <TaskSection minimalMode={false} />
+                  <TaskFab actions={actions} />
+                </>
+              : <div className="empty-state">Sezione task non disponibile</div>
+            }
+          </>
+        )}
+
+        {/* ───────── TAB: WORKOUT & PESO ───────── */}
+        {currentTab === 'workout' && (
+          <WorkoutTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} />
+        )}
+
+        {/* ───────── TAB: STATISTICHE ───────── */}
+        {currentTab === 'stats' && (
+          <StatsTabContent actions={actions} globalData={globalData} authUserId={authUserId} isNative={isNative} isReadOnly={isReadOnly} />
+        )}
+
+      </div>
+
+      {/* ── BOTTOM NAV ── */}
+      <BottomNav currentTab={currentTab} onTabChange={changeTab} />
 
       <Toast />
 
-      {/* Modals */}
+      {/* ── TUTTE LE MODAL (invariate) ── */}
       <AddModal />
       <EditModal />
       <SettingsModal />
@@ -618,6 +617,7 @@ export default function App() {
       <ExerciseStatsModal />
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
+      {authUserId === 'flavio' && <HealthPage />}
       {authUserId === 'flavio' && !isReadOnly && showPsychPage && (
         <PsychSessionsPage onClose={() => setShowPsychPage(false)} />
       )}
@@ -626,26 +626,11 @@ export default function App() {
       {authUserId === 'flavio' && <TaskHistoryModal />}
       {authUserId === 'flavio' && <QuotesModal />}
       {voiceNoteHabit && (
-        <HabitDiaryPage
-          habit={voiceNoteHabit}
-          onClose={() => setVoiceNoteHabit(null)}
-          viewDate={viewDate}
-          authUserId={authUserId}
-        />
+        <HabitDiaryPage habit={voiceNoteHabit} onClose={() => setVoiceNoteHabit(null)} viewDate={viewDate} authUserId={authUserId} />
       )}
       <UpdateBanner />
-
-      <AchievementQueue
-        queue={pendingAchievements || []}
-        onClear={() => actions.clearAchievementQueue()}
-      />
-
-      {levelUpInfo && (
-        <LevelUpOverlay
-          levelInfo={levelUpInfo}
-          onClose={() => setLevelUpInfo(null)}
-        />
-      )}
+      <AchievementQueue queue={pendingAchievements || []} onClear={() => actions.clearAchievementQueue()} />
+      {levelUpInfo && <LevelUpOverlay levelInfo={levelUpInfo} onClose={() => setLevelUpInfo(null)} />}
     </>
   )
 }

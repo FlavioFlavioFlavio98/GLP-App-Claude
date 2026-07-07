@@ -38,8 +38,9 @@ export default function SplashScreen({ correctPinLoaded, dataLoaded, forceHide, 
     })
   }
 
-  // Phase 1: 0 → 38% on mount (simula connessione Firebase)
-  useEffect(() => { animateTo(38, 1100) }, [])
+  // Phase 1: 0 → 38% on mount — più veloce su nativo
+  const isNative = window.Capacitor?.isNativePlatform?.() || false
+  useEffect(() => { animateTo(38, isNative ? 200 : 1100) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Phase 2: 38 → 76% quando PIN caricato
   useEffect(() => {

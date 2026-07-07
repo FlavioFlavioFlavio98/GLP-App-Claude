@@ -3,3 +3,5 @@ dist
 .env
 .env.local
 functions/node_modules
+android
+

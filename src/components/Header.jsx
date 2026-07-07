@@ -46,6 +46,12 @@ export default function Header({ isReadOnly, onOpenPsych }) {
         </div>
       </div>
       <div className="header-actions">
+        {/* Salute — solo Flavio */}
+        {authUserId === 'flavio' && !isReadOnly && (
+          <button className="icon-btn" onClick={() => actions.openModal('health')} title="Salute">
+            <span style={{ fontSize: 18 }}>❤️</span>
+          </button>
+        )}
         {/* Psicologo AI — solo Flavio, solo non read-only */}
         {authUserId === 'flavio' && !isReadOnly && onOpenPsych && (
           <button className="icon-btn" onClick={onOpenPsych} title="Psicologo AI">

@@ -66,7 +66,7 @@ function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
     )
   }
 
-  if (editing || savedValue === undefined) {
+  if (editing) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>

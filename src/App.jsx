@@ -6,6 +6,7 @@ import { getLevel } from './lib/levels'
 import { TIME_SLOT_OPTS } from './lib/timeSlots'
 
 import Header from './components/Header'
+import ReadingsPage from './modals/ReadingsPage'
 import ProgressCircle from './components/ProgressCircle'
 import ScoreBoard from './components/ScoreBoard'
 import DateNav from './components/DateNav'
@@ -98,6 +99,7 @@ export default function App() {
   const [focusMode, toggleFocusMode] = useFocusMode(viewDate)
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [showPsychPage, setShowPsychPage] = useState(false)
+  const [showReadings, setShowReadings] = useState(false)
   const [timeSlotFilter, setTimeSlotFilter] = useState(() => localStorage.getItem('glp_timeslot_filter') || 'all')
   const [habitSortMode, setHabitSortMode] = useState(false)
   const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
@@ -266,6 +268,9 @@ export default function App() {
         .reduce((sum, c) => sum + (c.pts || 1), 0)
     : 0
 
+  // Punti letture completate nel viewDate
+  const readingPts = globalData.dailyLogs?.[viewDate]?.readingEarned || 0
+
   // Punti task completate nel viewDate (solo Flavio)
   const taskPts = authUserId === 'flavio'
     ? (globalData.tasks || [])
@@ -284,7 +289,7 @@ export default function App() {
         .reduce((sum, t) => sum + (parseInt(t.penalty) || 0), 0)
     : 0
 
-  const net = totalHabitPoints + taskPts + extraPts + checkInPts - dailySpent - expiredTaskCost
+  const net = totalHabitPoints + taskPts + extraPts + checkInPts + readingPts - dailySpent - expiredTaskCost
 
   function isFullyComplete(h) {
     const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
@@ -431,7 +436,11 @@ export default function App() {
         </div>
       )}
 
-      <Header isReadOnly={isReadOnly} onOpenPsych={authUserId === 'flavio' && !isReadOnly ? () => setShowPsychPage(true) : undefined} />
+      <Header
+        isReadOnly={isReadOnly}
+        onOpenPsych={authUserId === 'flavio' && !isReadOnly ? () => setShowPsychPage(true) : undefined}
+        onOpenReadings={!isReadOnly ? () => setShowReadings(true) : undefined}
+      />
 
       {!isNative && isToday && !isReadOnly && (
         <CompactMoodStrip globalData={globalData} authUserId={authUserId} actions={actions} />
@@ -457,9 +466,10 @@ export default function App() {
               {taskPts > 0 && <DailySumRow label="Task 📋" value={`+${taskPts}`} color="#4caf50" />}
               {extraPts > 0 && <DailySumRow label="Extra 💪" value={`+${extraPts}`} color="#4caf50" />}
               {checkInPts > 0 && <DailySumRow label="Check-in ✅" value={`+${checkInPts}`} color="#4caf50" />}
-              {(totalHabitPoints + taskPts + extraPts + checkInPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
+              {readingPts > 0 && <DailySumRow label="Letture 📚" value={`+${readingPts}`} color="#4caf50" />}
+              {(totalHabitPoints + taskPts + extraPts + checkInPts + readingPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
               <div style={{ borderTop: '1px solid rgba(76,175,80,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts + checkInPts}`} color="#4caf50" bold />
+                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts + checkInPts + readingPts}`} color="#4caf50" bold />
               </div>
             </div>
             <div style={{ background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 10, padding: '10px 12px' }}>
@@ -620,6 +630,9 @@ export default function App() {
       {authUserId === 'flavio' && <HealthPage />}
       {authUserId === 'flavio' && !isReadOnly && showPsychPage && (
         <PsychSessionsPage onClose={() => setShowPsychPage(false)} />
+      )}
+      {!isReadOnly && showReadings && (
+        <ReadingsPage onClose={() => setShowReadings(false)} />
       )}
       {authUserId === 'flavio' && <AppUsageModal />}
       {authUserId === 'flavio' && <TaskModal />}

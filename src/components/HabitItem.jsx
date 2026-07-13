@@ -83,7 +83,6 @@ function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
                 background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
                 borderRadius: 8, color: 'var(--text)', fontSize: '0.9em',
               }}
-              autoFocus
             />
             <span style={{ fontSize: '0.75em', color: '#666' }}>{cfg?.unit}</span>
           </div>

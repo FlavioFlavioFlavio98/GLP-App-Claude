@@ -1,15 +1,19 @@
 // ─── GLP Service Worker ────────────────────────────────────────────────────────
-const CACHE_NAME = 'glp-cache-v4'
-const OFFLINE_ASSETS = ['/GLP-App-Claude/']
+// CACHE_NAME includes build timestamp injected at deploy time via sed in package.json
+// Falls back to a fixed string during local dev (vite dev doesn't process this file)
+const CACHE_NAME = 'glp-cache-BUILD_TS'
+const OFFLINE_ASSETS = ['/GLP-App-Claude/assets/']
 
-// Install
+// Install: skipWaiting() so the new SW activates immediately without waiting for
+// the user to close all tabs or click an update banner
 self.addEventListener('install', event => {
+  self.skipWaiting()
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(OFFLINE_ASSETS))
+    caches.open(CACHE_NAME).then(cache => cache.addAll([]))
   )
 })
 
-// Activate
+// Activate: delete ALL old caches (different CACHE_NAME per build), then claim
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -18,10 +22,38 @@ self.addEventListener('activate', event => {
   )
 })
 
-// Fetch: network-first, fallback cache
+// Fetch strategy:
+// - Navigation (index.html): network-only — always get fresh HTML with current asset hashes
+// - Static assets (/assets/*): cache-first, fallback network — hashed filenames never change
+// - Everything else: network-first, fallback cache
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return
   if (!event.request.url.startsWith(self.location.origin)) return
+
+  // Navigation: network-only (never serve stale index.html from cache)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request))
+    return
+  }
+
+  // Hashed assets: cache-first (content-addressed, never stale)
+  if (event.request.url.includes('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached
+        return fetch(event.request).then(response => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone))
+          }
+          return response
+        })
+      })
+    )
+    return
+  }
+
+  // Other GET: network-first, fallback cache
   event.respondWith(
     fetch(event.request)
       .then(response => {

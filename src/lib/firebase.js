@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 import { getMessaging, isSupported } from 'firebase/messaging'
+import { getStorage } from 'firebase/storage'
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyA001klzJou17djB76Q-t2eRTKbU9NZoQs',
@@ -16,6 +17,7 @@ export const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
 export const auth = getAuth(app)
 export const googleProvider = new GoogleAuthProvider()
+export const storage = getStorage(app)
 
 // Whitelist: solo queste due email possono accedere
 export const ALLOWED_EMAILS = [

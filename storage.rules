@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // PDF personali — solo il proprietario può leggere/scrivere
+    match /pdfs/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && (request.auth.token.email == 'flavio.rossi94@gmail.com'
+            || request.auth.token.email == 'simonaballini2000@gmail.com')
+        && request.auth.uid == userId;
+    }
+    // Nessun altro accesso
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

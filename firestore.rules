@@ -43,6 +43,18 @@ service cloud.firestore {
         allow read, write: if request.auth != null &&
                               request.auth.token.email == getUserEmail(userId);
       }
+
+      // Letture (PDF personali): solo il proprietario
+      match /readings/{readingId} {
+        allow read, write: if request.auth != null &&
+                              request.auth.token.email == getUserEmail(userId);
+
+        // Log singole letture completate
+        match /logs/{logId} {
+          allow read, write: if request.auth != null &&
+                                request.auth.token.email == getUserEmail(userId);
+        }
+      }
     }
 
     // Config (ex PIN) — non più usata, blocca tutto

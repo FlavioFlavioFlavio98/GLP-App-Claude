@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../lib/store'
-import { APP_VERSION, APP_UPDATED } from '../version'
+import { APP_VERSION, APP_UPDATED, APP_BUILD_TIME, APP_BUILD_HASH } from '../version'
 
 export default function SettingsModal() {
   const { state, actions } = useApp()
@@ -339,6 +339,12 @@ export default function SettingsModal() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78em', color: '#555', marginTop: 4 }}>
               <span>Ultimo aggiornamento</span><span>{APP_UPDATED}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72em', color: '#3a3a3a', marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+              <span>Build</span>
+              <span style={{ fontFamily: 'monospace', letterSpacing: 0 }}>
+                {APP_BUILD_TIME} · {APP_BUILD_HASH}
+              </span>
             </div>
           </div>
           <button className="btn-backup" onClick={checkForUpdates} disabled={checkingUpdate} style={{ marginTop: 8 }}>

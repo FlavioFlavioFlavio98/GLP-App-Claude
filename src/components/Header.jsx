@@ -1,9 +1,26 @@
+import { useEffect, useState } from 'react'
 import { useApp } from '../lib/store'
 import LevelBar from './LevelBar'
 import { useCountUp } from '../hooks/useCountUp'
 import { trackEvent } from '../lib/achievementLogic'
+import { db } from '../lib/firebase'
+import { collection, onSnapshot, query } from 'firebase/firestore'
+import { readingUrgency } from '../modals/ReadingsPage'
 
-export default function Header({ isReadOnly, onOpenPsych }) {
+function useReadingsBadge(authUserId) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!authUserId) return
+    const q = query(collection(db, 'users', authUserId, 'readings'))
+    return onSnapshot(q, snap => {
+      const urgent = snap.docs.filter(d => readingUrgency({ id: d.id, ...d.data() }).level >= 1).length
+      setCount(urgent)
+    })
+  }, [authUserId])
+  return count
+}
+
+export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
   const { state, actions } = useApp()
   const { currentUser, authUserId, userColors, globalData, allUsersData } = state
   const color = userColors[currentUser]
@@ -15,6 +32,7 @@ export default function Header({ isReadOnly, onOpenPsych }) {
   const avatar = authData?.profile?.avatar || (authUserId === 'flavio' ? '🔥' : '⭐')
 
   const displayName = currentUser === 'flavio' ? 'Flavio' : 'Simona'
+  const readingsBadge = useReadingsBadge(!isReadOnly ? authUserId : null)
 
   return (
     <div className="identity-bar">
@@ -62,6 +80,22 @@ export default function Header({ isReadOnly, onOpenPsych }) {
         {authUserId === 'flavio' && !isReadOnly && (
           <button className="icon-btn" onClick={() => actions.openModal('coach')} title="Coach AI">
             <span style={{ fontSize: 18 }}>🤖</span>
+          </button>
+        )}
+        {!isReadOnly && onOpenReadings && (
+          <button className="icon-btn" onClick={onOpenReadings} title="Letture" style={{ position: 'relative' }}>
+            <span style={{ fontSize: 18 }}>📚</span>
+            {readingsBadge > 0 && (
+              <span style={{
+                position: 'absolute', top: -2, right: -2,
+                minWidth: 16, height: 16, borderRadius: 8,
+                background: '#e53935', color: '#fff',
+                fontSize: '0.6em', fontWeight: 800, lineHeight: '16px',
+                textAlign: 'center', padding: '0 3px',
+              }}>
+                {readingsBadge}
+              </span>
+            )}
           </button>
         )}
         <button className="icon-btn" onClick={() => actions.openModal('weeklyView')} title="Dashboard Settimanale">

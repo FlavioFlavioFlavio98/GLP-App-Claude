@@ -9,7 +9,7 @@
     "build:web": "vite build --base=/GLP-App-Claude/",
     "build:android": "vite build --base=/",
     "preview": "vite preview",
-    "predeploy": "npm run build:web",
+    "predeploy": "npm run build:web && node scripts/stamp-sw.js",
     "deploy": "gh-pages -d dist",
     "cap:sync": "powershell -ExecutionPolicy Bypass -File fix-android.ps1"
   },

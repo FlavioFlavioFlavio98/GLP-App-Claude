@@ -1,12 +1,14 @@
 import { createContext, useContext, useEffect, useReducer, useRef } from 'react'
-import { db, auth, ALLOWED_EMAILS, EMAIL_TO_USER } from './firebase'
+import { db, auth, storage, ALLOWED_EMAILS, EMAIL_TO_USER } from './firebase'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { app } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   doc, onSnapshot, updateDoc, setDoc, getDoc, deleteDoc,
   arrayUnion, collection, getDocs, increment, runTransaction,
+  addDoc, serverTimestamp,
 } from 'firebase/firestore'
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, recalculateScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
@@ -1545,6 +1547,85 @@ export function AppProvider({ children }) {
       })
 
       actions.showToast(`Task completata! +${rewardNum}pt`, '✅')
+    },
+
+    // ── Readings ──────────────────────────────────────────────────────────────
+
+    async uploadReading(file, title, rewardPoints = 5) {
+      const { authUserId } = state
+      if (!authUserId) return
+      const realUid = auth.currentUser?.uid
+      if (!realUid) { actions.showToast('Utente non autenticato', '❌'); return }
+      const ts = Date.now()
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const path = `pdfs/${realUid}/${ts}_${safeName}`
+      const sRef = storageRef(storage, path)
+      await uploadBytes(sRef, file)
+      const fileUrl = await getDownloadURL(sRef)
+      await addDoc(collection(db, 'users', authUserId, 'readings'), {
+        title: title || file.name.replace(/\.pdf$/i, ''),
+        fileName: file.name,
+        fileUrl,
+        storagePath: path,
+        uploadedAt: serverTimestamp(),
+        rewardPoints,
+        lastReadAt: null,
+        totalReadCount: 0,
+      })
+      actions.showToast('PDF caricato!', '📚')
+    },
+
+    async completeReading(reading) {
+      const { authUserId } = state
+      if (!authUserId) return
+      const pts = reading.rewardPoints || 0
+      const now = new Date()
+      const dateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+      const readingRef = doc(db, 'users', authUserId, 'readings', reading.id)
+      // Log entry nella sotto-collezione
+      await addDoc(collection(db, 'users', authUserId, 'readings', reading.id, 'logs'), {
+        completedAt: serverTimestamp(),
+        pointsAwarded: pts,
+      })
+      // Aggiorna documento padre
+      await updateDoc(readingRef, {
+        lastReadAt: serverTimestamp(),
+        totalReadCount: increment(1),
+      })
+      // Aggiorna punteggio globale e guadagni del giorno
+      if (pts > 0) {
+        await updateDoc(doc(db, 'users', authUserId), {
+          score: increment(pts),
+          [`dailyLogs.${dateStr}.readingEarned`]: increment(pts),
+        })
+        actions._logHistory(authUserId, (state.allUsersData?.[authUserId]?.score || 0) + pts)
+      }
+      actions.vibrate('light')
+      actions.showToast(`Lettura completata! +${pts}pt`, '📖')
+    },
+
+    async deleteReading(reading) {
+      const { authUserId } = state
+      if (!authUserId) return
+      // Elimina da Storage
+      if (reading.storagePath) {
+        try {
+          await deleteObject(storageRef(storage, reading.storagePath))
+        } catch (e) {
+          // Ignora se già eliminato
+        }
+      }
+      // Elimina documento Firestore (le sotto-collezioni vanno eliminate lato console/Cloud Functions, accettabile)
+      await deleteDoc(doc(db, 'users', authUserId, 'readings', reading.id))
+      actions.showToast('PDF eliminato', '🗑️')
+    },
+
+    async updateReadingReward(readingId, newReward) {
+      const { authUserId } = state
+      if (!authUserId) return
+      await updateDoc(doc(db, 'users', authUserId, 'readings', readingId), {
+        rewardPoints: newReward,
+      })
     },
   }
 

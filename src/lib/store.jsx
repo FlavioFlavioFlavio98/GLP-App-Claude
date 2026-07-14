@@ -1167,6 +1167,32 @@ export function AppProvider({ children }) {
       actions.showToast('Task creata!', '📋')
     },
 
+    async addCompletedTask({ title, description, completedDate, reward, priority }) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const rewardNum = parseInt(reward) || 0
+      const newTask = {
+        id: `task_${Date.now().toString(36)}`,
+        title,
+        description: description || '',
+        deadline: completedDate,
+        reward: rewardNum,
+        penalty: 0,
+        priority: priority || 'medium',
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        completedAt: completedDate + 'T23:59:59.000Z',
+        expiredAt: null,
+        rewardApplied: true,
+        penaltyApplied: false,
+      }
+      const tasks = [...(globalData.tasks || []), newTask]
+      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(rewardNum) })
+      await actions._logHistory(authUserId, (globalData.score || 0) + rewardNum)
+      actions.vibrate('light')
+      actions.showToast(`Task già fatta registrata! +${rewardNum}pt`, '✅')
+    },
+
     async editTask(taskData) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state

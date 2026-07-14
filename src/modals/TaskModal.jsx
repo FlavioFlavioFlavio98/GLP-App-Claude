@@ -88,6 +88,7 @@ export default function TaskModal() {
   const [penalty, setPenalty] = useState(3)
   const [priority, setPriority] = useState('medium')
   const [saving, setSaving] = useState(false)
+  const [alreadyDone, setAlreadyDone] = useState(false)
 
   useEffect(() => {
     if (isEdit && editTask) {
@@ -101,16 +102,19 @@ export default function TaskModal() {
       setTitle(''); setDesc(''); setDeadline(tomorrow())
       setReward(5); setPenalty(3); setPriority('medium')
     }
+    setAlreadyDone(false)
     setSaving(false)
   }, [modal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSave() {
     if (!title.trim()) { actions.showToast('Inserisci un nome', '⚠️'); return }
-    if (!deadline) { actions.showToast('Seleziona una scadenza', '⚠️'); return }
+    if (!deadline) { actions.showToast('Seleziona una data', '⚠️'); return }
     if (reward < 0 || penalty < 0) { actions.showToast('I punti non possono essere negativi', '⚠️'); return }
     setSaving(true)
     if (isEdit) {
       await actions.editTask({ ...editTask, title: title.trim(), description: desc.trim(), deadline, reward, penalty, priority })
+    } else if (alreadyDone) {
+      await actions.addCompletedTask({ title: title.trim(), description: desc.trim(), completedDate: deadline, reward, priority })
     } else {
       await actions.addTask({ title: title.trim(), description: desc.trim(), deadline, reward, penalty, priority })
     }
@@ -137,6 +141,23 @@ export default function TaskModal() {
           {isEdit ? '✏️ Modifica Task' : '📋 Nuova Task'}
         </div>
 
+        {!isEdit && (
+          <button
+            onClick={() => setAlreadyDone(v => !v)}
+            style={{
+              width: '100%', padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
+              marginBottom: 16, textAlign: 'left',
+              border: `1px solid ${alreadyDone ? '#4caf50' : 'rgba(255,255,255,0.1)'}`,
+              background: alreadyDone ? 'rgba(76,175,80,0.12)' : 'rgba(255,255,255,0.04)',
+              color: alreadyDone ? '#4caf50' : '#888',
+              fontSize: '0.88em', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>{alreadyDone ? '✅' : '⬜'}</span>
+            Segna come già fatta
+          </button>
+        )}
+
         <div style={{ marginBottom: 14 }}>
           <div style={labelStyle}>NOME TASK *</div>
           <input
@@ -158,25 +179,28 @@ export default function TaskModal() {
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <div style={labelStyle}>DATA SCADENZA *</div>
+          <div style={labelStyle}>{alreadyDone ? 'DATA COMPLETAMENTO *' : 'DATA SCADENZA *'}</div>
           <input
             type="date" value={deadline}
             onChange={e => setDeadline(e.target.value)}
+            min={alreadyDone ? undefined : undefined}
             style={{ ...inputStyle, colorScheme: 'dark' }}
           />
         </div>
 
         <CoinPicker
-          label="🪙 COIN SE COMPLETI IN TEMPO *"
+          label="🪙 COIN GUADAGNATE *"
           value={reward}
           onChange={setReward}
         />
 
-        <CoinPicker
-          label="💀 COIN PERSE SE SCADE *"
-          value={penalty}
-          onChange={setPenalty}
-        />
+        {!alreadyDone && (
+          <CoinPicker
+            label="💀 COIN PERSE SE SCADE *"
+            value={penalty}
+            onChange={setPenalty}
+          />
+        )}
 
         <div style={{ marginBottom: 22 }}>
           <div style={labelStyle}>PRIORITÀ *</div>
@@ -218,7 +242,7 @@ export default function TaskModal() {
             className="btn-main"
             style={{ flex: 2, padding: 13, fontSize: '0.95em' }}
           >
-            {saving ? '⏳ Salvataggio...' : isEdit ? 'Salva modifiche' : 'Crea Task'}
+            {saving ? '⏳ Salvataggio...' : isEdit ? 'Salva modifiche' : alreadyDone ? '✅ Registra come completata' : 'Crea Task'}
           </button>
         </div>
       </div>

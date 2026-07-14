@@ -3,12 +3,13 @@ name: Deploy Web App to GitHub Pages
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # permette lancio manuale dalla UI GitHub
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
-# Evita deploy paralleli: annulla quello in corso se arriva un push più recente
 concurrency:
   group: gh-pages-deploy
   cancel-in-progress: true
@@ -18,8 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - uses: actions/setup-node@v4
         with:
@@ -37,3 +36,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
+          force_orphan: true

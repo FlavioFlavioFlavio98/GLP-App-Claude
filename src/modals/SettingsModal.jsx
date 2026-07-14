@@ -1,6 +1,31 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
 import { APP_VERSION, APP_UPDATED, APP_BUILD_TIME, APP_BUILD_HASH } from '../version'
+
+const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.()
+
+const DEFAULT_NOTIF_SETTINGS = {
+  habits:   { enabled: false, hour: 20, minute: 0 },
+  tasks:    { enabled: false, hour: 18, minute: 0 },
+  readings: { enabled: false, hour:  9, minute: 0 },
+}
+
+async function callNativeScheduler(settings) {
+  if (!IS_NATIVE) return
+  try {
+    const { NotificationPlugin } = window.Capacitor.Plugins
+    if (!NotificationPlugin) return
+    // Richiedi permesso al primo utilizzo
+    const perm = await NotificationPlugin.requestPermission()
+    if (perm?.status === 'denied') {
+      alert('Permesso notifiche negato. Abilitalo nelle impostazioni di sistema.')
+      return
+    }
+    await NotificationPlugin.scheduleAll({ settings })
+  } catch (e) {
+    console.warn('NotificationPlugin error:', e)
+  }
+}
 
 export default function SettingsModal() {
   const { state, actions } = useApp()
@@ -184,6 +209,9 @@ export default function SettingsModal() {
           </div>
         )}
 
+        {/* NOTIFICHE ANDROID */}
+        <NotificationSection globalData={state.globalData} authUserId={authUserId} actions={actions} />
+
         {/* MODALITÀ */}
         <div className="settings-section">
           <div className="settings-section-title">Modalità</div>
@@ -355,6 +383,126 @@ export default function SettingsModal() {
 
         <button className="btn-sec" onClick={() => actions.closeModal()}>Chiudi</button>
       </div>
+    </div>
+  )
+}
+
+// ─── Notifiche Android ────────────────────────────────────────────────────────
+
+function NotificationSection({ globalData, authUserId, actions }) {
+  const [settings, setSettings] = useState(DEFAULT_NOTIF_SETTINGS)
+  const [saving, setSaving] = useState(false)
+
+  // Carica impostazioni da globalData al mount
+  useEffect(() => {
+    const saved = globalData?.notificationSettings
+    if (saved) {
+      setSettings(prev => ({
+        habits:   { ...prev.habits,   ...saved.habits },
+        tasks:    { ...prev.tasks,    ...saved.tasks },
+        readings: { ...prev.readings, ...saved.readings },
+      }))
+    }
+  }, [globalData?.notificationSettings]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save(next) {
+    setSettings(next)
+    setSaving(true)
+    try {
+      // Salva su Firestore per backup/sync
+      await actions.saveNotificationSettings(next)
+      // Programma gli allarmi nativi
+      await callNativeScheduler(next)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function updateType(type, patch) {
+    save({ ...settings, [type]: { ...settings[type], ...patch } })
+  }
+
+  function timeToHM(timeStr) {
+    const [h, m] = (timeStr || '00:00').split(':').map(Number)
+    return { hour: h || 0, minute: m || 0 }
+  }
+
+  function hmToTime(hour, minute) {
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  }
+
+  const TYPES = [
+    { key: 'habits',   label: 'Abitudini non completate', icon: '💪', defaultTime: '20:00' },
+    { key: 'tasks',    label: 'Task in scadenza oggi',     icon: '📋', defaultTime: '18:00' },
+    { key: 'readings', label: 'Letture da ripassare',      icon: '📚', defaultTime: '09:00' },
+  ]
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">🔔 Notifiche Android</div>
+
+      {!IS_NATIVE && (
+        <div style={{
+          padding: '10px 12px', borderRadius: 10, fontSize: '0.78em',
+          background: 'rgba(255,255,255,0.04)', color: '#666',
+          border: '1px solid rgba(255,255,255,0.07)',
+        }}>
+          Disponibile solo sull'app Android
+        </div>
+      )}
+
+      {IS_NATIVE && TYPES.map(({ key, label, icon, defaultTime }) => {
+        const s = settings[key]
+        const timeVal = hmToTime(s.hour, s.minute) || defaultTime
+        return (
+          <div key={key} style={{
+            borderTop: '1px solid rgba(255,255,255,0.05)',
+            marginTop: 8, paddingTop: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>{icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.85em', fontWeight: 600 }}>{label}</div>
+              </div>
+              {/* Toggle */}
+              <button
+                onClick={() => updateType(key, { enabled: !s.enabled })}
+                style={{
+                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                  background: s.enabled ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)',
+                  position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: 3, transition: 'left 0.2s',
+                  left: s.enabled ? 23 : 3,
+                }} />
+              </button>
+            </div>
+            {s.enabled && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingLeft: 28 }}>
+                <span style={{ fontSize: '0.75em', color: '#666' }}>Orario:</span>
+                <input
+                  type="time"
+                  value={timeVal}
+                  onChange={e => {
+                    const { hour, minute } = timeToHM(e.target.value)
+                    updateType(key, { hour, minute })
+                  }}
+                  style={{
+                    padding: '4px 8px', borderRadius: 8, fontSize: '0.85em',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'rgba(255,255,255,0.06)', color: 'var(--text)',
+                    colorScheme: 'dark',
+                  }}
+                />
+                {saving && <span style={{ fontSize: '0.7em', color: '#666' }}>⏳</span>}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

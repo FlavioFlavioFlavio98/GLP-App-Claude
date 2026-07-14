@@ -138,6 +138,17 @@ export default function App() {
   useEffect(() => { applyTheme(theme); trackThemeUsed(theme) }, [theme])
   useEffect(() => { applyUserColors(userColors.flavio, userColors.simona) }, [userColors])
 
+  // Deep link da notifiche Android
+  useEffect(() => {
+    function handleOpenTab(e) {
+      const tab = e.detail
+      if (tab === 'readings') setShowReadings(true)
+      // habits e tasks sono già visibili nella schermata principale
+    }
+    window.addEventListener('glp_open_tab', handleOpenTab)
+    return () => window.removeEventListener('glp_open_tab', handleOpenTab)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Level-up detection
   useEffect(() => {
     if (!globalData || !authUserId) return

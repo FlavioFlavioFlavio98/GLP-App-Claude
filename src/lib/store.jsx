@@ -1193,6 +1193,12 @@ export function AppProvider({ children }) {
       actions.showToast(`Task già fatta registrata! +${rewardNum}pt`, '✅')
     },
 
+    async saveNotificationSettings(settings) {
+      if (isReadOnly()) return
+      const { authUserId } = state
+      await updateDoc(doc(db, 'users', authUserId), { notificationSettings: settings })
+    },
+
     async editTask(taskData) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state

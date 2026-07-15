@@ -530,6 +530,8 @@ export default function App() {
         </div>
       )}
 
+      <BuildInfo />
+
       {/* ── CONTENUTO TAB (scrollabile, con padding per bottom nav) ── */}
       <div style={{ paddingBottom: 68 }}>
 
@@ -660,6 +662,41 @@ export default function App() {
 }
 
 // ── Helper subcomponents ──────────────────────────────────────────────────────
+
+const MONTHS_IT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic']
+
+function formatBuildTime(raw) {
+  if (!raw) return null
+  // Expected: "2026-07-15 14:32 UTC"
+  const m = raw.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!m) return raw
+  return `${parseInt(m[3])} ${MONTHS_IT[parseInt(m[2]) - 1]} ${m[1]}, ${m[4]}:${m[5]}`
+}
+
+function BuildInfo() {
+  const webTime = formatBuildTime(typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : null)
+  const androidTime = formatBuildTime(typeof window !== 'undefined' ? window.__ANDROID_BUILD_TIME__ : null)
+  const isNative = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
+
+  if (!webTime) return null
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 1,
+      padding: '3px 8px 4px', marginBottom: 6,
+      opacity: 0.55, userSelect: 'text',
+    }}>
+      <span style={{ fontSize: '0.62em', color: 'var(--text-sec)', fontFamily: 'monospace' }}>
+        🌐 web {webTime}
+      </span>
+      {isNative && androidTime && (
+        <span style={{ fontSize: '0.62em', color: 'var(--text-sec)', fontFamily: 'monospace' }}>
+          📱 apk {androidTime}
+        </span>
+      )}
+    </div>
+  )
+}
 
 function DailySumRow({ label, value, color, bold }) {
   return (

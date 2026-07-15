@@ -73,9 +73,14 @@ function reducer(state, action) {
       return { ...state, modal: action.name, modalPayload: action.payload || null }
     case 'CLOSE_MODAL':
       return { ...state, modal: null, modalPayload: null }
-    case 'SET_THEME':
+    case 'SET_THEME': {
+      const DARK_IDS = ['dark', 'forest', 'volcano', 'midnight', 'aurora']
+      if (DARK_IDS.includes(action.theme)) {
+        localStorage.setItem('glp_last_dark_theme', action.theme)
+      }
       localStorage.setItem('glp_theme', action.theme)
-      return { ...state, theme: action.theme }
+      return { ...state, theme: action.theme, lastDarkTheme: DARK_IDS.includes(action.theme) ? action.theme : state.lastDarkTheme }
+    }
     case 'SET_USER_COLOR':
       localStorage.setItem(`glp_color_${action.user}`, action.color)
       return { ...state, userColors: { ...state.userColors, [action.user]: action.color } }
@@ -112,6 +117,7 @@ const initialState = {
   modal: null,
   modalPayload: null,
   theme: localStorage.getItem('glp_theme') || 'dark',
+  lastDarkTheme: localStorage.getItem('glp_last_dark_theme') || 'dark',
   userColors: {
     flavio: localStorage.getItem('glp_color_flavio') || '#ffca28',
     simona: localStorage.getItem('glp_color_simona') || '#d05ce3',
@@ -1429,6 +1435,23 @@ export function AppProvider({ children }) {
       )
       await updateDoc(doc(db, 'users', authUserId), { score: newScore })
       actions.showToast(`Punteggio ricalcolato: ${newScore}pt`, '✅')
+    },
+
+    // Completa una task scaduta: nessun reward, nessuna modifica allo score.
+    // La penalità è già stata applicata dalla Cloud Function — questa action serve solo
+    // per "chiudere" la task e rimuoverla dalla vista attiva.
+    async dismissExpiredTask(task) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const now = new Date().toISOString()
+      const tasks = (globalData.tasks || []).map(t =>
+        t.id === task.id
+          ? { ...t, status: 'completed', completedAt: now, rewardApplied: false }
+          : t
+      )
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      actions.vibrate('light')
+      actions.showToast('Task chiusa (completamento tardivo)', '✅')
     },
 
     async reopenTask(task, newDeadline) {

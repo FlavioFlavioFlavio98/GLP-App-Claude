@@ -31,17 +31,29 @@ export default function ThemeModal() {
 }
 
 function ThemeCard({ theme, active, onSelect }) {
+  const isLight = theme.id === 'light'
+  const previewBg = isLight
+    ? `linear-gradient(135deg, #e8eaf0, #ffffff)`
+    : `linear-gradient(135deg, ${theme.bg}, ${theme.cardSolid})`
+
   return (
     <div
       className={`theme-card${active ? ' active' : ''}`}
       style={{ background: theme.bg }}
       onClick={onSelect}
     >
-      <div className="theme-card-preview" style={{ background: `linear-gradient(135deg, ${theme.bg}, ${theme.cardSolid})` }}>
+      <div className="theme-card-preview" style={{ background: previewBg }}>
         <div className="theme-dot" style={{ background: theme.themeColor, boxShadow: `0 0 10px ${theme.themeGlow}` }} />
         <div className="theme-bar" style={{ background: `linear-gradient(90deg, ${theme.themeColor}, ${theme.accent2})`, opacity: 0.7 }} />
       </div>
-      <div className="theme-card-label" style={{ background: theme.cardSolid, color: active ? theme.themeColor : '#aaa' }}>
+      <div
+        className="theme-card-label"
+        style={{
+          background: isLight ? '#f5f5f7' : theme.cardSolid,
+          color: active ? theme.themeColor : (isLight ? '#888' : '#aaa'),
+          borderTop: isLight ? '1px solid rgba(0,0,0,0.08)' : undefined,
+        }}
+      >
         <span>{theme.name}</span>
         <span className="material-icons-round theme-check" style={{ fontSize: 16 }}>check_circle</span>
       </div>

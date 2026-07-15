@@ -22,7 +22,7 @@ function useReadingsBadge(authUserId) {
 
 export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
   const { state, actions } = useApp()
-  const { currentUser, authUserId, userColors, globalData, allUsersData } = state
+  const { currentUser, authUserId, userColors, globalData, allUsersData, theme, lastDarkTheme } = state
   const color = userColors[currentUser]
   const score = globalData?.score ?? 0
   const { displayVal: scoreDisplay, animClass: scoreAnim } = useCountUp(score)
@@ -100,6 +100,23 @@ export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
         )}
         <button className="icon-btn" onClick={() => actions.openModal('weeklyView')} title="Dashboard Settimanale">
           <span className="material-icons-round" style={{ fontSize: 20 }}>calendar_view_week</span>
+        </button>
+        {/* Day/Night toggle */}
+        <button
+          className="icon-btn"
+          title={theme === 'light' ? 'Modalità scura' : 'Modalità chiara'}
+          onClick={() => {
+            if (theme === 'light') {
+              actions.setTheme(lastDarkTheme || 'dark')
+            } else {
+              actions.setTheme('light')
+            }
+            actions.vibrate('light')
+          }}
+        >
+          <span className="material-icons-round" style={{ fontSize: 20 }}>
+            {theme === 'light' ? 'dark_mode' : 'light_mode'}
+          </span>
         </button>
         <button className="icon-btn" onClick={() => actions.openModal('settings')}>
           <span className="material-icons-round" style={{ fontSize: 20 }}>settings</span>

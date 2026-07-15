@@ -20,6 +20,9 @@
   --flavio-color: #ffca28;
   --simona-color: #d05ce3;
 
+  /* Glass shadow (overridden per theme) */
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+
   /* Design tokens */
   --radius-sm: 10px;
   --radius-md: 16px;
@@ -47,14 +50,35 @@ body {
   background-attachment: fixed;
 }
 
+/* ---- THEME TRANSITION ---- */
+.theme-transitioning,
+.theme-transitioning *,
+.theme-transitioning *::before,
+.theme-transitioning *::after {
+  transition:
+    background-color 260ms ease,
+    background 260ms ease,
+    color 260ms ease,
+    border-color 260ms ease,
+    box-shadow 260ms ease !important;
+}
+
 /* ---- GLASS MIXIN (applied via class or direct) ---- */
 .glass {
   background: var(--card);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--card-border);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255,255,255,0.04) inset;
+  box-shadow: var(--glass-shadow), 0 1px 0 rgba(255,255,255,0.04) inset;
 }
+
+/* Light theme overrides */
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse 60% 40% at 80% 10%, var(--theme-glow), transparent),
+    radial-gradient(ellipse 40% 30% at 10% 80%, rgba(0,0,0,0.02), transparent);
+}
+[data-theme="light"] .offline-badge { display: none; }
 
 /* =============================================
    ANIMATIONS

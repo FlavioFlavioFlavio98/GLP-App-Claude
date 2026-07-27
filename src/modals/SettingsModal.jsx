@@ -72,36 +72,10 @@ export default function SettingsModal() {
       <div className="modal-box">
         <h3>⚙️ Impostazioni</h3>
 
-        {/* UTENTE ATTIVO */}
-        <div className="settings-section">
-          <div className="settings-section-title">Utente attivo</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {['flavio', 'simona'].map(u => (
-              <button
-                key={u}
-                onClick={() => actions.switchUser(u)}
-                style={{
-                  flex: 1, padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
-                  background: currentUser === u ? `${userColors[u]}22` : 'rgba(255,255,255,0.04)',
-                  border: `2px solid ${currentUser === u ? userColors[u] : 'rgba(255,255,255,0.08)'}`,
-                  color: currentUser === u ? userColors[u] : '#666',
-                  fontWeight: currentUser === u ? 700 : 400,
-                  transition: 'all 0.2s',
-                }}
-              >
-                <div style={{ fontSize: '1.3em', marginBottom: 2 }}>{u === 'flavio' ? '🔥' : '⭐'}</div>
-                <div style={{ fontSize: '0.82em' }}>{u === 'flavio' ? 'Flavio' : 'Simona'}</div>
-                <div style={{ fontSize: '0.68em', opacity: 0.7 }}>{allUsersData[u]?.score ?? '--'} pt</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* PROFILO */}
         <div className="settings-section">
           <div className="settings-section-title">Profilo Utente</div>
           <UserColorRow name="Flavio" color={userColors.flavio} onChange={c => actions.setUserColor('flavio', c)} />
-          <UserColorRow name="Simona" color={userColors.simona} onChange={c => actions.setUserColor('simona', c)} />
           {/* Avatar button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 6 }}>
             <div style={{ fontSize: '2em', width: 40, textAlign: 'center' }}>
@@ -236,6 +210,10 @@ export default function SettingsModal() {
         {/* STORICO */}
         <div className="settings-section">
           <div className="settings-section-title">Storico & Diari</div>
+          <button className="btn-backup" onClick={() => openAfter('weeklyView')}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>calendar_view_week</span>
+            Dashboard Settimanale
+          </button>
           <button className="btn-backup" onClick={() => openAfter('purchaseHistory')}>
             <span style={{ fontSize: '1em' }}>🛍️</span>
             Storico acquisti

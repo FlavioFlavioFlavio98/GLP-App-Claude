@@ -12,20 +12,14 @@ const PERIODS = [
 
 export default function PurchaseHistoryView() {
   const { state, actions } = useApp()
-  const { modal, allUsersData, currentUser } = state
-  const [userFilter, setUserFilter] = useState('both')
+  const { modal, allUsersData } = state
   const [period, setPeriod] = useState('30')
   const [expanded, setExpanded] = useState(null)
 
   if (modal !== 'purchaseHistory') return null
 
   // Gather purchases
-  const flavioPurchases = getAllPurchases(allUsersData.flavio).map(p => ({ ...p, user: 'flavio' }))
-  const simonaPurchases = getAllPurchases(allUsersData.simona).map(p => ({ ...p, user: 'simona' }))
-  let all = [...flavioPurchases, ...simonaPurchases].sort((a, b) => b.dateStr.localeCompare(a.dateStr) || b.time - a.time)
-
-  // Filter by user
-  if (userFilter !== 'both') all = all.filter(p => p.user === userFilter)
+  let all = getAllPurchases(allUsersData.flavio).sort((a, b) => b.dateStr.localeCompare(a.dateStr) || b.time - a.time)
 
   // Filter by period
   if (period !== 'all') {
@@ -36,9 +30,6 @@ export default function PurchaseHistoryView() {
   }
 
   const totalSpent = all.reduce((acc, p) => acc + p.cost, 0)
-
-  const flavioColor = '#ffca28'
-  const simonaColor = '#d05ce3'
 
   return (
     <div className="single-habit-view">
@@ -51,11 +42,6 @@ export default function PurchaseHistoryView() {
 
       <div className="single-habit-body">
         {/* Filters */}
-        <div className="switch-group" style={{ marginBottom: 12 }}>
-          <div className={`switch-opt${userFilter === 'both' ? ' active' : ''}`} onClick={() => setUserFilter('both')}>Entrambi</div>
-          <div className={`switch-opt${userFilter === 'flavio' ? ' active' : ''}`} onClick={() => setUserFilter('flavio')}>Flavio</div>
-          <div className={`switch-opt${userFilter === 'simona' ? ' active' : ''}`} onClick={() => setUserFilter('simona')}>Simona</div>
-        </div>
         <div className="switch-group" style={{ marginBottom: 20 }}>
           {PERIODS.map(p => (
             <div key={p.id} className={`switch-opt${period === p.id ? ' active' : ''}`} onClick={() => setPeriod(p.id)}>{p.label}</div>
@@ -73,23 +59,18 @@ export default function PurchaseHistoryView() {
               <div key={idx} style={{ marginBottom: 8 }}>
                 <div
                   className="item"
-                  style={{ cursor: 'pointer', borderLeftColor: p.user === 'flavio' ? flavioColor : simonaColor }}
+                  style={{ cursor: 'pointer', borderLeftColor: '#ffca28' }}
                   onClick={() => setExpanded(expanded === idx ? null : idx)}
                 >
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <h3 style={{ margin: 0 }}>{p.name}</h3>
-                      <span style={{ fontSize: '0.65em', color: p.user === 'flavio' ? flavioColor : simonaColor, background: `${p.user === 'flavio' ? flavioColor : simonaColor}22`, padding: '2px 6px', borderRadius: 20 }}>
-                        {p.user === 'flavio' ? 'Flavio' : 'Simona'}
-                      </span>
-                    </div>
+                    <h3 style={{ margin: 0 }}>{p.name}</h3>
                     <div style={{ fontSize: '0.75em', color: '#666', marginTop: 3 }}>{p.dateStr.split('-').reverse().join('/')}</div>
                   </div>
                   <span style={{ color: 'var(--danger)', fontWeight: 700 }}>-{p.cost}</span>
                 </div>
                 {expanded === idx && (
                   <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '0 0 12px 12px', padding: '8px 16px', fontSize: '0.82em', color: '#888', border: '1px solid rgba(255,255,255,0.06)', borderTop: 'none', marginTop: -2 }}>
-                    📅 Acquistato il {p.dateStr.split('-').reverse().join('/')} da {p.user === 'flavio' ? 'Flavio' : 'Simona'}
+                    📅 Acquistato il {p.dateStr.split('-').reverse().join('/')}
                     {p.time ? ` alle ${new Date(p.time).toLocaleTimeString('it', { hour: '2-digit', minute: '2-digit' })}` : ''}
                   </div>
                 )}

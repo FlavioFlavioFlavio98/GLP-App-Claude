@@ -19,15 +19,13 @@ export const auth = getAuth(app)
 export const googleProvider = new GoogleAuthProvider()
 export const storage = getStorage(app)
 
-// Whitelist: solo queste due email possono accedere
+// Whitelist: solo questa email può accedere
 export const ALLOWED_EMAILS = [
   'flavio.rossi94@gmail.com',
-  'simonaballini2000@gmail.com',
 ]
 
 export const EMAIL_TO_USER = {
   'flavio.rossi94@gmail.com': 'flavio',
-  'simonaballini2000@gmail.com': 'simona',
 }
 
 // FCM — lazy-initialized

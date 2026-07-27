@@ -176,15 +176,6 @@ export default function WeeklyView() {
           <span className="material-icons-round" style={{ fontSize: 28 }}>arrow_back</span>
         </button>
         <h1 style={{ margin: 0, fontSize: '1em', color: 'var(--theme-color)', flex: 1 }}>Dashboard Settimanale</h1>
-        <div className="switch-group" style={{ margin: 0, width: 'auto', background: 'transparent', border: 'none', padding: 0, gap: 4 }}>
-          {['flavio', 'simona'].map(u => (
-            <button key={u}
-              onClick={() => setWeeklyUser(u)}
-              style={{ background: weeklyUser === u ? 'var(--theme-glow)' : 'rgba(255,255,255,0.05)', border: `1px solid ${weeklyUser === u ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)'}`, color: weeklyUser === u ? 'var(--theme-color)' : '#888', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: '0.75em', fontWeight: 600 }}>
-              {u === 'flavio' ? 'F' : 'S'}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Week navigator */}

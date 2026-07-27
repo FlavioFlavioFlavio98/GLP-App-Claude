@@ -16,7 +16,7 @@ import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
 
-const USERS = ['flavio', 'simona']
+const USERS = ['flavio']
 
 const MISSION_POOL = [
   { id: 'complete_5_habits', title: 'Completa 5 abitudini', pts: 5, target: 5, type: 'habits_count' },
@@ -111,7 +111,7 @@ const initialState = {
   currentUser: 'flavio',  // kept for backwards compat with all actions (= viewUserId)
   pendingAchievements: [],
   globalData: null,
-  allUsersData: { flavio: null, simona: null },
+  allUsersData: { flavio: null },
   viewDate: toDateString(new Date()),
   toast: null,
   modal: null,
@@ -120,7 +120,6 @@ const initialState = {
   lastDarkTheme: localStorage.getItem('glp_last_dark_theme') || 'dark',
   userColors: {
     flavio: localStorage.getItem('glp_color_flavio') || '#ffca28',
-    simona: localStorage.getItem('glp_color_simona') || '#d05ce3',
   },
   density: localStorage.getItem('glp_density') || 'normal',
   minimalMode: localStorage.getItem('glp_minimal_mode') === 'true',
@@ -210,17 +209,6 @@ export function AppProvider({ children }) {
     },
     restoreOwnUser() {
       dispatch({ type: 'RESTORE_OWN_USER' })
-    },
-
-    // ── Backwards-compat: switch currentUser was used by ScoreBoard ──
-    switchUser(u) {
-      if (u === state.currentUser) return
-      if (u === state.authUserId) {
-        actions.restoreOwnUser()
-      } else {
-        actions.switchToViewUser(u)
-      }
-      actions.vibrate('light')
     },
 
     setTheme(themeId) { dispatch({ type: 'SET_THEME', theme: themeId }) },
@@ -1008,7 +996,7 @@ export function AppProvider({ children }) {
         const JSZipModule = await import('jszip')
         const JSZip = JSZipModule.default || JSZipModule
         const zip = new JSZip()
-        const users = ['flavio', 'simona']
+        const users = ['flavio']
         const today = toDateString(new Date())
 
         function inRange(dateStr) {

@@ -106,8 +106,7 @@ export function applyTheme(themeId) {
   r.setAttribute('data-theme', themeId === 'light' ? 'light' : 'dark')
 }
 
-export function applyUserColors(flavioColor, simonaColor) {
+export function applyUserColors(flavioColor) {
   const r = document.documentElement
   r.style.setProperty('--flavio-color', flavioColor)
-  r.style.setProperty('--simona-color', simonaColor)
 }

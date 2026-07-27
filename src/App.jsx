@@ -8,7 +8,6 @@ import { TIME_SLOT_OPTS } from './lib/timeSlots'
 import Header from './components/Header'
 import ReadingsPage from './modals/ReadingsPage'
 import ProgressCircle from './components/ProgressCircle'
-import ScoreBoard from './components/ScoreBoard'
 import DateNav from './components/DateNav'
 import SortableHabitList from './components/SortableHabitList'
 import ReminderBanner from './components/ReminderBanner'
@@ -56,12 +55,9 @@ import ExerciseStatsModal from './modals/ExerciseStatsModal'
 import ExerciseSingleView from './modals/ExerciseSingleView'
 import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
-import HealthPage from './modals/HealthPage'
 import PsychSessionsPage from './modals/PsychSessionsPage'
 import AppUsageModal from './modals/AppUsageModal'
-import DailyInsightCard from './components/DailyInsightCard'
 import DailySummaryPanel from './components/DailySummaryPanel'
-import QuoteCard from './components/QuoteCard'
 import { trackAppOpen } from './lib/trackAppOpen'
 import TaskSection from './components/TaskSection'
 import TaskModal from './modals/TaskModal'
@@ -136,7 +132,7 @@ export default function App() {
 
   // Apply theme CSS vars + track for Versatile achievement
   useEffect(() => { applyTheme(theme); trackThemeUsed(theme) }, [theme])
-  useEffect(() => { applyUserColors(userColors.flavio, userColors.simona) }, [userColors])
+  useEffect(() => { applyUserColors(userColors.flavio) }, [userColors])
 
   // Deep link da notifiche Android
   useEffect(() => {
@@ -435,18 +431,6 @@ export default function App() {
       <WeeklyRecapCheck globalData={isReadOnly ? null : globalData} actions={actions} authUserId={authUserId} />
 
       {/* ── HEADER FISSO (sempre visibile su tutte le tab) ── */}
-      {isReadOnly && (
-        <div style={{ background: 'rgba(239,159,39,0.15)', border: '1px solid rgba(239,159,39,0.4)', borderRadius: 10, padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span>👁</span>
-          <span style={{ flex: 1, fontSize: '0.82em', color: '#EF9F27' }}>
-            Stai visualizzando i dati di <strong>{currentUser === 'flavio' ? 'Flavio' : 'Simona'}</strong> — sola lettura
-          </span>
-          <button onClick={() => actions.restoreOwnUser()} style={{ background: '#EF9F27', color: '#000', border: 'none', borderRadius: 8, padding: '5px 12px', fontWeight: 700, cursor: 'pointer', fontSize: '0.78em' }}>
-            Torna ai miei dati
-          </button>
-        </div>
-      )}
-
       <Header
         isReadOnly={isReadOnly}
         onOpenPsych={authUserId === 'flavio' && !isReadOnly ? () => setShowPsychPage(true) : undefined}
@@ -594,7 +578,6 @@ export default function App() {
       {authUserId === 'flavio' && <ExerciseSingleView />}
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
-      {authUserId === 'flavio' && <HealthPage />}
       {authUserId === 'flavio' && !isReadOnly && showPsychPage && (
         <PsychSessionsPage onClose={() => setShowPsychPage(false)} />
       )}

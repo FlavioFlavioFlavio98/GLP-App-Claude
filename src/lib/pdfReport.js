@@ -127,7 +127,7 @@ export async function generatePdfReport({ userData, currentUser, themeId, year, 
 
   const theme = THEMES[themeId] || THEMES.dark
   const accent = theme.themeColor
-  const userName = currentUser === 'flavio' ? 'Flavio' : 'Simona'
+  const userName = 'Flavio'
   const monthLabel = MONTH_NAMES_IT[month]
   const data = buildMonthData(userData, year, month)
   const tagsMap = {}

@@ -13,9 +13,9 @@ export default function AnalyticsModal() {
 
   useEffect(() => {
     if (modal !== 'analytics') return
-    if (!allUsersData.flavio || !allUsersData.simona) return
+    if (!allUsersData.flavio) return
     buildChart(days)
-  }, [modal, days, allUsersData.flavio, allUsersData.simona])
+  }, [modal, days, allUsersData.flavio])
 
   function buildChart(d) {
     const labels = [], dates = []
@@ -25,7 +25,6 @@ export default function AnalyticsModal() {
       labels.push(`${dt.getDate()}/${dt.getMonth() + 1}`)
     }
     const fPoints = dates.map(dt => getDailyNet(allUsersData.flavio, dt))
-    const sPoints = dates.map(dt => getDailyNet(allUsersData.simona, dt))
 
     if (chartRef.current) chartRef.current.destroy()
     chartRef.current = new Chart(canvasRef.current, {
@@ -34,7 +33,6 @@ export default function AnalyticsModal() {
         labels,
         datasets: [
           { label: 'Flavio', data: fPoints, borderColor: '#ffca28', backgroundColor: 'rgba(255,202,40,0.1)', borderWidth: 2, pointRadius: 5 },
-          { label: 'Simona', data: sPoints, borderColor: '#d05ce3', backgroundColor: 'rgba(208,92,227,0.1)', borderWidth: 2, pointRadius: 5 },
         ],
       },
       options: {
@@ -44,7 +42,7 @@ export default function AnalyticsModal() {
         onClick: (e, elements) => {
           if (elements.length > 0) {
             const idx = elements[0].index
-            setNodeInfo({ date: labels[idx] + '/' + new Date().getFullYear(), fVal: fPoints[idx], sVal: sPoints[idx] })
+            setNodeInfo({ date: labels[idx] + '/' + new Date().getFullYear(), fVal: fPoints[idx] })
           }
         },
       },
@@ -73,11 +71,7 @@ export default function AnalyticsModal() {
             <div className="node-info-row">
               <strong>{nodeInfo.date}</strong>
               <div>
-                <span style={{ color: '#ffca28' }}>F </span>
-                <span>{nodeInfo.fVal > 0 ? '+' : ''}{nodeInfo.fVal}</span>
-                {' | '}
-                <span style={{ color: '#d05ce3' }}>S </span>
-                <span>{nodeInfo.sVal > 0 ? '+' : ''}{nodeInfo.sVal}</span>
+                <span style={{ color: '#ffca28' }}>{nodeInfo.fVal > 0 ? '+' : ''}{nodeInfo.fVal}</span>
               </div>
             </div>
           </div>

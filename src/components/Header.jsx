@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../lib/store'
-import LevelBar from './LevelBar'
 import { useCountUp } from '../hooks/useCountUp'
 import { trackEvent } from '../lib/achievementLogic'
 import { db } from '../lib/firebase'
@@ -31,7 +30,6 @@ export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
   const authData = allUsersData[authUserId]
   const avatar = authData?.profile?.avatar || (authUserId === 'flavio' ? '🔥' : '⭐')
 
-  const displayName = currentUser === 'flavio' ? 'Flavio' : 'Simona'
   const readingsBadge = useReadingsBadge(!isReadOnly ? authUserId : null)
 
   return (
@@ -53,23 +51,12 @@ export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
           {avatar}
         </div>
         <div>
-          <div className="username" style={{ color }}>
-            {displayName}
-            {' '}
-            <span className={scoreAnim} style={{ fontSize: '0.75em', fontWeight: 800, opacity: 0.9 }}>
-              {scoreDisplay} pt
-            </span>
-          </div>
-          <LevelBar score={score} />
+          <span className={scoreAnim} style={{ color, fontSize: '1.1em', fontWeight: 800 }}>
+            {scoreDisplay} pt
+          </span>
         </div>
       </div>
       <div className="header-actions">
-        {/* Salute — solo Flavio */}
-        {authUserId === 'flavio' && !isReadOnly && (
-          <button className="icon-btn" onClick={() => actions.openModal('health')} title="Salute">
-            <span style={{ fontSize: 18 }}>❤️</span>
-          </button>
-        )}
         {/* Psicologo AI — solo Flavio, solo non read-only */}
         {authUserId === 'flavio' && !isReadOnly && onOpenPsych && (
           <button className="icon-btn" onClick={onOpenPsych} title="Psicologo AI">
@@ -98,9 +85,6 @@ export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
             )}
           </button>
         )}
-        <button className="icon-btn" onClick={() => actions.openModal('weeklyView')} title="Dashboard Settimanale">
-          <span className="material-icons-round" style={{ fontSize: 20 }}>calendar_view_week</span>
-        </button>
         {/* Day/Night toggle */}
         <button
           className="icon-btn"

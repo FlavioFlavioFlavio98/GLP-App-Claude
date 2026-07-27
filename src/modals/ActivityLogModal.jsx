@@ -37,23 +37,15 @@ function groupByDay(entries) {
 
 export default function ActivityLogModal() {
   const { state, actions } = useApp()
-  const { modal, globalData, allUsersData, currentUser } = state
+  const { modal, allUsersData } = state
 
-  const [userFilter, setUserFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
 
   if (modal !== 'activityLog') return null
 
-  // Merge logs from both users
-  const allLogs = []
-  ;['flavio', 'simona'].forEach(u => {
-    const log = allUsersData[u]?.activityLog || []
-    allLogs.push(...log)
-  })
-  allLogs.sort((a, b) => b.timestamp - a.timestamp)
+  const allLogs = [...(allUsersData.flavio?.activityLog || [])].sort((a, b) => b.timestamp - a.timestamp)
 
   const filtered = allLogs.filter(e => {
-    if (userFilter !== 'all' && e.user !== userFilter) return false
     if (typeFilter !== 'all' && !TYPE_GROUPS[typeFilter]?.includes(e.type)) return false
     return true
   })
@@ -63,11 +55,7 @@ export default function ActivityLogModal() {
 
   async function clearLog() {
     if (!window.confirm('Cancellare tutto lo storico?')) return
-    // Clear for both users if viewing all, or just current user
-    const usersToClean = userFilter === 'all' ? ['flavio', 'simona'] : [userFilter]
-    for (const u of usersToClean) {
-      await actions.clearActivityLog(u)
-    }
+    await actions.clearActivityLog('flavio')
   }
 
   return (
@@ -82,19 +70,8 @@ export default function ActivityLogModal() {
 
         {/* Filters */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-          {/* User filter */}
-          <div className="switch-group" style={{ flex: 1, minWidth: 160 }}>
-            {[['all', 'Tutti'], ['flavio', 'F'], ['simona', 'S']].map(([v, l]) => (
-              <div key={v} className={`switch-opt${userFilter === v ? ' active' : ''}`}
-                onClick={() => setUserFilter(v)}>
-                {v === 'flavio' ? <span style={{ color: 'var(--flavio-color)' }}>F</span>
-                  : v === 'simona' ? <span style={{ color: 'var(--simona-color)' }}>S</span>
-                  : l}
-              </div>
-            ))}
-          </div>
           {/* Type filter */}
-          <div className="switch-group" style={{ flex: 2, minWidth: 220 }}>
+          <div className="switch-group" style={{ flex: 1, minWidth: 220 }}>
             {[['all', 'Tutto'], ['habits', 'Abitudini'], ['rewards', 'Premi'], ['settings', 'Impost.']].map(([v, l]) => (
               <div key={v} className={`switch-opt${typeFilter === v ? ' active' : ''}`}
                 onClick={() => setTypeFilter(v)}>{l}</div>
@@ -120,14 +97,6 @@ export default function ActivityLogModal() {
                   display: 'flex', alignItems: 'flex-start', gap: 10,
                   padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
                 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                    background: entry.user === 'flavio' ? 'var(--flavio-color)' : 'var(--simona-color)',
-                    color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '0.72em', fontWeight: 700,
-                  }}>
-                    {entry.user === 'flavio' ? 'F' : 'S'}
-                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontSize: '0.85em' }}>{TYPE_ICONS[entry.type] || '•'}</span>

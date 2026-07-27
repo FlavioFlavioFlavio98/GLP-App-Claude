@@ -33,11 +33,9 @@ function StatsPageInner({ allUsersData, currentUser, onClose }) {
   const { actions } = useApp()
   const [section, setSection] = useState('comparison')
   const userData = allUsersData[currentUser]
-  const otherUser = currentUser === 'flavio' ? 'simona' : 'flavio'
-  const otherData = allUsersData[otherUser]
 
   const sections = [
-    { id: 'comparison', icon: 'show_chart', label: 'Confronto' },
+    { id: 'comparison', icon: 'show_chart', label: 'Andamento' },
     { id: 'categories', icon: 'category', label: 'Categorie' },
     { id: 'weekly', icon: 'bar_chart', label: 'Settimane' },
     { id: 'records', icon: 'emoji_events', label: 'Record' },
@@ -110,7 +108,6 @@ function ComparisonSection({ allUsersData, currentUser }) {
   useEffect(() => {
     if (!canvasRef.current) return
     const fData = buildDailyNets(allUsersData.flavio, days)
-    const sData = buildDailyNets(allUsersData.simona, days)
     const labels = fData.map(d => d.label)
 
     if (chartRef.current) chartRef.current.destroy()
@@ -120,7 +117,6 @@ function ComparisonSection({ allUsersData, currentUser }) {
         labels,
         datasets: [
           { label: 'Flavio', data: fData.map(d => d.net), borderColor: '#ffca28', backgroundColor: 'rgba(255,202,40,0.08)', fill: true, tension: 0.3, pointRadius: days > 30 ? 2 : 4, borderWidth: 2 },
-          { label: 'Simona', data: sData.map(d => d.net), borderColor: '#d05ce3', backgroundColor: 'rgba(208,92,227,0.08)', fill: true, tension: 0.3, pointRadius: days > 30 ? 2 : 4, borderWidth: 2 },
         ],
       },
       options: {
@@ -134,27 +130,22 @@ function ComparisonSection({ allUsersData, currentUser }) {
       },
     })
     return () => { if (chartRef.current) chartRef.current.destroy() }
-  }, [days, allUsersData.flavio, allUsersData.simona])
+  }, [days, allUsersData.flavio])
 
   // Aggregates
   const fNets = buildDailyNets(allUsersData.flavio, days)
-  const sNets = buildDailyNets(allUsersData.simona, days)
   const fAvg = fNets.length ? (fNets.reduce((a, d) => a + d.net, 0) / fNets.length).toFixed(1) : 0
-  const sAvg = sNets.length ? (sNets.reduce((a, d) => a + d.net, 0) / sNets.length).toFixed(1) : 0
 
   return (
     <>
-      <SectionTitle>Flavio vs Simona</SectionTitle>
+      <SectionTitle>Andamento Punti</SectionTitle>
       <div className="switch-group" style={{ marginBottom: 12 }}>
         {[30, 60, 90].map(d => (
           <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>
         ))}
       </div>
       <div style={{ height: 200, marginBottom: 16, position: 'relative' }}><canvas ref={canvasRef} /></div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <StatCard color="#ffca28" label="Media Flavio" value={`${fAvg > 0 ? '+' : ''}${fAvg}`} />
-        <StatCard color="#d05ce3" label="Media Simona" value={`${sAvg > 0 ? '+' : ''}${sAvg}`} />
-      </div>
+      <StatCard color="#ffca28" label="Media Netto" value={`${fAvg > 0 ? '+' : ''}${fAvg}`} />
     </>
   )
 }
@@ -188,7 +179,7 @@ function TagSection({ allUsersData, currentUser }) {
       },
     })
     return () => { if (chartRef.current) chartRef.current.destroy() }
-  }, [user, allUsersData.flavio, allUsersData.simona])
+  }, [user, allUsersData.flavio])
 
   const scores = buildTagScores(userData)
   const total = Object.values(scores).reduce((a, b) => a + b, 0)
@@ -199,10 +190,6 @@ function TagSection({ allUsersData, currentUser }) {
   return (
     <>
       <SectionTitle>Punti per Categoria</SectionTitle>
-      <div className="switch-group" style={{ marginBottom: 12 }}>
-        <div className={`switch-opt${user === 'flavio' ? ' active' : ''}`} onClick={() => setUser('flavio')}>Flavio</div>
-        <div className={`switch-opt${user === 'simona' ? ' active' : ''}`} onClick={() => setUser('simona')}>Simona</div>
-      </div>
       <div style={{ height: 200, marginBottom: 16, position: 'relative' }}><canvas ref={canvasRef} /></div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {sortedTags.map(({ tId, pts, label, color }) => (
@@ -903,10 +890,6 @@ function MoodSection({ allUsersData, currentUser }) {
   return (
     <>
       <SectionTitle>Mood nel Tempo</SectionTitle>
-      <div className="switch-group" style={{ marginBottom: 10 }}>
-        <div className={`switch-opt${user === 'flavio' ? ' active' : ''}`} onClick={() => setUser('flavio')}>Flavio</div>
-        <div className={`switch-opt${user === 'simona' ? ' active' : ''}`} onClick={() => setUser('simona')}>Simona</div>
-      </div>
       <div className="switch-group" style={{ marginBottom: 12 }}>
         {[14, 30, 60].map(d => (
           <div key={d} className={`switch-opt${days === d ? ' active' : ''}`} onClick={() => setDays(d)}>{d} GG</div>

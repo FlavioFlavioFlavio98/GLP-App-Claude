@@ -2,57 +2,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: mappa userId → email autorizzata
-    function getUserEmail(userId) {
-      return userId == 'flavio'
-        ? 'flavio.rossi94@gmail.com'
-        : 'simonaballini2000@gmail.com';
-    }
-
-    // Helper: l'utente autenticato è nella whitelist
+    // Solo Flavio può accedere
     function isAllowedUser() {
       return request.auth != null &&
-             request.auth.token.email in [
-               'flavio.rossi94@gmail.com',
-               'simonaballini2000@gmail.com'
-             ];
+             request.auth.token.email == 'flavio.rossi94@gmail.com';
     }
 
-    // Documenti utente: lettura per entrambi (per statistiche comparative)
-    // scrittura solo per il proprietario
+    // Documenti utente
     match /users/{userId} {
-      allow read: if isAllowedUser();
-      allow write: if request.auth != null &&
-                      request.auth.token.email == getUserEmail(userId);
+      allow read, write: if isAllowedUser();
 
       // Sottocollezione settings: stesse regole del documento padre
       match /settings/{doc} {
-        allow read: if isAllowedUser();
-        allow write: if request.auth != null &&
-                        request.auth.token.email == getUserEmail(userId);
+        allow read, write: if isAllowedUser();
       }
 
-      // FCM tokens: solo il proprietario
+      // FCM tokens
       match /fcmTokens/{tokenId} {
-        allow read, write: if request.auth != null &&
-                              request.auth.token.email == getUserEmail(userId);
+        allow read, write: if isAllowedUser();
       }
 
-      // Dati privati (es. peso): solo il proprietario può leggere e scrivere
+      // Dati privati (es. peso)
       match /private/{doc} {
-        allow read, write: if request.auth != null &&
-                              request.auth.token.email == getUserEmail(userId);
+        allow read, write: if isAllowedUser();
       }
 
-      // Letture (PDF personali): solo il proprietario
+      // Letture (PDF personali)
       match /readings/{readingId} {
-        allow read, write: if request.auth != null &&
-                              request.auth.token.email == getUserEmail(userId);
+        allow read, write: if isAllowedUser();
 
         // Log singole letture completate
         match /logs/{logId} {
-          allow read, write: if request.auth != null &&
-                                request.auth.token.email == getUserEmail(userId);
+          allow read, write: if isAllowedUser();
         }
       }
     }

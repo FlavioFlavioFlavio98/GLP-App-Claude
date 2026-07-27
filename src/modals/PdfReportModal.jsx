@@ -40,7 +40,7 @@ export default function PdfReportModal() {
       <div className="modal-box" style={{ textAlign: 'center' }}>
         <h3>📄 Esporta Report PDF</h3>
         <p style={{ fontSize: '0.85em', color: '#888', marginBottom: 20 }}>
-          Genera un report mensile completo per {currentUser === 'flavio' ? 'Flavio' : 'Simona'}
+          Genera un report mensile completo
         </p>
 
         <div className="grid-2">

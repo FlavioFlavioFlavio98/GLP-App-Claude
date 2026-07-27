@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from './lib/store'
-import { parseEntry, getItemValueAtDate, isHabitVisible, toDateString, calcNumericPoints, countPerfectDays } from './lib/habitLogic'
+import { parseEntry, getItemValueAtDate, isHabitVisible, toDateString, calcNumericPoints } from './lib/habitLogic'
 import { applyTheme, applyUserColors } from './lib/themes'
 import { getLevel } from './lib/levels'
 import { TIME_SLOT_OPTS } from './lib/timeSlots'
@@ -19,7 +19,6 @@ import ShopList from './components/ShopList'
 import Toast from './components/Toast'
 import SplashScreen from './components/SplashScreen'
 import LoginScreen from './components/LoginScreen'
-import AnimatedNumber from './components/AnimatedNumber'
 import TrendRow from './components/TrendRow'
 import GoalSection from './components/GoalSection'
 import HabitSearch from './components/HabitSearch'
@@ -61,7 +60,7 @@ import HealthPage from './modals/HealthPage'
 import PsychSessionsPage from './modals/PsychSessionsPage'
 import AppUsageModal from './modals/AppUsageModal'
 import DailyInsightCard from './components/DailyInsightCard'
-import ScoreSparkline from './components/ScoreSparkline'
+import DailySummaryPanel from './components/DailySummaryPanel'
 import QuoteCard from './components/QuoteCard'
 import { trackAppOpen } from './lib/trackAppOpen'
 import TaskSection from './components/TaskSection'
@@ -468,70 +467,23 @@ export default function App() {
 
       <DateNav />
 
-      {/* ── CARD GUADAGNI/COSTI/NETTO (sempre visibile su tutte le tab) ── */}
-      {authUserId === 'flavio' ? (
-        <div style={{ margin: '8px 0' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
-            <div style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#4caf50', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>💚 Guadagni</div>
-              {totalHabitPoints > 0 && <DailySumRow label="Abitudini" value={`+${totalHabitPoints}`} color="#4caf50" />}
-              {taskPts > 0 && <DailySumRow label="Task 📋" value={`+${taskPts}`} color="#4caf50" />}
-              {extraPts > 0 && <DailySumRow label="Extra 💪" value={`+${extraPts}`} color="#4caf50" />}
-              {checkInPts > 0 && <DailySumRow label="Check-in ✅" value={`+${checkInPts}`} color="#4caf50" />}
-              {readingPts > 0 && <DailySumRow label="Letture 📚" value={`+${readingPts}`} color="#4caf50" />}
-              {(totalHabitPoints + taskPts + extraPts + checkInPts + readingPts) === 0 && <div style={{ fontSize: '0.7em', color: '#444', fontStyle: 'italic' }}>Nessun guadagno</div>}
-              <div style={{ borderTop: '1px solid rgba(76,175,80,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`+${totalHabitPoints + taskPts + extraPts + checkInPts + readingPts}`} color="#4caf50" bold />
-              </div>
-            </div>
-            <div style={{ background: 'rgba(229,57,53,0.08)', border: '1px solid rgba(229,57,53,0.2)', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: '0.62em', fontWeight: 700, color: '#e53935', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>🔴 Costi</div>
-              {purchaseCost > 0 && <DailySumRow label="Premi" value={`-${purchaseCost}`} color="#e53935" />}
-              {penaltyCost > 0 && <DailySumRow label="Penalità" value={`-${penaltyCost}`} color="#e53935" />}
-              <DailySumRow label="Task scad." value={`-${expiredTaskCost}`} color={expiredTaskCost > 0 ? '#e53935' : '#3a3a3a'} />
-              {trackedItems.filter(ti => ti.cost > 0).map(ti => (
-                <DailySumRow key={ti.id} label={ti.name} value={`-${ti.cost}`} color="#e53935" />
-              ))}
-              <div style={{ borderTop: '1px solid rgba(229,57,53,0.2)', marginTop: 4, paddingTop: 4 }}>
-                <DailySumRow label="Totale" value={`-${dailySpent + expiredTaskCost}`} color="#e53935" bold />
-              </div>
-            </div>
-          </div>
-          <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-            <div style={{ fontSize: '0.58em', color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 2 }}>NETTO OGGI</div>
-            <span key={net} className="netto-animated" style={{ fontWeight: 800, fontSize: '2.2em', color: net < 0 ? '#e53935' : net === 0 ? '#EF9F27' : '#4caf50' }}>
-              {net > 0 ? '+' : ''}{net}pt
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 4 }}>
-              <ScoreSparkline habits={globalData?.habits} rewards={globalData?.rewards} dailyLogs={globalData?.dailyLogs} />
-              {(() => { const pd = countPerfectDays(globalData?.habits, globalData?.dailyLogs); return pd > 0 ? <span style={{ fontSize: '0.72em', color: '#ffd700', fontWeight: 700 }}>⭐ {pd} giorni perfetti</span> : null })()}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="daily-summary">
-          <div className="sum-item">
-            <div className="sum-label">Abitudini</div>
-            <AnimatedNumber value={totalHabitPoints} className="sum-val sum-earn" prefix="+" />
-          </div>
-          {extraPts > 0 && (
-            <div className="sum-item">
-              <div className="sum-label">Extra 💪</div>
-              <AnimatedNumber value={extraPts} className="sum-val sum-earn" prefix="+" />
-            </div>
-          )}
-          <div className="sum-item">
-            <div className="sum-label">Spesi/Pen</div>
-            <AnimatedNumber value={dailySpent} className="sum-val sum-spent" prefix="-" />
-          </div>
-          <div className="sum-item">
-            <div className="sum-label">Netto</div>
-            <AnimatedNumber value={net} className={`sum-val ${net < 0 ? 'net-neg' : net < 10 ? 'net-warn' : 'net-pos'}`} prefix={net > 0 ? '+' : ''} />
-          </div>
-        </div>
-      )}
-
-      <BuildInfo />
+      {/* ── CARD GUADAGNI/COSTI/NETTO (sempre visibile su tutte le tab, comprimibile) ── */}
+      <DailySummaryPanel
+        authUserId={authUserId}
+        globalData={globalData}
+        totalHabitPoints={totalHabitPoints}
+        taskPts={taskPts}
+        extraPts={extraPts}
+        checkInPts={checkInPts}
+        readingPts={readingPts}
+        purchaseCost={purchaseCost}
+        penaltyCost={penaltyCost}
+        expiredTaskCost={expiredTaskCost}
+        trackedItems={trackedItems}
+        dailySpent={dailySpent}
+        net={net}
+        buildInfo={<BuildInfo />}
+      />
 
       {/* ── CONTENUTO TAB (scrollabile, con padding per bottom nav) ── */}
       <div style={{ paddingBottom: 68 }}>
@@ -696,15 +648,6 @@ function BuildInfo() {
           📱 apk {androidTime}
         </span>
       )}
-    </div>
-  )
-}
-
-function DailySumRow({ label, value, color, bold }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-      <span style={{ fontSize: '0.72em', color: '#888' }}>{label}</span>
-      <span style={{ fontSize: bold ? '0.82em' : '0.75em', color, fontWeight: bold ? 800 : 600 }}>{value}</span>
     </div>
   )
 }

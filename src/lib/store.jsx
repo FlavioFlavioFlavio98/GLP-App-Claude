@@ -881,6 +881,17 @@ export function AppProvider({ children }) {
       actions.showToast('Esercizio salvato', '💪')
     },
 
+    async updateExerciseMuscles(exerciseId, muscles) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const updated = (gd.quickExercises || []).map(e =>
+        e.id === exerciseId ? { ...e, muscles } : e
+      )
+      await updateDoc(doc(db, 'users', 'flavio'), { quickExercises: updated })
+      actions.showToast('Mappatura muscoli salvata', '🫀')
+    },
+
     async archiveExercise(exerciseId) {
       if (state.authUserId !== 'flavio') return
       const gd = state.allUsersData?.flavio

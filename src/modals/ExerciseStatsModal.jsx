@@ -3,6 +3,7 @@ import { useApp } from '../lib/store'
 import { _getPPR } from '../lib/store'
 import { Chart } from '../lib/chartSetup'
 import { toDateString } from '../lib/habitLogic'
+import { MUSCLE_GROUPS, getDefaultMuscles } from '../lib/muscleMapping'
 
 const MONTH_NAMES = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic']
 
@@ -360,6 +361,7 @@ export default function ExerciseStatsModal() {
           onSave={handleSaveExercise}
           onArchive={id => { if (window.confirm('Archiviare?')) actions.archiveExercise(id) }}
           openEdit={openEdit}
+          onSaveMuscles={(id, muscles) => actions.updateExerciseMuscles(id, muscles)}
         />
       )}
 
@@ -368,8 +370,107 @@ export default function ExerciseStatsModal() {
   )
 }
 
+// ─── Muscle mapping editor ────────────────────────────────────────────────────
+function MuscleMappingEditor({ exercise, onSave, onClose }) {
+  const autoMuscles = getDefaultMuscles(exercise.name)
+  const initial = exercise.muscles && Object.keys(exercise.muscles).length > 0
+    ? exercise.muscles
+    : autoMuscles
+
+  const [muscles, setMuscles] = useState(() => {
+    const m = {}
+    Object.keys(MUSCLE_GROUPS).forEach(k => {
+      m[k] = initial[k] || 0
+    })
+    return m
+  })
+  const [saving, setSaving] = useState(false)
+
+  function cycle(key) {
+    setMuscles(prev => {
+      const v = prev[key]
+      const next = v === 0 ? 1.0 : v === 1.0 ? 0.5 : 0
+      return { ...prev, [key]: next }
+    })
+  }
+
+  function chipLabel(v) {
+    if (v === 1.0) return 'Primario'
+    if (v === 0.5) return 'Sec.'
+    return '–'
+  }
+
+  function chipColor(v) {
+    if (v === 1.0) return { bg: 'rgba(255,202,40,0.18)', border: '#ffca28', color: '#ffca28' }
+    if (v === 0.5) return { bg: 'rgba(255,112,67,0.18)', border: '#ff7043', color: '#ff7043' }
+    return { bg: 'transparent', border: 'rgba(255,255,255,0.1)', color: '#444' }
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    const toSave = {}
+    Object.entries(muscles).forEach(([k, v]) => { if (v > 0) toSave[k] = v })
+    await onSave(exercise.id, toSave)
+    setSaving(false)
+    onClose()
+  }
+
+  const sides = ['front', 'back']
+  const sideLabel = { front: '🫀 Fronte', back: '🔙 Retro' }
+
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--theme-color)', borderRadius: 14, padding: 14, marginTop: 8 }}>
+      <div style={{ fontWeight: 700, color: 'var(--theme-color)', fontSize: '0.82em', marginBottom: 10 }}>
+        🫀 Muscoli per {exercise.emoji} {exercise.name}
+      </div>
+      {exercise.muscles && Object.keys(exercise.muscles).length === 0 && (
+        <div style={{ fontSize: '0.68em', color: '#666', marginBottom: 8 }}>
+          Rilevamento automatico: {Object.keys(autoMuscles).length > 0
+            ? Object.entries(autoMuscles).map(([k]) => MUSCLE_GROUPS[k]?.label).join(', ')
+            : 'nessuno — imposta manualmente'}
+        </div>
+      )}
+      {sides.map(side => (
+        <div key={side} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: '0.65em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>{sideLabel[side]}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {Object.entries(MUSCLE_GROUPS)
+              .filter(([, g]) => g.side === side)
+              .map(([key, g]) => {
+                const v = muscles[key] || 0
+                const { bg, border, color } = chipColor(v)
+                return (
+                  <button
+                    key={key}
+                    onClick={() => cycle(key)}
+                    style={{
+                      padding: '4px 10px', borderRadius: 20, fontSize: '0.68em', fontWeight: 700,
+                      background: bg, border: `1px solid ${border}`, color, cursor: 'pointer',
+                    }}
+                  >
+                    {g.label} · {chipLabel(v)}
+                  </button>
+                )
+              })}
+          </div>
+        </div>
+      ))}
+      <div style={{ fontSize: '0.62em', color: '#555', marginBottom: 10 }}>
+        Tap sul chip per ciclare: – → Primario (1.0) → Secondario (0.5) → –
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn-main" style={{ flex: 1, padding: '10px', margin: 0 }} onClick={handleSave} disabled={saving}>
+          {saving ? '⏳' : '💾 Salva muscoli'}
+        </button>
+        <button className="btn-sec" style={{ padding: '10px 14px' }} onClick={onClose}>Annulla</button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Manage tab extracted for clarity ────────────────────────────────────────
-function ManageExercisesTab({ exercises, showAddForm, setShowAddForm, editEx, setEditEx, form, setForm, saving, onSave, onArchive, openEdit }) {
+function ManageExercisesTab({ exercises, showAddForm, setShowAddForm, editEx, setEditEx, form, setForm, saving, onSave, onArchive, openEdit, onSaveMuscles }) {
+  const [editMusclesId, setEditMusclesId] = useState(null)
   const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontSize: '0.9em', width: '100%', boxSizing: 'border-box' }
 
   return (
@@ -380,26 +481,49 @@ function ManageExercisesTab({ exercises, showAddForm, setShowAddForm, editEx, se
           <div style={{ textAlign: 'center', color: '#555', fontSize: '0.85em', padding: '20px 0' }}>Nessun esercizio — creane uno!</div>
         )}
         {exercises.map(ex => (
-          <div key={ex.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, opacity: ex.active === false ? 0.5 : 1 }}>
-            <span style={{ fontSize: '1.5em', flexShrink: 0 }}>{ex.emoji}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: '0.92em' }}>{ex.name}</div>
-              <div style={{ fontSize: '0.72em', color: 'var(--theme-color)', fontWeight: 600, marginTop: 2 }}>
-                {parseFloat(ex.pointsPerRep)} pt / rep
-              </div>
-              {(ex.changes || []).length > 1 && (
-                <div style={{ fontSize: '0.6em', color: '#444', marginTop: 4, lineHeight: 1.6 }}>
-                  {ex.changes.map(c => `${c.date}: ${c.pointsPerRep}pt/rep`).join(' → ')}
+          <div key={ex.id}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, opacity: ex.active === false ? 0.5 : 1 }}>
+              <span style={{ fontSize: '1.5em', flexShrink: 0 }}>{ex.emoji}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.92em' }}>{ex.name}</div>
+                <div style={{ fontSize: '0.72em', color: 'var(--theme-color)', fontWeight: 600, marginTop: 2 }}>
+                  {parseFloat(ex.pointsPerRep)} pt / rep
                 </div>
+                {(ex.changes || []).length > 1 && (
+                  <div style={{ fontSize: '0.6em', color: '#444', marginTop: 4, lineHeight: 1.6 }}>
+                    {ex.changes.map(c => `${c.date}: ${c.pointsPerRep}pt/rep`).join(' → ')}
+                  </div>
+                )}
+                {/* Muscle summary */}
+                {(() => {
+                  const m = ex.muscles && Object.keys(ex.muscles).length > 0
+                    ? ex.muscles : getDefaultMuscles(ex.name)
+                  const names = Object.entries(m).filter(([,v]) => v > 0).map(([k]) => MUSCLE_GROUPS[k]?.label).filter(Boolean)
+                  return names.length > 0 ? (
+                    <div style={{ fontSize: '0.6em', color: '#555', marginTop: 3 }}>
+                      🫀 {names.join(' · ')} {ex.muscles ? '' : '(auto)'}
+                    </div>
+                  ) : null
+                })()}
+              </div>
+              <button className="btn-icon" onClick={() => setEditMusclesId(editMusclesId === ex.id ? null : ex.id)} title="Mappa muscoli">
+                <span className="material-icons-round" style={{ fontSize: 18, color: 'var(--theme-color)' }}>accessibility_new</span>
+              </button>
+              <button className="btn-icon" onClick={() => openEdit(ex)} title="Modifica">
+                <span className="material-icons-round" style={{ fontSize: 20 }}>edit</span>
+              </button>
+              {ex.active !== false && (
+                <button className="btn-icon" onClick={() => onArchive(ex.id)} title="Archivia">
+                  <span className="material-icons-round" style={{ fontSize: 18, color: '#555' }}>archive</span>
+                </button>
               )}
             </div>
-            <button className="btn-icon" onClick={() => openEdit(ex)} title="Modifica">
-              <span className="material-icons-round" style={{ fontSize: 20 }}>edit</span>
-            </button>
-            {ex.active !== false && (
-              <button className="btn-icon" onClick={() => onArchive(ex.id)} title="Archivia">
-                <span className="material-icons-round" style={{ fontSize: 18, color: '#555' }}>archive</span>
-              </button>
+            {editMusclesId === ex.id && (
+              <MuscleMappingEditor
+                exercise={ex}
+                onSave={onSaveMuscles}
+                onClose={() => setEditMusclesId(null)}
+              />
             )}
           </div>
         ))}

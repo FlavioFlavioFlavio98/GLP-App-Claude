@@ -54,6 +54,7 @@ import AvatarModal from './modals/AvatarModal'
 import BackupModal from './modals/BackupModal'
 import QuickExerciseModal from './modals/QuickExerciseModal'
 import ExerciseStatsModal from './modals/ExerciseStatsModal'
+import ExerciseSingleView from './modals/ExerciseSingleView'
 import WeightModal from './modals/WeightModal'
 import CoachPage from './modals/CoachPage'
 import HealthPage from './modals/HealthPage'
@@ -595,7 +596,7 @@ export default function App() {
 
         {/* ───────── TAB: WORKOUT & PESO ───────── */}
         {currentTab === 'workout' && (
-          <WorkoutTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} />
+          <WorkoutTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
         )}
 
         {/* ───────── TAB: STATISTICHE ───────── */}
@@ -638,6 +639,7 @@ export default function App() {
       <BackupModal />
       <QuickExerciseModal />
       <ExerciseStatsModal />
+      {authUserId === 'flavio' && <ExerciseSingleView />}
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
       {authUserId === 'flavio' && <HealthPage />}

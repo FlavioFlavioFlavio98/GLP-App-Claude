@@ -1,5 +1,6 @@
 import MuscleHeatmapBody from './MuscleHeatmapBody'
 import WorkoutMotivationBanner from './WorkoutMotivationBanner'
+import WorkoutGoalProgress from './WorkoutGoalProgress'
 import { toDateString } from '../lib/habitLogic'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
@@ -30,6 +31,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         exerciseLog={globalData?.exerciseLog || {}}
         quickExercises={globalData?.quickExercises || []}
       />
+
+      {/* Obiettivo di sforzo giornaliero */}
+      <WorkoutGoalProgress exerciseLog={globalData?.exerciseLog || {}} />
 
       {/* Muscle heatmap */}
       <MuscleHeatmapBody

@@ -16,6 +16,51 @@ export function getDayEffort(exerciseLog, dateStr) {
   return calculateWorkoutEffort(exerciseLog?.[dateStr] || [])
 }
 
+// ─── Obiettivo di sforzo giornaliero ─────────────────────────────────────────────
+// Suggerito = media dello sforzo nei giorni di allenamento recenti (default 14gg,
+// solo giorni con sforzo > 0) con una leggera crescita incrementale (+5% default).
+export function getSuggestedDailyGoal(exerciseLog, days = 14, growth = 1.05) {
+  const todayStr = toDateString(new Date())
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days)
+  const cutoffStr = toDateString(cutoff)
+
+  const recentEfforts = Object.keys(exerciseLog || {})
+    .filter(d => d !== todayStr && d >= cutoffStr)
+    .map(d => getDayEffort(exerciseLog, d))
+    .filter(e => e > 0)
+
+  if (recentEfforts.length === 0) return 20 // fallback ragionevole per chi inizia ora
+
+  const avg = recentEfforts.reduce((a, b) => a + b, 0) / recentEfforts.length
+  return Math.round(avg * growth * 10) / 10
+}
+
+const GOAL_OVERRIDE_PREFIX = 'glp_workout_goal_'
+
+// L'obiettivo del giorno: quello impostato manualmente per OGGI se presente,
+// altrimenti il suggerito. L'override è per-giorno: domani si ricalcola da capo
+// sulla nuova media, così la progressione incrementale non resta bloccata da una
+// modifica manuale fatta settimane prima.
+export function getDailyGoal(exerciseLog) {
+  const todayStr = toDateString(new Date())
+  try {
+    const stored = localStorage.getItem(GOAL_OVERRIDE_PREFIX + todayStr)
+    if (stored !== null) {
+      const n = parseFloat(stored)
+      if (!isNaN(n) && n > 0) return { value: n, isCustom: true }
+    }
+  } catch { /* localStorage non disponibile */ }
+  return { value: getSuggestedDailyGoal(exerciseLog), isCustom: false }
+}
+
+export function setDailyGoalOverride(value) {
+  const todayStr = toDateString(new Date())
+  try {
+    if (value === null || value === undefined) localStorage.removeItem(GOAL_OVERRIDE_PREFIX + todayStr)
+    else localStorage.setItem(GOAL_OVERRIDE_PREFIX + todayStr, String(value))
+  } catch { /* localStorage non disponibile */ }
+}
+
 // ─── Banner motivazionale ───────────────────────────────────────────────────────
 
 // L'esercizio dell'ultima serie loggata oggi (per data+ora), usato per decidere

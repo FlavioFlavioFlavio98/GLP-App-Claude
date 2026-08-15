@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../lib/store'
 import { Chart } from '../lib/chartSetup'
 import { toDateString } from '../lib/habitLogic'
+import { computeAllStats } from '../lib/workoutStats'
 
 // ─── Milestones ───────────────────────────────────────────────────────────────
 
@@ -33,119 +34,6 @@ function getFunFact(name, totalReps) {
   if (kcal >= 600)  return { text: `circa ${Math.round(kcal / 300)} pizze margherita in kcal`, icon: '🍕' }
   if (kcal >= 150)  return { text: `circa ${Math.round(kcal / 60)} km di corsa in energia`, icon: '🏃' }
   return { text: `circa ${kcal} kcal totali`, icon: '⚡' }
-}
-
-// ─── Streak calculation ───────────────────────────────────────────────────────
-
-function computeStreak(exerciseLog, exerciseId) {
-  const dates = Object.keys(exerciseLog || {})
-    .filter(d => (exerciseLog[d] || []).some(s => s.exerciseId === exerciseId))
-    .sort()
-
-  if (!dates.length) return { current: 0, best: 0, bestStart: null, bestEnd: null, currentStart: null }
-
-  const runs = []
-  let runStart = dates[0], runLen = 1
-
-  for (let i = 1; i < dates.length; i++) {
-    const diff = Math.round((new Date(dates[i]) - new Date(dates[i - 1])) / 86400000)
-    if (diff === 1) { runLen++ }
-    else { runs.push({ start: runStart, end: dates[i - 1], len: runLen }); runStart = dates[i]; runLen = 1 }
-  }
-  runs.push({ start: runStart, end: dates.at(-1), len: runLen })
-
-  const best = runs.reduce((a, b) => b.len > a.len ? b : a, runs[0])
-
-  const todayStr     = toDateString(new Date())
-  const yesterdayStr = toDateString(new Date(Date.now() - 86400000))
-  const last = runs.at(-1)
-  const isContinuing = last.end === todayStr || last.end === yesterdayStr
-  const current = isContinuing ? last.len : 0
-  const currentStart = isContinuing ? last.start : null
-
-  return { current, currentStart, best: best.len, bestStart: best.start, bestEnd: best.end }
-}
-
-// ─── Stats computation ────────────────────────────────────────────────────────
-
-function computeAllStats(exerciseLog, exerciseId) {
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const todayStr = toDateString(today)
-
-  const allDates = Object.keys(exerciseLog || {}).sort()
-
-  function repsOnDate(d) {
-    return (exerciseLog[d] || []).filter(s => s.exerciseId === exerciseId).reduce((a, s) => a + s.reps, 0)
-  }
-  function sessionsOnDate(d) {
-    return (exerciseLog[d] || []).filter(s => s.exerciseId === exerciseId)
-  }
-
-  // ── Lifetime ──
-  let lifetimeReps = 0, lifetimeSessions = 0
-  allDates.forEach(d => {
-    const ss = sessionsOnDate(d)
-    ss.forEach(s => { lifetimeReps += s.reps; lifetimeSessions++ })
-  })
-  const avgPerSession = lifetimeSessions > 0 ? Math.round(lifetimeReps / lifetimeSessions) : 0
-
-  // ── Week ──
-  const weekStart = new Date(today); weekStart.setDate(today.getDate() - 6)
-  const lastWeekStart = new Date(today); lastWeekStart.setDate(today.getDate() - 13)
-  const lastWeekEnd   = new Date(today); lastWeekEnd.setDate(today.getDate() - 7)
-  const weekStartStr     = toDateString(weekStart)
-  const lastWeekStartStr = toDateString(lastWeekStart)
-  const lastWeekEndStr   = toDateString(lastWeekEnd)
-
-  let weekReps = 0, lastWeekReps = 0
-  allDates.forEach(d => {
-    if (d >= weekStartStr)       weekReps     += repsOnDate(d)
-    if (d >= lastWeekStartStr && d <= lastWeekEndStr) lastWeekReps += repsOnDate(d)
-  })
-  const weekDelta = lastWeekReps === 0 ? null : Math.round((weekReps - lastWeekReps) / lastWeekReps * 100)
-
-  // ── Month ──
-  const mm = String(today.getMonth() + 1).padStart(2, '0')
-  const monthPrefix = `${today.getFullYear()}-${mm}`
-  const lastMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-  const lastMonthPrefix = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`
-
-  let monthReps = 0, lastMonthReps = 0
-  allDates.forEach(d => {
-    if (d.startsWith(monthPrefix))     monthReps     += repsOnDate(d)
-    if (d.startsWith(lastMonthPrefix)) lastMonthReps += repsOnDate(d)
-  })
-  const monthDelta = lastMonthReps === 0 ? null : Math.round((monthReps - lastMonthReps) / lastMonthReps * 100)
-
-  // ── Records ──
-  let bestSession = null, bestSessionReps = 0, bestSessionDate = null
-  let bestDay = null, bestDayReps = 0
-  allDates.forEach(d => {
-    const dayTotal = repsOnDate(d)
-    if (dayTotal > bestDayReps) { bestDayReps = dayTotal; bestDay = d }
-    sessionsOnDate(d).forEach(s => {
-      if (s.reps > bestSessionReps) { bestSessionReps = s.reps; bestSession = s; bestSessionDate = d }
-    })
-  })
-
-  // ── Today ──
-  const todayReps = repsOnDate(todayStr)
-  const todaySessions = sessionsOnDate(todayStr)
-  const isNewRecord = todaySessions.length > 0 && bestSessionDate === todayStr && lifetimeSessions > 1
-
-  // ── Streak ──
-  const streak = computeStreak(exerciseLog, exerciseId)
-
-  return {
-    lifetimeReps, lifetimeSessions, avgPerSession,
-    weekReps, lastWeekReps, weekDelta,
-    monthReps, lastMonthReps, monthDelta,
-    bestSessionReps, bestSessionDate,
-    bestDayReps, bestDay,
-    todayReps, todaySessions,
-    isNewRecord,
-    streak,
-  }
 }
 
 // ─── Date formatting ──────────────────────────────────────────────────────────

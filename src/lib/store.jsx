@@ -12,6 +12,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll }
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
+import { touchWorkoutSession } from './workoutStats'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -886,6 +887,13 @@ export function AppProvider({ children }) {
       })
       actions.vibrate('light')
       actions.showToast(`+${pts} pt 💪`, '💪')
+
+      // La sessione di allenamento (finestra temporale locale) si apre/estende solo
+      // per serie loggate OGGI — una serie retrodatata dal date-picker non è "live".
+      const isToday = logDate === toDateString(new Date())
+      const session = isToday ? touchWorkoutSession() : null
+
+      return { logEntry, session }
     },
 
     async deleteExerciseSession(dateStr, logId) {

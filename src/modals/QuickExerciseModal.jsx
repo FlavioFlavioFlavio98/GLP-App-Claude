@@ -1,11 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
+import { MUSCLE_GROUPS } from '../lib/muscleMapping'
+import { groupExercisesByMuscle } from '../lib/workoutStats'
+
+const ALTRO_GROUP = { label: 'Altro', emoji: '🏋️' }
 
 export default function QuickExerciseModal() {
   const { state, actions } = useApp()
   const { modal, allUsersData, authUserId } = state
 
+  // step: 'muscle' | 'exercise' | 'reps'
+  const [step, setStep] = useState('muscle')
+  const [muscleKey, setMuscleKey] = useState(null)
   const [selId, setSelId] = useState(null)
   const [reps, setReps] = useState(10)
   const [saving, setSaving] = useState(false)
@@ -14,40 +21,58 @@ export default function QuickExerciseModal() {
   const gd = allUsersData?.flavio
   const exercises = (gd?.quickExercises || []).filter(e => e.active !== false)
 
-  // Sync selId when exercises load or modal opens
+  const grouped = useMemo(() => groupExercisesByMuscle(exercises), [exercises])
+  const muscleKeys = useMemo(
+    () => Object.keys(grouped).sort((a, b) => {
+      if (a === 'altro') return 1
+      if (b === 'altro') return -1
+      return (MUSCLE_GROUPS[a]?.label || '').localeCompare(MUSCLE_GROUPS[b]?.label || '')
+    }),
+    [grouped]
+  )
+
+  // Reset del flusso ogni volta che il modal si apre
   useEffect(() => {
     if (modal === 'quickExercise') {
+      setStep('muscle')
+      setMuscleKey(null)
+      setSelId(null)
       setReps(10)
       setExerciseDate(toDateString(new Date()))
-      if (exercises.length > 0) setSelId(exercises[0].id)
     }
-  }, [modal]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Keep selId valid when exercises list changes
-  useEffect(() => {
-    if (exercises.length > 0 && (!selId || !exercises.find(e => e.id === selId))) {
-      setSelId(exercises[0].id)
-    }
-  }, [exercises.length, selId])
+  }, [modal])
 
   if (modal !== 'quickExercise') return null
   if (authUserId !== 'flavio') return null
 
-  const exercise = exercises.find(e => e.id === selId) ?? exercises[0] ?? null
+  const exercise = exercises.find(e => e.id === selId) ?? null
 
   // ppr: always parseFloat to handle Firestore string/number ambiguity
   const ppr = parseFloat(exercise?.pointsPerRep) || 0.1
   const pts = parseFloat((reps * ppr).toFixed(2))
 
-  console.log('[QuickExercise] exercise:', exercise, 'ppr:', ppr, 'reps:', reps, 'pts:', pts)
-
   function changeReps(delta) {
     setReps(prev => Math.max(1, Math.min(200, prev + delta)))
   }
 
+  function pickMuscle(key) {
+    setMuscleKey(key)
+    setStep('exercise')
+  }
+
+  function pickExercise(ex) {
+    setSelId(ex.id)
+    setReps(10)
+    setStep('reps')
+  }
+
+  function goBack() {
+    if (step === 'reps') setStep('exercise')
+    else if (step === 'exercise') { setMuscleKey(null); setStep('muscle') }
+  }
+
   async function handleAdd() {
     if (!exercise) { actions.showToast('Nessun esercizio selezionato', '⚠️'); return }
-    console.log('[QuickExercise] handleAdd', exercise.id, reps, pts)
     setSaving(true)
     await actions.addExerciseSession(exercise.id, reps, exerciseDate)
     setSaving(false)
@@ -84,86 +109,132 @@ export default function QuickExerciseModal() {
         borderRadius: '20px 20px 0 0', padding: '20px 20px 36px',
         border: '1px solid var(--card-border)',
         animation: 'slideUp 0.22s ease',
+        maxHeight: '82vh', overflowY: 'auto', boxSizing: 'border-box',
       }}>
         {/* Handle bar */}
         <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 2, margin: '0 auto 18px' }} />
 
-        {/* Exercise chip selector (only when >1 exercise) */}
-        {exercises.length > 1 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18, justifyContent: 'center' }}>
-            {exercises.map(ex => (
+        {/* Header con back button (tranne al primo step) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, minHeight: 28 }}>
+          {step !== 'muscle' ? (
+            <button onClick={goBack} className="btn-icon" style={{ padding: 4 }}>
+              <span className="material-icons-round" style={{ fontSize: 22 }}>arrow_back</span>
+            </button>
+          ) : <div style={{ width: 30 }} />}
+          <div style={{ flex: 1, textAlign: 'center', fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>
+            {step === 'muscle' && 'Che muscolo alleni?'}
+            {step === 'exercise' && (MUSCLE_GROUPS[muscleKey]?.label || ALTRO_GROUP.label)}
+            {step === 'reps' && (exercise ? `${exercise.emoji} ${exercise.name}` : '')}
+          </div>
+          <div style={{ width: 30 }} />
+        </div>
+
+        {/* ── STEP 1: gruppo muscolare ── */}
+        {step === 'muscle' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {muscleKeys.map(key => {
+              const info = key === 'altro' ? ALTRO_GROUP : MUSCLE_GROUPS[key]
+              const count = grouped[key].length
+              return (
+                <button
+                  key={key}
+                  onClick={() => pickMuscle(key)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    padding: '16px 10px', borderRadius: 14, cursor: 'pointer',
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'var(--text)',
+                  }}
+                >
+                  <span style={{ fontSize: '1.8em' }}>{info?.emoji || '🏋️'}</span>
+                  <span style={{ fontSize: '0.85em', fontWeight: 700 }}>{info?.label || key}</span>
+                  <span style={{ fontSize: '0.65em', color: '#666' }}>{count} eserciz{count === 1 ? 'io' : 'i'}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── STEP 2: esercizio filtrato per gruppo ── */}
+        {step === 'exercise' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(grouped[muscleKey] || []).map(ex => (
               <button
                 key={ex.id}
-                onClick={() => setSelId(ex.id)}
+                onClick={() => pickExercise(ex)}
                 style={{
-                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer', fontSize: '0.88em', fontWeight: 600,
-                  background: selId === ex.id ? 'var(--theme-glow)' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${selId === ex.id ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)'}`,
-                  color: selId === ex.id ? 'var(--theme-color)' : '#888',
-                  transition: 'all 0.15s',
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'var(--text)',
                 }}
-              >{ex.emoji} {ex.name}</button>
+              >
+                <span style={{ fontSize: '1.4em' }}>{ex.emoji}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9em' }}>{ex.name}</div>
+                  <div style={{ fontSize: '0.65em', color: 'var(--theme-color)' }}>{parseFloat(ex.pointsPerRep)} pt/rep</div>
+                </div>
+                <span className="material-icons-round" style={{ fontSize: 18, color: '#444' }}>chevron_right</span>
+              </button>
             ))}
           </div>
         )}
 
-        {/* Exercise name + ppr info */}
-        {exercise && (
-          <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: '1em', fontWeight: 700, color: 'var(--theme-color)' }}>
-              {exercise.emoji} {exercise.name}
+        {/* ── STEP 3: ripetizioni (invariato) ── */}
+        {step === 'reps' && exercise && (
+          <>
+            {/* Reps counter */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 14 }}>
+              <button onClick={() => changeReps(-5)} style={btnStyle}>−5</button>
+              <button onClick={() => changeReps(-1)} style={{ ...btnStyle, width: 52, height: 52, fontSize: '1.4em' }}>−</button>
+
+              <div style={{ textAlign: 'center', minWidth: 80 }}>
+                <div style={{ fontSize: '3.4em', fontWeight: 900, color: 'var(--theme-color)', lineHeight: 1 }}>{reps}</div>
+                <div style={{ fontSize: '0.65em', color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>reps</div>
+              </div>
+
+              <button onClick={() => changeReps(1)} style={{ ...btnStyle, width: 52, height: 52, fontSize: '1.4em' }}>+</button>
+              <button onClick={() => changeReps(5)} style={btnStyle}>+5</button>
             </div>
-            <div style={{ fontSize: '0.65em', color: '#444', marginTop: 2 }}>
-              {ppr} pt / rep
+
+            {/* Points preview */}
+            <div style={{ textAlign: 'center', marginBottom: 22, fontSize: '1.2em', fontWeight: 800, color: 'var(--success)' }}>
+              = +{pts} pt
             </div>
-          </div>
+
+            {/* Date picker */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Data</div>
+              <input
+                type="date"
+                value={exerciseDate}
+                max={toDateString(new Date())}
+                onChange={e => setExerciseDate(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
+              />
+              {exerciseDate !== toDateString(new Date()) && (
+                <div style={{ fontSize: '0.65em', color: '#EF9F27', marginTop: 4 }}>
+                  ⚠️ Data retrodatata: non farà parte della sessione di allenamento live
+                </div>
+              )}
+            </div>
+
+            {/* Save button */}
+            <button
+              className="btn-main"
+              style={{ width: '100%', padding: '14px', fontSize: '1.05em', marginBottom: 10 }}
+              onClick={handleAdd}
+              disabled={saving}
+            >
+              {saving ? '⏳ Salvataggio...' : `Aggiungi ${exercise.emoji}`}
+            </button>
+          </>
         )}
-
-        {/* Reps counter */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 14 }}>
-          <button onClick={() => changeReps(-5)} style={btnStyle}>−5</button>
-          <button onClick={() => changeReps(-1)} style={{ ...btnStyle, width: 52, height: 52, fontSize: '1.4em' }}>−</button>
-
-          <div style={{ textAlign: 'center', minWidth: 80 }}>
-            <div style={{ fontSize: '3.4em', fontWeight: 900, color: 'var(--theme-color)', lineHeight: 1 }}>{reps}</div>
-            <div style={{ fontSize: '0.65em', color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>reps</div>
-          </div>
-
-          <button onClick={() => changeReps(1)} style={{ ...btnStyle, width: 52, height: 52, fontSize: '1.4em' }}>+</button>
-          <button onClick={() => changeReps(5)} style={btnStyle}>+5</button>
-        </div>
-
-        {/* Points preview */}
-        <div style={{ textAlign: 'center', marginBottom: 22, fontSize: '1.2em', fontWeight: 800, color: 'var(--success)' }}>
-          = +{pts} pt
-        </div>
-
-        {/* Date picker */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Data</div>
-          <input
-            type="date"
-            value={exerciseDate}
-            max={toDateString(new Date())}
-            onChange={e => setExerciseDate(e.target.value)}
-            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
-          />
-        </div>
-
-        {/* Save button */}
-        <button
-          className="btn-main"
-          style={{ width: '100%', padding: '14px', fontSize: '1.05em', marginBottom: 10 }}
-          onClick={handleAdd}
-          disabled={saving || !exercise}
-        >
-          {saving ? '⏳ Salvataggio...' : `Aggiungi ${exercise?.emoji || '💪'}`}
-        </button>
 
         {/* Stats link */}
         <button
           onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('exerciseStats'), 60) }}
-          style={{ width: '100%', padding: '10px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#888', cursor: 'pointer', fontSize: '0.85em' }}
+          style={{ width: '100%', padding: '10px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#888', cursor: 'pointer', fontSize: '0.85em', marginTop: 4 }}
         >
           📊 Statistiche complete
         </button>

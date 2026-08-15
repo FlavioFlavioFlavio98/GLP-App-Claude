@@ -2,6 +2,7 @@ import MuscleHeatmapBody from './MuscleHeatmapBody'
 import WorkoutMotivationBanner from './WorkoutMotivationBanner'
 import WorkoutGoalProgress from './WorkoutGoalProgress'
 import WorkoutRestTimer from './WorkoutRestTimer'
+import WorkoutEffortChart from './WorkoutEffortChart'
 import { toDateString } from '../lib/habitLogic'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
@@ -44,6 +45,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         exerciseLog={globalData?.exerciseLog || {}}
         quickExercises={globalData?.quickExercises || []}
       />
+
+      {/* Sforzo pesato nel tempo */}
+      <WorkoutEffortChart exerciseLog={globalData?.exerciseLog || {}} />
 
       {/* Action buttons */}
       <button style={btnStyle} onClick={() => actions.openModal('quickExercise')}>

@@ -43,18 +43,8 @@ export default function BackupModal() {
           </div>
         </div>
 
-        <div className="settings-section">
-          <div className="settings-section-title">Zona Pericolosa</div>
-          <button
-            className="btn-danger"
-            style={{ fontSize: '0.85em' }}
-            onClick={actions.hardReset}
-          >
-            💣 Reset Account
-          </button>
-          <div style={{ fontSize: '0.65em', color: '#555', marginTop: 4, padding: '0 4px' }}>
-            Elimina definitivamente tutti i tuoi dati
-          </div>
+        <div style={{ fontSize: '0.65em', color: '#555', marginTop: 4, padding: '0 4px' }}>
+          Per resettare completamente l'app, vai in Impostazioni → Zona Pericolosa
         </div>
 
         <button className="btn-sec" onClick={() => actions.closeModal()}>Chiudi</button>

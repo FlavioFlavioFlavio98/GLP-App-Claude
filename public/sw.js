@@ -1,15 +1,18 @@
 // ─── GLP Service Worker ────────────────────────────────────────────────────────
-// CACHE_NAME includes build timestamp injected at deploy time via sed in package.json
-// Falls back to a fixed string during local dev (vite dev doesn't process this file)
+// CACHE_NAME and PRECACHE_ASSETS are injected at build time by scripts/stamp-sw.js
+// (reads the real hashed filenames from dist/ after `vite build` — no manual list to
+// maintain, and the cache name changes on every build so stale caches are dropped).
 const CACHE_NAME = 'glp-cache-BUILD_TS'
-const OFFLINE_ASSETS = ['/GLP-App-Claude/assets/']
+const PRECACHE_ASSETS = []
 
-// Install: skipWaiting() so the new SW activates immediately without waiting for
-// the user to close all tabs or click an update banner
+// External font/icon CDNs we opportunistically cache (cache-first, static content)
+const EXTERNAL_CACHE_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net']
+
+// Install: precache the real app shell (index.html + hashed JS/CSS from this build)
 self.addEventListener('install', event => {
   self.skipWaiting()
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll([]))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_ASSETS))
   )
 })
 
@@ -22,22 +25,26 @@ self.addEventListener('activate', event => {
   )
 })
 
-// Fetch strategy:
-// - Navigation (index.html): network-only — always get fresh HTML with current asset hashes
-// - Static assets (/assets/*): cache-first, fallback network — hashed filenames never change
-// - Everything else: network-first, fallback cache
+// Fetch strategy — app shell only. Firestore/Google API calls are never intercepted
+// here (different origin, not in EXTERNAL_CACHE_HOSTS), so they always hit the network.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return
-  if (!event.request.url.startsWith(self.location.origin)) return
 
-  // Navigation: network-only (never serve stale index.html from cache)
+  const url = new URL(event.request.url)
+  const isSameOrigin = url.origin === self.location.origin
+  const isCacheableExternal = EXTERNAL_CACHE_HOSTS.includes(url.hostname)
+  if (!isSameOrigin && !isCacheableExternal) return
+
+  // Navigation (index.html): network-only — always get fresh HTML with current asset hashes
   if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request))
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/GLP-App-Claude/index.html'))
+    )
     return
   }
 
-  // Hashed assets: cache-first (content-addressed, never stale)
-  if (event.request.url.includes('/assets/')) {
+  // Hashed assets (/assets/*) and external fonts/icons: cache-first, never stale
+  if ((isSameOrigin && url.pathname.includes('/assets/')) || isCacheableExternal) {
     event.respondWith(
       caches.match(event.request).then(cached => {
         if (cached) return cached
@@ -53,7 +60,7 @@ self.addEventListener('fetch', event => {
     return
   }
 
-  // Other GET: network-first, fallback cache
+  // Everything else same-origin: network-first, fallback cache
   event.respondWith(
     fetch(event.request)
       .then(response => {

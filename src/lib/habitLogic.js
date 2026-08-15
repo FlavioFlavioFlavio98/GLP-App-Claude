@@ -113,35 +113,122 @@ export function calculateStreak(habitId, dailyLogs) {
   return streak
 }
 
+// ─── Fonte unica di verità per il calcolo dei punti ────────────────────────────
+// Calcola il "Netto" completo di una singola giornata: abitudini (fatte/fallite/
+// numeriche), acquisti negozio, premi tracciati, esercizi rapidi, check-in,
+// letture e task (completate/scadute quel giorno). Usata sia per il "Netto Oggi"
+// live in App.jsx, sia per i grafici storici (getDailyNet), sia per il punteggio
+// totale (calculateTotalScore) — un'unica formula, mai più duplicata.
+export function computeDayNet(userData, dateStr) {
+  const empty = {
+    totalHabitPoints: 0, taskPts: 0, extraPts: 0, checkInPts: 0, readingPts: 0,
+    purchaseCost: 0, penaltyCost: 0, trackedCost: 0, dailySpent: 0, expiredTaskCost: 0,
+    net: 0,
+  }
+  if (!userData) return empty
+
+  const entry = parseEntry(userData.dailyLogs?.[dateStr])
+  const habits = userData.habits || []
+
+  let dailyEarned = 0, penaltyCost = 0
+
+  habits.forEach(h => {
+    if (h.type === 'goal') return
+    if (!isHabitVisible(h, dateStr, entry.habits, entry.failedHabits)) return
+    const stableId = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
+    const reward = getItemValueAtDate(h, 'reward', dateStr)
+    const rewardMin = getItemValueAtDate(h, 'rewardMin', dateStr)
+    const penalty = getItemValueAtDate(h, 'penalty', dateStr)
+    const isMulti = getItemValueAtDate(h, 'isMulti', dateStr)
+    const isDone = entry.habits.includes(stableId)
+    const isFailed = entry.failedHabits.includes(stableId)
+    const level = entry.habitLevels[stableId] || 'max'
+    if (isDone) dailyEarned += isMulti && level === 'min' ? rewardMin : reward
+    if (isFailed) penaltyCost += penalty
+  })
+
+  const numericHabitPoints = habits
+    .filter(h => h.numericConfig && entry.habitValues?.[h.id] != null)
+    .reduce((sum, h) => {
+      const pts = calcNumericPoints(parseFloat(entry.habitValues[h.id]), h.numericConfig)
+      return sum + (pts > 0 ? pts : 0)
+    }, 0)
+
+  const totalHabitPoints = dailyEarned + numericHabitPoints
+
+  const purchaseCost = entry.purchases.reduce((acc, p) => acc + parseInt(p.cost || 0), 0)
+  const trackedCost = Object.values(entry.trackedRewards || {})
+    .reduce((sum, tr) => sum + (parseInt(tr.cost) || 0), 0)
+  const dailySpent = penaltyCost + purchaseCost + trackedCost
+
+  const extraPts = Math.round(
+    ((userData.exerciseLog || {})[dateStr] || [])
+      .reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) * 10
+  ) / 10
+
+  const checkInPts = Object.values(userData.dailyLogs?.[dateStr]?.checkIns || {})
+    .filter(c => c?.done)
+    .reduce((sum, c) => sum + (c.pts || 1), 0)
+
+  const readingPts = userData.dailyLogs?.[dateStr]?.readingEarned || 0
+
+  const taskPts = (userData.tasks || [])
+    .filter(t => t.status === 'completed' && typeof t.completedAt === 'string' && t.completedAt.startsWith(dateStr))
+    .reduce((sum, t) => sum + (parseInt(t.reward) || 0), 0)
+
+  const expiredTaskCost = (userData.tasks || [])
+    .filter(t => {
+      if (!t.expiredAt || !t.penaltyApplied) return false
+      const d = new Date(t.expiredAt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+      return d === dateStr
+    })
+    .reduce((sum, t) => sum + (parseInt(t.penalty) || 0), 0)
+
+  const net = totalHabitPoints + taskPts + extraPts + checkInPts + readingPts - dailySpent - expiredTaskCost
+
+  return { totalHabitPoints, taskPts, extraPts, checkInPts, readingPts, purchaseCost, penaltyCost, trackedCost, dailySpent, expiredTaskCost, net }
+}
+
 // Calculate net points for a single day for a given user's data
 export function getDailyNet(userData, dateStr) {
-  if (!userData || !userData.dailyLogs) return 0
-  const entry = parseEntry(userData.dailyLogs[dateStr])
-  let net = 0
-  entry.habits.forEach(hId => {
-    const h = userData.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
-    if (h) {
-      const isM = getItemValueAtDate(h, 'isMulti', dateStr)
-      const rMin = getItemValueAtDate(h, 'rewardMin', dateStr)
-      const rMax = getItemValueAtDate(h, 'reward', dateStr)
-      const lvl = entry.habitLevels[hId] || 'max'
-      net += isM && lvl === 'min' ? rMin : rMax
+  return computeDayNet(userData, dateStr).net
+}
+
+// Ricalcola il punteggio TOTALE sommando computeDayNet() su ogni giorno rilevante,
+// più i bonus una tantum non legati a un giorno "Netto" (obiettivi completati,
+// bonus mood). Unica fonte di verità per il punteggio mostrato in header.
+export function calculateTotalScore(userData) {
+  if (!userData) return 0
+
+  const dates = new Set([
+    ...Object.keys(userData.dailyLogs || {}),
+    ...Object.keys(userData.exerciseLog || {}),
+  ])
+  ;(userData.tasks || []).forEach(t => {
+    if (typeof t.completedAt === 'string') dates.add(t.completedAt.slice(0, 10))
+    if (typeof t.expiredAt === 'string') {
+      dates.add(new Date(t.expiredAt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }))
     }
   })
-  entry.failedHabits.forEach(hId => {
-    const h = userData.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
-    if (h) net -= getItemValueAtDate(h, 'penalty', dateStr)
-  })
-  const numericPts = Object.entries(entry.habitValues || {}).reduce((sum, [hId, val]) => {
-    const h = userData.habits?.find(x => (x.id || x.name.replace(/[^a-zA-Z0-9]/g, '')) === hId)
-    if (h?.numericConfig) {
-      return sum + calcNumericPoints(parseFloat(val), h.numericConfig)
+
+  let total = 0
+  dates.forEach(dateStr => { total += computeDayNet(userData, dateStr).net })
+
+  // Bonus obiettivi completati (non legati a un giorno specifico nel Netto)
+  ;(userData.habits || []).forEach(h => {
+    if (h.type === 'goal' && h.goalConfig?.completedAt) {
+      total += h.goalConfig.rewardOnComplete || 0
     }
-    return sum
-  }, 0)
-  net += numericPts
-  const spent = entry.purchases.reduce((acc, p) => acc + parseInt(p.cost || 0), 0)
-  return net - spent
+  })
+
+  // Bonus mood (+0.5pt una tantum per giorno in cui è stato salvato)
+  Object.values(userData.dailyLogs || {}).forEach(rawEntry => {
+    if (rawEntry && typeof rawEntry === 'object' && rawEntry.moodPtsGiven === true) {
+      total += 0.5
+    }
+  })
+
+  return Math.round(total * 100) / 100
 }
 
 export function toDateString(date) {
@@ -150,57 +237,6 @@ export function toDateString(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-/**
- * Ricalcola il punteggio totale leggendo tutti i dailyLogs.
- * Usa questa invece di increment() per mantenere score e dailyLogs sincronizzati.
- * NON include task (gestite separatamente con increment()).
- */
-export function recalculateScore(habits, rewards, dailyLogs) {
-  if (!dailyLogs || !habits) return 0
-  let total = 0
-
-  for (const [date, rawEntry] of Object.entries(dailyLogs)) {
-    if (!rawEntry || typeof rawEntry !== 'object') continue
-    const entry = parseEntry(rawEntry)
-
-    // Abitudini completate
-    for (const habitId of entry.habits) {
-      const habit = habits.find(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
-      if (!habit) continue
-      const isM = getItemValueAtDate(habit, 'isMulti', date)
-      const rMin = getItemValueAtDate(habit, 'rewardMin', date)
-      const rMax = getItemValueAtDate(habit, 'reward', date)
-      const lvl = entry.habitLevels[habitId] || 'max'
-      total += isM && lvl === 'min' ? rMin : rMax
-    }
-
-    // Penalita abitudini fallite
-    for (const habitId of entry.failedHabits) {
-      const habit = habits.find(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
-      if (habit) total -= getItemValueAtDate(habit, 'penalty', date)
-    }
-
-    // Abitudini numeriche
-    for (const [habitId, value] of Object.entries(entry.habitValues)) {
-      const habit = habits.find(h => (h.id || h.name?.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
-      if (habit?.numericConfig) total += calcNumericPoints(parseFloat(value), habit.numericConfig)
-    }
-
-    // Acquisti negozio (array di oggetti {name, cost, time})
-    for (const p of entry.purchases) {
-      const cost = typeof p === 'object' ? (parseInt(p.cost) || 0) : 0
-      total -= cost
-    }
-
-    // Premi tracciati
-    for (const [, data] of Object.entries(entry.trackedRewards || {})) {
-      if (data && typeof data.cost === 'number') total -= data.cost
-    }
-  }
-
-  return Math.round(total * 100) / 100
 }
 
 export function countPerfectDays(habits, dailyLogs) {

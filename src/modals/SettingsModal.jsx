@@ -27,9 +27,9 @@ async function callNativeScheduler(settings) {
   }
 }
 
-export default function SettingsModal() {
+export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
   const { state, actions } = useApp()
-  const { modal, userColors, density, authUserId, allUsersData, currentUser, minimalMode, wakeLockEnabled } = state
+  const { modal, userColors, density, authUserId, allUsersData, currentUser, minimalMode, wakeLockEnabled, theme, lastDarkTheme } = state
   const supportsWakeLock = 'wakeLock' in navigator
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
@@ -38,6 +38,11 @@ export default function SettingsModal() {
   function openAfter(name) {
     actions.closeModal()
     setTimeout(() => actions.openModal(name), 60)
+  }
+
+  function runAfterClose(fn) {
+    actions.closeModal()
+    setTimeout(fn, 60)
   }
 
   async function checkForUpdates() {
@@ -126,6 +131,13 @@ export default function SettingsModal() {
             <span className="material-icons-round" style={{ fontSize: 18 }}>palette</span>
             Temi
           </button>
+          <ToggleRow
+            label="Modalità chiara"
+            sublabel="Passa dal tema scuro a quello chiaro"
+            icon={theme === 'light' ? 'light_mode' : 'dark_mode'}
+            value={theme === 'light'}
+            onChange={v => actions.setTheme(v ? 'light' : (lastDarkTheme || 'dark'))}
+          />
         </div>
 
         {/* TROFEI */}
@@ -165,10 +177,38 @@ export default function SettingsModal() {
           </div>
         )}
 
+        {/* COACH AI — solo Flavio */}
+        {authUserId === 'flavio' && (
+          <div className="settings-section">
+            <div className="settings-section-title">🤖 Coach AI</div>
+            <button className="btn-backup" onClick={() => openAfter('coach')}>
+              <span style={{ fontSize: '1.1em' }}>🤖</span>
+              Apri Coach AI
+            </button>
+          </div>
+        )}
+
+        {/* LETTURE */}
+        {onOpenReadings && (
+          <div className="settings-section">
+            <div className="settings-section-title">📚 Letture</div>
+            <button className="btn-backup" onClick={() => runAfterClose(onOpenReadings)}>
+              <span style={{ fontSize: '1.1em' }}>📚</span>
+              Apri Letture
+            </button>
+          </div>
+        )}
+
         {/* PSICOLOGO AI — solo Flavio */}
         {authUserId === 'flavio' && (
           <div className="settings-section">
             <div className="settings-section-title">💭 Psicologo AI</div>
+            {onOpenPsych && (
+              <button className="btn-backup" onClick={() => runAfterClose(onOpenPsych)} style={{ marginBottom: 10 }}>
+                <span style={{ fontSize: '1.1em' }}>💭</span>
+                Apri Psicologo AI
+              </button>
+            )}
             {(() => {
               const ps = allUsersData?.flavio?.psychStats || {}
               return (
@@ -218,6 +258,10 @@ export default function SettingsModal() {
             <span style={{ fontSize: '1em' }}>🛍️</span>
             Storico acquisti
           </button>
+          <button className="btn-backup" onClick={() => openAfter('journal')}>
+            <span style={{ fontSize: '1em' }}>📔</span>
+            Diario di oggi
+          </button>
           <button className="btn-backup" onClick={() => openAfter('journalView')}>
             <span style={{ fontSize: '1em' }}>📔</span>
             Il mio diario
@@ -258,7 +302,7 @@ export default function SettingsModal() {
           </button>
           <button className="btn-backup" onClick={actions.forceRecalculateScore} style={{ marginTop: 8 }}>
             <span className="material-icons-round" style={{ fontSize: 18 }}>calculate</span>
-            🔄 Ricalcola punteggio
+            🔄 Verifica punteggio
           </button>
           <button
             className="btn-backup"
@@ -358,6 +402,8 @@ export default function SettingsModal() {
             {checkingUpdate ? 'Controllo in corso...' : 'Controlla aggiornamenti'}
           </button>
         </div>
+
+        {authUserId === 'flavio' && <DangerZoneSection actions={actions} />}
 
         <button className="btn-sec" onClick={() => actions.closeModal()}>Chiudi</button>
       </div>
@@ -527,5 +573,168 @@ function ToggleRow({ label, sublabel, icon, value, onChange }) {
         }} />
       </button>
     </div>
+  )
+}
+
+// ─── Zona Pericolosa: reset completo dati account ─────────────────────────────
+
+const RESET_CONFIRM_WORD = 'CANCELLA'
+
+function DangerZoneSection({ actions }) {
+  // step: null | 'warning' | 'confirm' | 'loading' | 'done'
+  const [step, setStep] = useState(null)
+  const [confirmText, setConfirmText] = useState('')
+  const [result, setResult] = useState(null)
+
+  function openFlow() { setStep('warning') }
+  function cancelFlow() { setStep(null); setConfirmText(''); setResult(null) }
+
+  async function runReset() {
+    setStep('loading')
+    const res = await actions.resetAllUserData()
+    setResult(res)
+    setStep('done')
+  }
+
+  return (
+    <>
+      <div className="settings-section" style={{
+        marginTop: 24, border: '1px solid rgba(239,83,80,0.35)', borderRadius: 12,
+        padding: '14px 16px', background: 'rgba(239,83,80,0.05)',
+      }}>
+        <div className="settings-section-title" style={{ color: 'var(--danger)' }}>⚠️ Zona Pericolosa</div>
+        <p style={{ fontSize: '0.75em', color: '#888', margin: '2px 0 10px' }}>
+          Azioni distruttive e irreversibili. Procedi solo se sei sicuro.
+        </p>
+        <button className="btn-danger" onClick={openFlow}>
+          🗑️ Resetta completamente l'app
+        </button>
+      </div>
+
+      {step && step !== null && (
+        <div className="modal-overlay" style={{ zIndex: 2000 }} onClick={e => { if (e.target === e.currentTarget && step === 'warning') cancelFlow() }}>
+          <div className="modal-box">
+
+            {step === 'warning' && (
+              <>
+                <h3 style={{ color: 'var(--danger)' }}>⚠️ Resettare completamente l'app?</h3>
+                <p style={{ fontSize: '0.85em', color: 'var(--text)', marginBottom: 8 }}>
+                  Questa azione è <strong>IRREVERSIBILE</strong>. Tutti i tuoi dati verranno cancellati permanentemente e non potranno essere recuperati:
+                </p>
+                <ul style={{ fontSize: '0.8em', color: 'var(--text-sec)', margin: '0 0 14px', paddingLeft: 20, lineHeight: 1.7 }}>
+                  <li>Tutte le abitudini e i premi</li>
+                  <li>Tutte le task (attive, completate, scadute)</li>
+                  <li>Lo storico giornaliero completo (mood, energia, note)</li>
+                  <li>La cronologia del peso</li>
+                  <li>Le letture caricate e i relativi PDF</li>
+                  <li>Punteggio, livello, streak, trofei sbloccati</li>
+                  <li>Diario, memoria del Coach AI, statistiche Psicologo AI</li>
+                  <li>Tutte le impostazioni personali (tema, notifiche, ecc.)</li>
+                </ul>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button className="btn-backup" onClick={cancelFlow} style={{ fontWeight: 700 }}>
+                    Annulla
+                  </button>
+                  <button
+                    onClick={() => setStep('confirm')}
+                    style={{
+                      width: '100%', padding: '10px', background: 'transparent',
+                      color: 'var(--danger)', border: '1px solid rgba(239,83,80,0.3)',
+                      borderRadius: 8, cursor: 'pointer', fontSize: '0.85em',
+                    }}
+                  >
+                    Continua
+                  </button>
+                </div>
+              </>
+            )}
+
+            {step === 'confirm' && (
+              <>
+                <h3 style={{ color: 'var(--danger)' }}>Ultima conferma</h3>
+                <p style={{ fontSize: '0.85em', color: 'var(--text-sec)', marginBottom: 12 }}>
+                  Per confermare, scrivi <strong style={{ color: 'var(--danger)' }}>{RESET_CONFIRM_WORD}</strong> nel campo qui sotto.
+                </p>
+                <input
+                  type="text"
+                  autoFocus
+                  value={confirmText}
+                  onChange={e => setConfirmText(e.target.value)}
+                  placeholder={RESET_CONFIRM_WORD}
+                  style={{
+                    width: '100%', padding: '10px 12px', marginBottom: 14, boxSizing: 'border-box',
+                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(239,83,80,0.3)',
+                    borderRadius: 8, color: 'var(--text)', fontSize: '0.9em',
+                  }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button className="btn-backup" onClick={cancelFlow} style={{ fontWeight: 700 }}>
+                    Annulla
+                  </button>
+                  <button
+                    onClick={runReset}
+                    disabled={confirmText !== RESET_CONFIRM_WORD}
+                    style={{
+                      width: '100%', padding: '10px', borderRadius: 8, fontSize: '0.85em',
+                      cursor: confirmText === RESET_CONFIRM_WORD ? 'pointer' : 'not-allowed',
+                      background: confirmText === RESET_CONFIRM_WORD ? 'var(--danger)' : 'rgba(255,255,255,0.06)',
+                      color: confirmText === RESET_CONFIRM_WORD ? '#fff' : '#555',
+                      border: confirmText === RESET_CONFIRM_WORD ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                      fontWeight: 700, transition: 'all 0.15s',
+                    }}
+                  >
+                    Cancella tutto definitivamente
+                  </button>
+                </div>
+              </>
+            )}
+
+            {step === 'loading' && (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{
+                  width: 36, height: 36, margin: '0 auto 16px', borderRadius: '50%',
+                  border: '3px solid rgba(239,83,80,0.2)', borderTopColor: 'var(--danger)',
+                  animation: 'spin 0.8s linear infinite',
+                }} />
+                <p style={{ fontSize: '0.85em', color: 'var(--text-sec)' }}>
+                  Cancellazione in corso... può richiedere qualche secondo.
+                </p>
+              </div>
+            )}
+
+            {step === 'done' && (
+              <>
+                {result?.success ? (
+                  <>
+                    <h3 style={{ color: 'var(--success, #4caf50)' }}>✅ Reset completato</h3>
+                    <p style={{ fontSize: '0.85em', color: 'var(--text-sec)', marginBottom: 16 }}>
+                      L'app è stata riportata allo stato iniziale. Verrai reindirizzato alla tab Oggi.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 style={{ color: '#EF9F27' }}>⚠️ Reset completato con avvisi</h3>
+                    <p style={{ fontSize: '0.85em', color: 'var(--text-sec)', marginBottom: 8 }}>
+                      Alcuni elementi non sono stati eliminati correttamente:
+                    </p>
+                    <ul style={{ fontSize: '0.75em', color: 'var(--text-sec)', margin: '0 0 16px', paddingLeft: 18, maxHeight: 160, overflowY: 'auto' }}>
+                      {result?.errors?.map((err, i) => <li key={i}>{err}</li>)}
+                    </ul>
+                  </>
+                )}
+                <button
+                  className="btn-backup"
+                  onClick={() => window.location.reload()}
+                  style={{ fontWeight: 700 }}
+                >
+                  Continua
+                </button>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+    </>
   )
 }

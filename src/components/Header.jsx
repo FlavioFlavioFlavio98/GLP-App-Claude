@@ -1,27 +1,9 @@
-import { useEffect, useState } from 'react'
 import { useApp } from '../lib/store'
 import { useCountUp } from '../hooks/useCountUp'
-import { trackEvent } from '../lib/achievementLogic'
-import { db } from '../lib/firebase'
-import { collection, onSnapshot, query } from 'firebase/firestore'
-import { readingUrgency } from '../modals/ReadingsPage'
 
-function useReadingsBadge(authUserId) {
-  const [count, setCount] = useState(0)
-  useEffect(() => {
-    if (!authUserId) return
-    const q = query(collection(db, 'users', authUserId, 'readings'))
-    return onSnapshot(q, snap => {
-      const urgent = snap.docs.filter(d => readingUrgency({ id: d.id, ...d.data() }).level >= 1).length
-      setCount(urgent)
-    })
-  }, [authUserId])
-  return count
-}
-
-export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
+export default function Header({ isReadOnly }) {
   const { state, actions } = useApp()
-  const { currentUser, authUserId, userColors, globalData, allUsersData, theme, lastDarkTheme } = state
+  const { currentUser, authUserId, userColors, globalData, allUsersData } = state
   const color = userColors[currentUser]
   const score = globalData?.score ?? 0
   const { displayVal: scoreDisplay, animClass: scoreAnim } = useCountUp(score)
@@ -29,8 +11,6 @@ export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
   // Avatar: from profile, fallback to default emoji
   const authData = allUsersData[authUserId]
   const avatar = authData?.profile?.avatar || (authUserId === 'flavio' ? '🔥' : '⭐')
-
-  const readingsBadge = useReadingsBadge(!isReadOnly ? authUserId : null)
 
   return (
     <div className="identity-bar">
@@ -57,51 +37,11 @@ export default function Header({ isReadOnly, onOpenPsych, onOpenReadings }) {
         </div>
       </div>
       <div className="header-actions">
-        {/* Psicologo AI — solo Flavio, solo non read-only */}
-        {authUserId === 'flavio' && !isReadOnly && onOpenPsych && (
-          <button className="icon-btn" onClick={onOpenPsych} title="Psicologo AI">
-            <span style={{ fontSize: 18 }}>🧠</span>
+        {!isReadOnly && (
+          <button className="icon-btn" onClick={() => actions.openModal('insights')} title="Insight">
+            <span style={{ fontSize: 18 }}>💡</span>
           </button>
         )}
-        {/* Coach — solo Flavio, solo non read-only */}
-        {authUserId === 'flavio' && !isReadOnly && (
-          <button className="icon-btn" onClick={() => actions.openModal('coach')} title="Coach AI">
-            <span style={{ fontSize: 18 }}>🤖</span>
-          </button>
-        )}
-        {!isReadOnly && onOpenReadings && (
-          <button className="icon-btn" onClick={onOpenReadings} title="Letture" style={{ position: 'relative' }}>
-            <span style={{ fontSize: 18 }}>📚</span>
-            {readingsBadge > 0 && (
-              <span style={{
-                position: 'absolute', top: -2, right: -2,
-                minWidth: 16, height: 16, borderRadius: 8,
-                background: '#e53935', color: '#fff',
-                fontSize: '0.6em', fontWeight: 800, lineHeight: '16px',
-                textAlign: 'center', padding: '0 3px',
-              }}>
-                {readingsBadge}
-              </span>
-            )}
-          </button>
-        )}
-        {/* Day/Night toggle */}
-        <button
-          className="icon-btn"
-          title={theme === 'light' ? 'Modalità scura' : 'Modalità chiara'}
-          onClick={() => {
-            if (theme === 'light') {
-              actions.setTheme(lastDarkTheme || 'dark')
-            } else {
-              actions.setTheme('light')
-            }
-            actions.vibrate('light')
-          }}
-        >
-          <span className="material-icons-round" style={{ fontSize: 20 }}>
-            {theme === 'light' ? 'dark_mode' : 'light_mode'}
-          </span>
-        </button>
         <button className="icon-btn" onClick={() => actions.openModal('settings')}>
           <span className="material-icons-round" style={{ fontSize: 20 }}>settings</span>
         </button>

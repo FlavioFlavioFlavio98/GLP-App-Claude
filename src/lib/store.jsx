@@ -8,8 +8,8 @@ import {
   arrayUnion, collection, getDocs, increment, runTransaction,
   addDoc, serverTimestamp,
 } from 'firebase/firestore'
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
-import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, recalculateScore } from './habitLogic'
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
+import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 
@@ -59,12 +59,18 @@ function reducer(state, action) {
         currentUser: state.authUserId,
         globalData: state.allUsersData[state.authUserId] || null,
       }
-    case 'SET_USER_DATA':
+    case 'SET_USER_DATA': {
+      // score non è mai salvato staticamente: viene sempre ricalcolato al volo
+      // qui, una sola volta per aggiornamento dati, così ogni componente che legge
+      // globalData.score/allUsersData[x].score vede sempre il totale corretto senza
+      // doverlo ricalcolare ad ogni render.
+      const dataWithScore = { ...action.data, score: calculateTotalScore(action.data) }
       return {
         ...state,
-        allUsersData: { ...state.allUsersData, [action.user]: action.data },
-        globalData: action.user === state.currentUser ? action.data : state.globalData,
+        allUsersData: { ...state.allUsersData, [action.user]: dataWithScore },
+        globalData: action.user === state.currentUser ? dataWithScore : state.globalData,
       }
+    }
     case 'SET_VIEW_DATE':
       return { ...state, viewDate: action.date }
     case 'SET_TOAST':
@@ -299,7 +305,7 @@ export function AppProvider({ children }) {
 
       const isMulti = getItemValueAtDate(habitObj, 'isMulti', viewDate)
 
-      let score, finalEntry, finalHabitsArr, actionType = 'neutral'
+      let finalEntry, finalHabitsArr, actionType = 'neutral'
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -352,8 +358,6 @@ export function AppProvider({ children }) {
             }
           }
 
-          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: entry }
-          score = recalculateScore(habitsArr, freshData.rewards || [], newDailyLogs)
           finalEntry = entry
           finalHabitsArr = habitsArr
 
@@ -361,7 +365,6 @@ export function AppProvider({ children }) {
             [`dailyLogs.${viewDate}.habits`]: entry.habits,
             [`dailyLogs.${viewDate}.failedHabits`]: entry.failedHabits,
             [`dailyLogs.${viewDate}.habitLevels`]: entry.habitLevels,
-            score,
             habits: habitsArr,
           })
         })
@@ -371,17 +374,17 @@ export function AppProvider({ children }) {
         return
       }
 
-      await actions._logHistory(authUserId, score)
-
       if (actionType === 'done') {
         import('canvas-confetti').then(m => m.default({ particleCount: 60, spread: 60, origin: { y: 0.7 }, colors: [authUserId === 'flavio' ? '#ffca28' : '#d05ce3'] }))
         actions.showToast('Completata!', '✅')
       } else if (actionType === 'failed') {
         actions.showToast('Segnata come fallita', '❌')
       }
+      const updatedData = { ...globalData, dailyLogs: { ...globalData.dailyLogs, [viewDate]: finalEntry }, habits: finalHabitsArr }
+      const score = calculateTotalScore(updatedData)
+      const freshData = { ...updatedData, score }
       actions._triggerPersistentNotification(authUserId, score, finalEntry, finalHabitsArr)
       setTimeout(() => {
-        const freshData = { ...globalData, score, dailyLogs: { ...globalData.dailyLogs, [viewDate]: finalEntry }, habits: finalHabitsArr }
         actions._checkAchievements(freshData, authUserId)
       }, 500)
     },
@@ -395,7 +398,6 @@ export function AppProvider({ children }) {
         if (!window.confirm(`Comprare ${name} per ${cost}?`)) return
       }
       const ref = doc(db, 'users', authUserId)
-      let newScore
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -406,12 +408,8 @@ export function AppProvider({ children }) {
           if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
           const purchases = [...(raw.purchases || []), { name, cost, time: Date.now() }]
 
-          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: { ...raw, purchases } }
-          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
-
           transaction.update(ref, {
             [`dailyLogs.${viewDate}.purchases`]: purchases,
-            score: newScore,
           })
         })
       } catch (err) {
@@ -420,22 +418,19 @@ export function AppProvider({ children }) {
         return
       }
 
-      await actions._logHistory(authUserId, newScore)
       actions.vibrate('heavy')
       import('canvas-confetti').then(m => m.default({ shapes: ['circle'], colors: ['#4caf50'] }))
       actions.showToast('Acquisto effettuato!', '🛍️')
       setTimeout(() => {
-        const freshData = { ...globalData, score: newScore }
-        actions._checkAchievements(freshData, authUserId)
+        actions._checkAchievements(globalData, authUserId)
       }, 500)
     },
 
     async refundPurchase(idx, cost) {
       if (isReadOnly()) return
       if (!window.confirm('Annullare acquisto e rimborsare punti?')) return
-      const { authUserId, globalData, viewDate } = state
+      const { authUserId, viewDate } = state
       const ref = doc(db, 'users', authUserId)
-      let newScore
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -447,12 +442,8 @@ export function AppProvider({ children }) {
           const purchases = [...(raw.purchases || [])]
           purchases.splice(idx, 1)
 
-          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: { ...raw, purchases } }
-          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
-
           transaction.update(ref, {
             [`dailyLogs.${viewDate}.purchases`]: purchases,
-            score: newScore,
           })
         })
       } catch (err) {
@@ -461,7 +452,6 @@ export function AppProvider({ children }) {
         return
       }
 
-      await actions._logHistory(authUserId, newScore)
       actions.vibrate('light')
       actions.showToast('Rimborsato!', '↩️')
     },
@@ -596,13 +586,94 @@ export function AppProvider({ children }) {
       }
     },
 
-    async hardReset() {
-      if (isReadOnly()) return
-      const code = window.prompt('Scrivi RESET per confermare:')
-      if (code !== 'RESET') return
+    // Cancella TUTTI i dati dell'utente (documento principale, sotto-collezioni,
+    // file PDF in Storage) e riporta l'account allo stato di un account nuovo.
+    // L'autenticazione non viene toccata. Non blocca al primo errore: prosegue
+    // con gli altri step e restituisce l'elenco di eventuali fallimenti.
+    async resetAllUserData() {
+      if (isReadOnly()) return { success: false, errors: ['Operazione non consentita in sola lettura'] }
       const { authUserId } = state
-      await deleteDoc(doc(db, 'users', authUserId))
-      window.location.reload()
+      if (!authUserId) return { success: false, errors: ['Utente non autenticato'] }
+      const errors = []
+
+      // 1) Storage: elenca ed elimina fisicamente tutti i PDF dell'utente
+      const realUid = auth.currentUser?.uid
+      if (realUid) {
+        try {
+          const list = await listAll(storageRef(storage, `pdfs/${realUid}`))
+          const results = await Promise.allSettled(list.items.map(item => deleteObject(item)))
+          results.forEach((r, i) => {
+            if (r.status === 'rejected') errors.push(`File PDF "${list.items[i].name}": ${r.reason?.message || r.reason}`)
+          })
+        } catch (e) {
+          errors.push(`Storage PDF: ${e.message || e}`)
+        }
+      }
+
+      // 2) Sotto-collezioni semplici (Firestore non le cancella insieme al documento padre)
+      for (const sub of ['fcmTokens', 'settings', 'private']) {
+        try {
+          const snap = await getDocs(collection(db, 'users', authUserId, sub))
+          const results = await Promise.allSettled(snap.docs.map(d => deleteDoc(d.ref)))
+          results.forEach((r, i) => {
+            if (r.status === 'rejected') errors.push(`${sub}/${snap.docs[i].id}: ${r.reason?.message || r.reason}`)
+          })
+        } catch (e) {
+          errors.push(`Sotto-collezione ${sub}: ${e.message || e}`)
+        }
+      }
+
+      // 3) Letture (readings) + le loro sotto-collezioni logs
+      try {
+        const readingsSnap = await getDocs(collection(db, 'users', authUserId, 'readings'))
+        for (const readingDoc of readingsSnap.docs) {
+          try {
+            const logsSnap = await getDocs(collection(db, 'users', authUserId, 'readings', readingDoc.id, 'logs'))
+            const logResults = await Promise.allSettled(logsSnap.docs.map(d => deleteDoc(d.ref)))
+            logResults.forEach((r, i) => {
+              if (r.status === 'rejected') errors.push(`readings/${readingDoc.id}/logs/${logsSnap.docs[i].id}: ${r.reason?.message || r.reason}`)
+            })
+          } catch (e) {
+            errors.push(`Log letture di ${readingDoc.id}: ${e.message || e}`)
+          }
+          try {
+            await deleteDoc(readingDoc.ref)
+          } catch (e) {
+            errors.push(`Lettura ${readingDoc.id}: ${e.message || e}`)
+          }
+        }
+      } catch (e) {
+        errors.push(`Letture: ${e.message || e}`)
+      }
+
+      // 4) Documento principale (habits, rewards, dailyLogs, tags, tasks, quickExercises,
+      // journalEntries, activityLog, notificationSettings, psychStats, score, ecc.)
+      try {
+        await deleteDoc(doc(db, 'users', authUserId))
+      } catch (e) {
+        errors.push(`Documento utente: ${e.message || e}`)
+      }
+
+      // 5) Ricrea un documento vuoto identico a quello di un account nuovo,
+      // così l'app non resta bloccata in attesa di dati inesistenti
+      try {
+        await setDoc(doc(db, 'users', authUserId), {
+          score: 0, habits: [], rewards: [], history: [], dailyLogs: {}, tags: [],
+        })
+      } catch (e) {
+        errors.push(`Ricreazione documento: ${e.message || e}`)
+      }
+
+      // 6) Preferenze locali (tema, tab attiva, filtri, wake lock, ecc.)
+      try {
+        Object.keys(localStorage)
+          .filter(k => k.startsWith('glp_'))
+          .forEach(k => localStorage.removeItem(k))
+      } catch (e) {
+        errors.push(`Preferenze locali: ${e.message || e}`)
+      }
+
+      return { success: errors.length === 0, errors }
     },
 
     // ─── FCM / Notifications ─────────────────────────────────────────────────
@@ -703,16 +774,14 @@ export function AppProvider({ children }) {
       const habit = habitsArr[idx]
       const gc = habit.goalConfig || {}
       const target = gc.targetValue || 1
-      let score = globalData.score
       const updated = { ...habit, goalConfig: { ...gc, currentValue: newValue } }
       if (newValue >= target && !gc.completedAt) {
         updated.goalConfig.completedAt = toDateString(new Date())
-        score += (gc.rewardOnComplete || 0)
         import('canvas-confetti').then(m => m.default({ particleCount: 100, spread: 80, origin: { y: 0.6 } }))
         actions.showToast(`Obiettivo raggiunto! +${gc.rewardOnComplete || 0}pt 🎉`, '🎯')
       }
       habitsArr[idx] = updated
-      await updateDoc(ref, { habits: habitsArr, score })
+      await updateDoc(ref, { habits: habitsArr })
       if (gc.completedAt || newValue < target) actions.vibrate('light')
     },
 
@@ -813,10 +882,8 @@ export function AppProvider({ children }) {
       }
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, {
-        score: increment(pts),
         [`exerciseLog.${logDate}`]: arrayUnion(logEntry),
       })
-      await actions._logHistory('flavio', (gd.score || 0) + pts)
       actions.vibrate('light')
       actions.showToast(`+${pts} pt 💪`, '💪')
     },
@@ -831,10 +898,8 @@ export function AppProvider({ children }) {
       const newLog = dayLog.filter(e => e.id !== logId)
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, {
-        score: increment(-entry.pts),
         [`exerciseLog.${dateStr}`]: newLog,
       })
-      await actions._logHistory('flavio', (gd.score || 0) - entry.pts)
       actions.showToast(`-${entry.pts} pt annullato`, '↩️')
     },
 
@@ -929,7 +994,6 @@ export function AppProvider({ children }) {
         }
         if (!alreadyGiven) {
           update[`dailyLogs.${dateStr}.moodPtsGiven`] = true
-          update.score = (freshData.score || 0) + 0.5
         }
         transaction.update(ref, update)
       })
@@ -946,8 +1010,6 @@ export function AppProvider({ children }) {
       if (!habit || !habit.numericConfig) return
       const { calcNumericPoints: cnp } = await import('./habitLogic')
       const newPts = cnp(parseFloat(value), habit.numericConfig)
-
-      let newScore
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -968,13 +1030,9 @@ export function AppProvider({ children }) {
           }
           if (!entry.habits.includes(habitId)) entry.habits.push(habitId)
 
-          const newDailyLogs = { ...freshData.dailyLogs, [viewDate]: entry }
-          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
-
           transaction.update(ref, {
             [`dailyLogs.${viewDate}.habitValues`]: entry.habitValues,
             [`dailyLogs.${viewDate}.habits`]: entry.habits,
-            score: newScore,
           })
         })
       } catch (err) {
@@ -983,7 +1041,6 @@ export function AppProvider({ children }) {
         return
       }
 
-      await actions._logHistory(authUserId, newScore)
       actions.vibrate('light')
       actions.showToast(`${newPts >= 0 ? '+' : ''}${newPts} pt`, newPts >= 0 ? '✅' : '❌')
     },
@@ -1136,18 +1193,6 @@ export function AppProvider({ children }) {
       } catch { /* non-critical */ }
     },
 
-    async _logHistory(user, score) {
-      try {
-        const ref = doc(db, 'users', user)
-        const snap = await getDoc(ref)
-        if (!snap.exists()) return
-        const hist = [...(snap.data().history || [])]
-        hist.push({ date: new Date().toISOString(), score })
-        if (hist.length > 500) hist.shift()
-        await updateDoc(ref, { history: hist })
-      } catch { /* non-critical */ }
-    },
-
     // ─── Tasks ────────────────────────────────────────────────────────────────
     async addTask(taskData) {
       if (isReadOnly()) return
@@ -1192,8 +1237,7 @@ export function AppProvider({ children }) {
         penaltyApplied: false,
       }
       const tasks = [...(globalData.tasks || []), newTask]
-      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(rewardNum) })
-      await actions._logHistory(authUserId, (globalData.score || 0) + rewardNum)
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.vibrate('light')
       actions.showToast(`Task già fatta registrata! +${rewardNum}pt`, '✅')
     },
@@ -1226,8 +1270,7 @@ export function AppProvider({ children }) {
           ? { ...t, status: 'completed', completedAt: now, rewardApplied: true }
           : t
       )
-      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(rewardNum) })
-      await actions._logHistory(authUserId, (globalData.score || 0) + task.reward)
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.vibrate('light')
       actions.showToast(`Task completata! +${task.reward}pt 🎉`, '✅')
       if (task.reward >= 10) {
@@ -1252,8 +1295,7 @@ export function AppProvider({ children }) {
           ? { ...t, status: 'active', completedAt: null, rewardApplied: false }
           : t
       )
-      await updateDoc(doc(db, 'users', authUserId), { tasks, score: increment(-rewardNum) })
-      await actions._logHistory(authUserId, (globalData.score || 0) - rewardNum)
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.showToast('Completamento annullato', '↩️')
     },
 
@@ -1281,17 +1323,12 @@ export function AppProvider({ children }) {
       const task = (globalData.tasks || []).find(t => t.id === taskId)
       if (!task) return
       const rewardNum = parseInt(task.reward) || 0
-      let refundPoints = false
-      if (task.status === 'completed' && rewardNum > 0) {
-        refundPoints = window.confirm(`Vuoi anche restituire i ${rewardNum}pt guadagnati?`)
-      } else {
-        if (!window.confirm('Eliminare definitivamente questa task?')) return
-      }
+      const confirmMsg = task.status === 'completed' && rewardNum > 0
+        ? `Eliminare questa task? I ${rewardNum}pt guadagnati verranno rimossi dal punteggio.`
+        : 'Eliminare definitivamente questa task?'
+      if (!window.confirm(confirmMsg)) return
       const tasks = (globalData.tasks || []).filter(t => t.id !== taskId)
-      const update = { tasks }
-      if (refundPoints) update.score = increment(-rewardNum)
-      await updateDoc(doc(db, 'users', authUserId), update)
-      if (refundPoints) await actions._logHistory(authUserId, (globalData.score || 0) - rewardNum)
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.showToast('Task eliminata', '🗑️')
     },
 
@@ -1346,7 +1383,7 @@ export function AppProvider({ children }) {
       const newCost = calcTrackedCost(quantity, reward)
       const ref = doc(db, 'users', authUserId)
 
-      let newScore, diff
+      let diff
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -1361,14 +1398,8 @@ export function AppProvider({ children }) {
           diff = newCost - oldCost
           trackedRewards[rewardId] = { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() }
 
-          const newDailyLogs = { ...freshData.dailyLogs, [dateStr]: { ...raw, trackedRewards } }
-          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
-
-          console.log('[registerTrackedReward] rewardId=', rewardId, 'qty=', quantity, 'date=', dateStr, 'newCost=', newCost, 'newScore=', newScore, 'trackedRewards=', trackedRewards)
-
           transaction.update(ref, {
             [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
-            score: newScore,
           })
         })
       } catch (err) {
@@ -1377,7 +1408,6 @@ export function AppProvider({ children }) {
         return
       }
 
-      await actions._logHistory(authUserId, newScore)
       if (diff > 0) actions.showToast(`Registrato: -${newCost}pt`, '📊')
       else if (diff < 0) actions.showToast(`Aggiornato: rimborso +${Math.abs(diff)}pt`, '📊')
       else actions.showToast('Registrato', '📊')
@@ -1393,7 +1423,6 @@ export function AppProvider({ children }) {
       const { calcTrackedCost } = await import('./habitLogic')
       const newCost = calcTrackedCost(quantity, reward)
       const ref = doc(db, 'users', authUserId)
-      let newScore
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -1404,14 +1433,9 @@ export function AppProvider({ children }) {
           if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
 
           const trackedRewards = { ...(raw.trackedRewards || {}), [rewardId]: { quantity: parseInt(quantity) || 0, cost: newCost, registeredAt: Date.now() } }
-          const newDailyLogs = { ...freshData.dailyLogs, [dateStr]: { ...raw, trackedRewards } }
-          newScore = recalculateScore(freshData.habits || [], freshData.rewards || [], newDailyLogs)
-
-          console.log('[patchTrackedRewardManual] rewardId=', rewardId, 'date=', dateStr, 'qty=', quantity, 'newCost=', newCost, 'newScore=', newScore)
 
           transaction.update(ref, {
             [`dailyLogs.${dateStr}.trackedRewards`]: trackedRewards,
-            score: newScore,
           })
         })
       } catch (err) {
@@ -1420,20 +1444,15 @@ export function AppProvider({ children }) {
         return
       }
 
-      await actions._logHistory(authUserId, newScore)
       actions.showToast(`Corretto ${dateStr}: ${quantity}x ${reward.name} (-${newCost}pt)`, '✅')
     },
 
-    async forceRecalculateScore() {
-      if (isReadOnly()) return
-      const { authUserId, globalData } = state
-      const newScore = recalculateScore(
-        globalData.habits || [],
-        globalData.rewards || [],
-        globalData.dailyLogs || {}
-      )
-      await updateDoc(doc(db, 'users', authUserId), { score: newScore })
-      actions.showToast(`Punteggio ricalcolato: ${newScore}pt`, '✅')
+    // Il punteggio è sempre calcolato al volo (calculateTotalScore) e non è più
+    // salvato su Firestore — questo pulsante serve solo a confermare all'utente
+    // che il valore mostrato è corretto, senza scrivere nulla.
+    forceRecalculateScore() {
+      const { globalData } = state
+      actions.showToast(`Punteggio verificato: ${globalData?.score ?? 0}pt`, '✅')
     },
 
     // Completa una task scaduta: nessun reward, nessuna modifica allo score.
@@ -1460,10 +1479,7 @@ export function AppProvider({ children }) {
         if (t.id !== task.id) return t
         return { ...t, status: 'active', expiredAt: null, deadline: newDeadline, penaltyApplied: false }
       })
-      const scoreUpdate = task.penaltyApplied && task.penalty > 0
-        ? { score: increment(task.penalty) }
-        : {}
-      await updateDoc(doc(db, 'users', authUserId), { tasks, ...scoreUpdate })
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.showToast('Task riaperta!', '↩️')
     },
 
@@ -1473,14 +1489,8 @@ export function AppProvider({ children }) {
       const { authUserId } = state
       const date = toDateString(new Date())
       const userRef = doc(db, 'users', authUserId)
-      await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(userRef)
-        const freshData = snap.data()
-        const newScore = (freshData.score || 0) + 1
-        transaction.update(userRef, {
-          [`dailyLogs.${date}.checkIns.${slot}`]: { done: true, pts: 1, answer, answeredAt: new Date().toISOString() },
-          score: newScore,
-        })
+      await updateDoc(userRef, {
+        [`dailyLogs.${date}.checkIns.${slot}`]: { done: true, pts: 1, answer, answeredAt: new Date().toISOString() },
       })
       actions.showToast('Check-in completato! +1pt', '✅')
     },
@@ -1596,8 +1606,7 @@ export function AppProvider({ children }) {
           }
         })
 
-        const newScore = (freshData.score || 0) + scoreDelta
-        transaction.update(userRef, { tasks: updatedTasks, score: newScore })
+        transaction.update(userRef, { tasks: updatedTasks })
       })
 
       actions.showToast(`Task completata! +${rewardNum}pt`, '✅')
@@ -1646,13 +1655,11 @@ export function AppProvider({ children }) {
         lastReadAt: serverTimestamp(),
         totalReadCount: increment(1),
       })
-      // Aggiorna punteggio globale e guadagni del giorno
+      // Aggiorna i guadagni del giorno (il punteggio totale è sempre ricalcolato al volo)
       if (pts > 0) {
         await updateDoc(doc(db, 'users', authUserId), {
-          score: increment(pts),
           [`dailyLogs.${dateStr}.readingEarned`]: increment(pts),
         })
-        actions._logHistory(authUserId, (state.allUsersData?.[authUserId]?.score || 0) + pts)
       }
       actions.vibrate('light')
       actions.showToast(`Lettura completata! +${pts}pt`, '📖')

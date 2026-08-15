@@ -202,11 +202,9 @@ exports.expireTasks = onSchedule(
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
     const tasks = flavioSnap.data()?.tasks || []
 
-    let scoreDeduction = 0
     let hasChanges = false
     const updatedTasks = tasks.map(task => {
       if (task.status === 'active' && task.deadline < today) {
-        scoreDeduction += (task.penalty || 0)
         hasChanges = true
         return {
           ...task,
@@ -220,12 +218,11 @@ exports.expireTasks = onSchedule(
 
     if (!hasChanges) return
 
-    const update = { tasks: updatedTasks }
-    if (scoreDeduction > 0) {
-      update.score = admin.firestore.FieldValue.increment(-scoreDeduction)
-    }
-    await flavioRef.update(update)
-    console.log(`[expireTasks] expired ${updatedTasks.filter(t => t.status === 'expired').length - tasks.filter(t => t.status === 'expired').length} tasks, deducted ${scoreDeduction} points`)
+    // Il punteggio non è più un campo salvato: viene sempre ricalcolato al volo
+    // lato client sommando i dailyLogs/tasks, quindi qui basta aggiornare i task
+    // (penaltyApplied:true viene già letto dal calcolo dinamico della penalità).
+    await flavioRef.update({ tasks: updatedTasks })
+    console.log(`[expireTasks] expired ${updatedTasks.filter(t => t.status === 'expired').length - tasks.filter(t => t.status === 'expired').length} tasks`)
   }
 )
 

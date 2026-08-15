@@ -84,9 +84,6 @@ export default function TaskSection({ minimalMode }) {
           <span className="material-icons-round" style={{ fontSize: 18, color: 'var(--theme-color)' }}>{expanded ? 'expand_less' : 'expand_more'}</span>
         </button>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn-icon" onClick={() => actions.openModal('taskHistory')} title="Storico task">
-            <span className="material-icons-round" style={{ fontSize: 18 }}>history</span>
-          </button>
           <button className="btn-icon" onClick={() => actions.openModal('taskAdd')} title="Aggiungi task">
             <span className="material-icons-round" style={{ fontSize: 18 }}>add</span>
           </button>

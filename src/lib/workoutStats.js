@@ -61,6 +61,86 @@ export function setDailyGoalOverride(value) {
   } catch { /* localStorage non disponibile */ }
 }
 
+// ─── Timer di recupero ───────────────────────────────────────────────────────────
+// Anche questo vive solo in localStorage (come la sessione): nessun campo Firestore,
+// il countdown è puramente un aiuto visivo lato client durante l'allenamento.
+
+const REST_DURATION_KEY = 'glp_workout_rest_duration' // default generale, in secondi
+const REST_TIMER_KEY = 'glp_workout_rest_timer'        // countdown attivo
+export const DEFAULT_REST_SECONDS = 90
+
+export function getRestDuration() {
+  try {
+    const stored = localStorage.getItem(REST_DURATION_KEY)
+    const n = parseInt(stored)
+    return (!isNaN(n) && n > 0) ? n : DEFAULT_REST_SECONDS
+  } catch { return DEFAULT_REST_SECONDS }
+}
+
+export function setRestDuration(seconds) {
+  try { localStorage.setItem(REST_DURATION_KEY, String(Math.max(10, Math.round(seconds)))) } catch { /* ignore */ }
+}
+
+// Avvia (o riavvia) il countdown — da chiamare dopo ogni serie salvata oggi.
+export function startRestTimer(durationSeconds) {
+  const duration = durationSeconds || getRestDuration()
+  const timer = { startedAt: Date.now(), duration }
+  try { localStorage.setItem(REST_TIMER_KEY, JSON.stringify(timer)) } catch { /* ignore */ }
+  return timer
+}
+
+// Estende/riduce il countdown attivo "al volo" (es. +15s/-15s), senza toccare il
+// default generale nelle impostazioni.
+export function adjustRestTimer(deltaSeconds) {
+  const active = getActiveRestTimer()
+  if (!active) return null
+  const remaining = Math.max(0, active.remaining + deltaSeconds)
+  const timer = { startedAt: Date.now(), duration: remaining }
+  try { localStorage.setItem(REST_TIMER_KEY, JSON.stringify(timer)) } catch { /* ignore */ }
+  return timer
+}
+
+export function getActiveRestTimer() {
+  try {
+    const raw = localStorage.getItem(REST_TIMER_KEY)
+    if (!raw) return null
+    const timer = JSON.parse(raw)
+    if (!timer?.startedAt || !timer?.duration) return null
+    const elapsed = (Date.now() - timer.startedAt) / 1000
+    const remaining = Math.max(0, timer.duration - elapsed)
+    return { ...timer, remaining, finished: remaining <= 0 }
+  } catch { return null }
+}
+
+export function cancelRestTimer() {
+  try { localStorage.removeItem(REST_TIMER_KEY) } catch { /* ignore */ }
+}
+
+// Beep leggero (Web Audio, nessun asset esterno) + vibrazione a fine countdown.
+// Va bene se il beep non parte (es. contesto audio bloccato dal browser finché
+// l'utente non ha interagito con la pagina) — resta comunque la vibrazione e
+// l'indicatore visivo nel componente del timer.
+export function playRestFinishedAlert() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (Ctx) {
+      const ctx = new Ctx()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = 880
+      gain.gain.setValueAtTime(0.001, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.4)
+      osc.onended = () => ctx.close()
+    }
+  } catch { /* audio non disponibile, va bene */ }
+  try { navigator.vibrate?.([120, 60, 120]) } catch { /* vibration non disponibile */ }
+}
+
 // ─── Banner motivazionale ───────────────────────────────────────────────────────
 
 // L'esercizio dell'ultima serie loggata oggi (per data+ora), usato per decidere

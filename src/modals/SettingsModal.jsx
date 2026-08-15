@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
 import { APP_VERSION, APP_UPDATED, APP_BUILD_TIME, APP_BUILD_HASH } from '../version'
+import { getRestDuration, setRestDuration } from '../lib/workoutStats'
 
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.()
 
@@ -32,6 +33,7 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
   const { modal, userColors, density, authUserId, allUsersData, currentUser, minimalMode, wakeLockEnabled, theme, lastDarkTheme } = state
   const supportsWakeLock = 'wakeLock' in navigator
   const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [restSeconds, setRestSeconds] = useState(() => getRestDuration())
 
   if (modal !== 'settings') return null
 
@@ -157,6 +159,36 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
             Notifiche & Backup email
           </button>
         </div>
+
+        {/* ALLENAMENTO — solo Flavio */}
+        {authUserId === 'flavio' && (
+          <div className="settings-section">
+            <div className="settings-section-title">🏋️ Allenamento</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.85em', fontWeight: 600 }}>Timer di recupero</div>
+                <div style={{ fontSize: '0.68em', color: '#555' }}>Countdown proposto dopo ogni serie</div>
+              </div>
+              <input
+                type="number"
+                min={10}
+                step={5}
+                value={restSeconds}
+                onChange={e => {
+                  const n = parseInt(e.target.value) || 0
+                  setRestSeconds(n)
+                  if (n >= 10) setRestDuration(n)
+                }}
+                style={{
+                  width: 64, padding: '8px 10px', borderRadius: 8, textAlign: 'center',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+                  color: 'var(--text)', fontSize: '0.9em',
+                }}
+              />
+              <span style={{ fontSize: '0.78em', color: '#666' }}>sec</span>
+            </div>
+          </div>
+        )}
 
         {/* PESO + USO APP — solo Flavio */}
         {authUserId === 'flavio' && (

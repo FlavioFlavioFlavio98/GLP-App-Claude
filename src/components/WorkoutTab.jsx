@@ -1,6 +1,7 @@
 import MuscleHeatmapBody from './MuscleHeatmapBody'
 import WorkoutMotivationBanner from './WorkoutMotivationBanner'
 import WorkoutGoalProgress from './WorkoutGoalProgress'
+import WorkoutRestTimer from './WorkoutRestTimer'
 import { toDateString } from '../lib/habitLogic'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
@@ -34,6 +35,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
       {/* Obiettivo di sforzo giornaliero */}
       <WorkoutGoalProgress exerciseLog={globalData?.exerciseLog || {}} />
+
+      {/* Timer di recupero — visibile solo se un countdown è attivo */}
+      <WorkoutRestTimer />
 
       {/* Muscle heatmap */}
       <MuscleHeatmapBody

@@ -1,13 +1,43 @@
+import { useEffect, useState } from 'react'
 import MuscleHeatmapBody from './MuscleHeatmapBody'
 import WorkoutMotivationBanner from './WorkoutMotivationBanner'
 import WorkoutGoalProgress from './WorkoutGoalProgress'
 import WorkoutRestTimer from './WorkoutRestTimer'
 import WorkoutEffortChart from './WorkoutEffortChart'
+import WorkoutSessionBar from './WorkoutSessionBar'
+import WorkoutSessionSummary from './WorkoutSessionSummary'
 import { toDateString } from '../lib/habitLogic'
+import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary } from '../lib/workoutStats'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
+  const [sessionSummary, setSessionSummary] = useState(null)
+
+  const exerciseLog = globalData?.exerciseLog || {}
+  const quickExercises = globalData?.quickExercises || []
+
+  // Se l'ultima sessione è scaduta per inattività e non è mai stata mostrata,
+  // proponi il riepilogo anche se l'utente non ha premuto "Termina sessione"
+  useEffect(() => {
+    if (authUserId !== 'flavio' || isReadOnly) return
+    const expired = getUnseenExpiredSession()
+    if (expired) {
+      const summary = computeSessionSummary(exerciseLog, quickExercises, expired, expired.lastActivityAt)
+      markSessionSeen(expired)
+      setSessionSummary(summary)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (authUserId !== 'flavio' || isReadOnly) {
     return <div className="empty-state">Sezione workout non disponibile</div>
+  }
+
+  function handleEndSession(session) {
+    const endedAt = Date.now()
+    const summary = computeSessionSummary(exerciseLog, quickExercises, session, endedAt)
+    endWorkoutSession()
+    markSessionSeen(session)
+    setSessionSummary(summary)
   }
 
   const btnStyle = {
@@ -18,9 +48,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
     fontSize: '0.92em', fontWeight: 600, textAlign: 'left',
   }
 
-  const exercises = (globalData?.quickExercises || []).filter(e => e.active !== false)
+  const exercises = quickExercises.filter(e => e.active !== false)
   const todayStr  = toDateString(new Date())
-  const todayLog  = globalData?.exerciseLog?.[todayStr] || []
+  const todayLog  = exerciseLog[todayStr] || []
 
   function todayRepsFor(exId) {
     return todayLog.filter(s => s.exerciseId === exId).reduce((a, s) => a + s.reps, 0)
@@ -28,26 +58,33 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
   return (
     <div style={{ paddingTop: 8 }}>
+      {sessionSummary && (
+        <WorkoutSessionSummary summary={sessionSummary} onClose={() => setSessionSummary(null)} />
+      )}
+
+      {/* Sessione attiva — bottone "Termina sessione" */}
+      <WorkoutSessionBar onEndSession={handleEndSession} />
+
       {/* Banner motivazionale — sempre visibile, in cima alla pagina */}
       <WorkoutMotivationBanner
-        exerciseLog={globalData?.exerciseLog || {}}
-        quickExercises={globalData?.quickExercises || []}
+        exerciseLog={exerciseLog}
+        quickExercises={quickExercises}
       />
 
       {/* Obiettivo di sforzo giornaliero */}
-      <WorkoutGoalProgress exerciseLog={globalData?.exerciseLog || {}} />
+      <WorkoutGoalProgress exerciseLog={exerciseLog} />
 
       {/* Timer di recupero — visibile solo se un countdown è attivo */}
       <WorkoutRestTimer />
 
       {/* Muscle heatmap */}
       <MuscleHeatmapBody
-        exerciseLog={globalData?.exerciseLog || {}}
-        quickExercises={globalData?.quickExercises || []}
+        exerciseLog={exerciseLog}
+        quickExercises={quickExercises}
       />
 
       {/* Sforzo pesato nel tempo */}
-      <WorkoutEffortChart exerciseLog={globalData?.exerciseLog || {}} />
+      <WorkoutEffortChart exerciseLog={exerciseLog} />
 
       {/* Action buttons */}
       <button style={btnStyle} onClick={() => actions.openModal('quickExercise')}>

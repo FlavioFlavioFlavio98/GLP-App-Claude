@@ -220,6 +220,27 @@ function readStoredSession() {
   }
 }
 
+const SESSION_SEEN_KEY = 'glp_workout_session_last_seen'
+
+// Sessione appena scaduta per inattività (45 min) e MAI mostrata come riepilogo —
+// da controllare all'apertura della tab Workout per proporre il recap anche se
+// l'utente non ha premuto esplicitamente "Termina sessione".
+export function getUnseenExpiredSession() {
+  const raw = readStoredSession()
+  if (!raw) return null
+  if (isSessionValid(raw)) return null // ancora attiva, non è "finita"
+  try {
+    if (String(raw.startedAt) === localStorage.getItem(SESSION_SEEN_KEY)) return null
+  } catch { /* ignore */ }
+  return raw
+}
+
+// Segna una sessione come "vista" (riepilogo mostrato o scartato) così non ricompare.
+export function markSessionSeen(session) {
+  if (!session) return
+  try { localStorage.setItem(SESSION_SEEN_KEY, String(session.startedAt)) } catch { /* ignore */ }
+}
+
 function isSessionValid(session) {
   if (!session) return false
   if (Date.now() - session.lastActivityAt > SESSION_TIMEOUT_MS) return false
@@ -261,12 +282,36 @@ function timeStrToMs(dateStr, timeStr) {
   return d.getTime()
 }
 
+// I log entry salvano solo `HH:MM:SS` (niente millisecondi — vedi addExerciseSession
+// in store.jsx), quindi confrontarli con un timestamp ms-precision come startedAt
+// può escludere per errore la primissima serie di una sessione (i suoi ms vengono
+// troncati verso il basso alla ricostruzione). Si arrotonda il confine al secondo
+// per non perdere quella serie.
+function floorToSecond(ms) {
+  return Math.floor(ms / 1000) * 1000
+}
+
 // Tutte le serie di oggi che appartengono alla sessione data (qualsiasi esercizio)
 export function getSessionLogEntries(exerciseLog, session) {
   if (!session) return []
   const todayStr = toDateString(new Date())
   const todayEntries = exerciseLog?.[todayStr] || []
-  return todayEntries.filter(e => timeStrToMs(todayStr, e.time) >= session.startedAt)
+  const startFloor = floorToSecond(session.startedAt)
+  return todayEntries.filter(e => timeStrToMs(todayStr, e.time) >= startFloor)
+}
+
+// Serie in un intervallo [startMs, endMs] preciso — usata per il riepilogo di fine
+// sessione, dove serve anche un limite superiore (altrimenti, se nel frattempo si è
+// già aperta una nuova sessione, ne includerebbe erroneamente le serie).
+export function getEntriesInTimeRange(exerciseLog, startMs, endMs) {
+  const todayStr = toDateString(new Date(startMs))
+  const todayEntries = exerciseLog?.[todayStr] || []
+  const startFloor = floorToSecond(startMs)
+  const endCeil = Math.ceil(endMs / 1000) * 1000
+  return todayEntries.filter(e => {
+    const ms = timeStrToMs(todayStr, e.time)
+    return ms >= startFloor && ms <= endCeil
+  })
 }
 
 // ─── Muscoli coinvolti (per lo step "gruppo muscolare" del flusso Aggiungi serie) ──
@@ -399,5 +444,117 @@ export function computeAllStats(exerciseLog, exerciseId) {
     todayReps, todaySessions,
     isNewRecord,
     streak,
+  }
+}
+
+// ─── Riepilogo di fine sessione ─────────────────────────────────────────────────
+// Lo storico sessioni vive anch'esso solo in localStorage (max 60 voci): non è un
+// dato retroattivo (prima di questa funzionalità non esistevano sessioni), ma da
+// qui in avanti permette un vero confronto "sessioni con lo stesso focus muscolare"
+// invece di un fallback generico ogni volta.
+
+const SESSION_HISTORY_KEY = 'glp_workout_session_history'
+const MAX_SESSION_HISTORY = 60
+
+function readSessionHistory() {
+  try {
+    const raw = localStorage.getItem(SESSION_HISTORY_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    return Array.isArray(list) ? list : []
+  } catch { return [] }
+}
+
+function saveSessionToHistory(record) {
+  try {
+    const list = readSessionHistory()
+    list.push(record)
+    while (list.length > MAX_SESSION_HISTORY) list.shift()
+    localStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(list))
+  } catch { /* ignore */ }
+}
+
+// Ripartizione delle ripetizioni per gruppo muscolare in un set di log entry, più
+// il "focus" dominante: il gruppo che da solo supera il 50% delle rip. totali della
+// sessione, se esiste — altrimenti la sessione è considerata "mista" (focus null).
+function computeMuscleBreakdown(entries, quickExercises) {
+  const exMap = {}
+  ;(quickExercises || []).forEach(e => { exMap[e.id] = e })
+
+  const repsByMuscle = {}
+  let totalReps = 0
+  entries.forEach(e => {
+    const ex = exMap[e.exerciseId]
+    if (!ex) return
+    const key = getPrimaryMuscleGroup(ex) || 'altro'
+    repsByMuscle[key] = (repsByMuscle[key] || 0) + e.reps
+    totalReps += e.reps
+  })
+
+  const groups = Object.entries(repsByMuscle)
+    .map(([key, reps]) => ({ key, reps }))
+    .sort((a, b) => b.reps - a.reps)
+
+  const focus = (groups.length > 0 && totalReps > 0 && groups[0].reps / totalReps > 0.5)
+    ? groups[0].key
+    : null
+
+  return { groups, focus }
+}
+
+// Calcola il riepilogo completo di una sessione conclusa (esplicitamente o per
+// scadenza). Salva anche la sessione nello storico locale per i confronti futuri.
+export function computeSessionSummary(exerciseLog, quickExercises, session, endedAtMs) {
+  const endMs = endedAtMs || session.lastActivityAt
+  const entries = getEntriesInTimeRange(exerciseLog, session.startedAt, endMs)
+  const totalEffort = calculateWorkoutEffort(entries)
+  const { groups: muscleGroups, focus } = computeMuscleBreakdown(entries, quickExercises)
+
+  // Record battuti: per ogni esercizio coinvolto, il totale ODIERNO (di solito
+  // coincide con quello della sessione, salvo più sessioni nello stesso giorno)
+  // supera il miglior giorno storico precedente a oggi.
+  const exerciseIds = [...new Set(entries.map(e => e.exerciseId))]
+  const exMap = {}
+  ;(quickExercises || []).forEach(e => { exMap[e.id] = e })
+  const recordsBroken = exerciseIds
+    .map(exId => ({ exercise: exMap[exId], status: getExerciseRecordStatus(exerciseLog, exId) }))
+    .filter(r => r.exercise && r.status.isNewRecord)
+
+  // Confronto storico: prova prima con sessioni passate dello stesso focus
+  // muscolare; se non ce ne sono (o questa sessione è "mista"), confronto generale
+  // con tutte le sessioni passate registrate.
+  const history = readSessionHistory()
+  let comparison = null
+  if (focus) {
+    const sameFocus = history.filter(h => h.focus === focus)
+    if (sameFocus.length > 0) {
+      const avgEffort = sameFocus.reduce((a, h) => a + h.effort, 0) / sameFocus.length
+      comparison = {
+        type: 'focus', focus, count: sameFocus.length,
+        avgEffort: Math.round(avgEffort * 10) / 10,
+        deltaPct: avgEffort > 0 ? Math.round((totalEffort - avgEffort) / avgEffort * 100) : null,
+      }
+    }
+  }
+  if (!comparison && history.length > 0) {
+    const avgEffort = history.reduce((a, h) => a + h.effort, 0) / history.length
+    comparison = {
+      type: 'general', focus: null, count: history.length,
+      avgEffort: Math.round(avgEffort * 10) / 10,
+      deltaPct: avgEffort > 0 ? Math.round((totalEffort - avgEffort) / avgEffort * 100) : null,
+    }
+  }
+
+  // Salva questa sessione nello storico DOPO aver calcolato il confronto (altrimenti
+  // si confronterebbe con se stessa)
+  saveSessionToHistory({
+    startedAt: session.startedAt, endedAt: endMs,
+    effort: totalEffort, focus, exerciseCount: exerciseIds.length,
+  })
+
+  return {
+    startedAt: session.startedAt, endedAt: endMs,
+    durationMin: Math.max(1, Math.round((endMs - session.startedAt) / 60000)),
+    totalEffort, entries, muscleGroups, focus,
+    recordsBroken, comparison,
   }
 }

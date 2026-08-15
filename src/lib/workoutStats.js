@@ -16,6 +16,65 @@ export function getDayEffort(exerciseLog, dateStr) {
   return calculateWorkoutEffort(exerciseLog?.[dateStr] || [])
 }
 
+// ─── Banner motivazionale ───────────────────────────────────────────────────────
+
+// L'esercizio dell'ultima serie loggata oggi (per data+ora), usato per decidere
+// il messaggio del banner subito dopo un salvataggio.
+export function getMostRecentLoggedExercise(exerciseLog, quickExercises) {
+  const todayStr = toDateString(new Date())
+  const entries = exerciseLog?.[todayStr] || []
+  if (entries.length === 0) return null
+  const sorted = [...entries].sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+  const last = sorted[sorted.length - 1]
+  const exercise = (quickExercises || []).find(e => e.id === last.exerciseId)
+  return exercise ? { exercise, entry: last } : null
+}
+
+// Confronta le ripetizioni di oggi per un esercizio col record storico
+// (il miglior giorno PRIMA di oggi, mai includendo oggi nel confronto).
+export function getExerciseRecordStatus(exerciseLog, exerciseId) {
+  const todayStr = toDateString(new Date())
+
+  function repsOnDate(d) {
+    return (exerciseLog?.[d] || []).filter(s => s.exerciseId === exerciseId).reduce((a, s) => a + s.reps, 0)
+  }
+
+  let prevBestReps = 0, prevBestDate = null
+  Object.keys(exerciseLog || {}).forEach(d => {
+    if (d === todayStr) return
+    const r = repsOnDate(d)
+    if (r > prevBestReps) { prevBestReps = r; prevBestDate = d }
+  })
+
+  const todayReps = repsOnDate(todayStr)
+  const isNewRecord = prevBestDate !== null && todayReps > prevBestReps
+  const remaining = Math.max(0, prevBestReps - todayReps)
+  // "Vicino al record": manca al massimo il 20% del record per raggiungerlo
+  const closeToRecord = prevBestReps > 0 && !isNewRecord && remaining > 0 && remaining <= prevBestReps * 0.2
+
+  return { todayReps, prevBestReps, prevBestDate, isNewRecord, remaining, closeToRecord }
+}
+
+// Confronta lo sforzo pesato di oggi con tutti i giorni storici in cui l'utente
+// si è effettivamente allenato (sforzo > 0) — esclude i giorni a zero dal conteggio.
+export function getEffortPercentile(exerciseLog) {
+  const todayStr = toDateString(new Date())
+  const todayEffort = getDayEffort(exerciseLog, todayStr)
+
+  const historicalEfforts = Object.keys(exerciseLog || {})
+    .filter(d => d !== todayStr)
+    .map(d => getDayEffort(exerciseLog, d))
+    .filter(e => e > 0)
+
+  if (historicalEfforts.length === 0) {
+    return { todayEffort, percentile: null, totalDays: 0 }
+  }
+
+  const betterThanCount = historicalEfforts.filter(e => e < todayEffort).length
+  const percentile = Math.round((betterThanCount / historicalEfforts.length) * 100)
+  return { todayEffort, percentile, totalDays: historicalEfforts.length }
+}
+
 // ─── Sessione di allenamento (finestra temporale, non un campo Firestore) ──────
 // Vedi CLAUDE.md / discussione Fase 0: la sessione è un puntatore leggero in
 // localStorage, mai un nuovo campo su exerciseLog. Una serie "appartiene" alla

@@ -1,4 +1,5 @@
 import MuscleHeatmapBody from './MuscleHeatmapBody'
+import WorkoutMotivationBanner from './WorkoutMotivationBanner'
 import { toDateString } from '../lib/habitLogic'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
@@ -24,6 +25,12 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
   return (
     <div style={{ paddingTop: 8 }}>
+      {/* Banner motivazionale — sempre visibile, in cima alla pagina */}
+      <WorkoutMotivationBanner
+        exerciseLog={globalData?.exerciseLog || {}}
+        quickExercises={globalData?.quickExercises || []}
+      />
+
       {/* Muscle heatmap */}
       <MuscleHeatmapBody
         exerciseLog={globalData?.exerciseLog || {}}

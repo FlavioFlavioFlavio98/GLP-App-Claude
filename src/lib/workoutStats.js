@@ -558,3 +558,62 @@ export function computeSessionSummary(exerciseLog, quickExercises, session, ende
     recordsBroken, comparison,
   }
 }
+
+// ─── Heatmap allenamenti ──────────────────────────────────────────────────────
+// Stessa griglia settimane×giorni della heatmap abitudini esistente (StatsPage.jsx
+// -> buildAnnualHeatmap), ma colorata sullo sforzo pesato invece che sul netto punti.
+export function buildWorkoutHeatmap(exerciseLog, year) {
+  const today = new Date()
+  const cells = []
+
+  const jan1 = new Date(year, 0, 1)
+  const startDow = (jan1.getDay() + 6) % 7 // 0=Lun..6=Dom
+  const start = new Date(jan1)
+  start.setDate(jan1.getDate() - startDow)
+
+  const d = new Date(start)
+  for (let w = 0; w < 53; w++) {
+    for (let dow = 0; dow < 7; dow++) {
+      const dateStr = toDateString(d)
+      const inYear = d.getFullYear() === year
+      const inFuture = d > today
+      const effort = (inYear && !inFuture) ? getDayEffort(exerciseLog, dateStr) : 0
+      cells.push({
+        dateStr, effort, hasData: effort > 0,
+        dow, month: d.getMonth(), day: d.getDate(), week: w, inYear: inYear && !inFuture,
+      })
+      d.setDate(d.getDate() + 1)
+    }
+  }
+  return cells
+}
+
+// Streak "globale" (qualsiasi esercizio, non uno specifico) — stessa logica di
+// computeStreak ma su tutti i giorni in cui c'è stato sforzo > 0.
+export function computeGlobalWorkoutStreak(exerciseLog) {
+  const dates = Object.keys(exerciseLog || {})
+    .filter(d => getDayEffort(exerciseLog, d) > 0)
+    .sort()
+
+  if (!dates.length) return { current: 0, best: 0, bestStart: null, bestEnd: null, currentStart: null }
+
+  const runs = []
+  let runStart = dates[0], runLen = 1
+  for (let i = 1; i < dates.length; i++) {
+    const diff = Math.round((new Date(dates[i]) - new Date(dates[i - 1])) / 86400000)
+    if (diff === 1) { runLen++ }
+    else { runs.push({ start: runStart, end: dates[i - 1], len: runLen }); runStart = dates[i]; runLen = 1 }
+  }
+  runs.push({ start: runStart, end: dates.at(-1), len: runLen })
+
+  const best = runs.reduce((a, b) => b.len > a.len ? b : a, runs[0])
+
+  const todayStr     = toDateString(new Date())
+  const yesterdayStr = toDateString(new Date(Date.now() - 86400000))
+  const last = runs.at(-1)
+  const isContinuing = last.end === todayStr || last.end === yesterdayStr
+  const current = isContinuing ? last.len : 0
+  const currentStart = isContinuing ? last.start : null
+
+  return { current, currentStart, best: best.len, bestStart: best.start, bestEnd: best.end }
+}

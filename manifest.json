@@ -1,0 +1,25 @@
+{
+  "name": "GLP — Gamification Life Project",
+  "short_name": "GLP",
+  "description": "Sistema di gamification personale per abitudini quotidiane",
+  "start_url": "/GLP-App-Claude/",
+  "scope": "/GLP-App-Claude/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "lang": "it",
+  "icons": [
+    {
+      "src": "/GLP-App-Claude/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://em-content.zobj.net/source/apple/354/fire_1f525.png",
+      "sizes": "160x160",
+      "type": "image/png"
+    }
+  ]
+}

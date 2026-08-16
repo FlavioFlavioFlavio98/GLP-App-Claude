@@ -1,0 +1,1 @@
+const o=[{v:null,icon:null,label:"Nessuna",color:"#666"},{v:"morning",icon:"wb_twilight",label:"Mattina",color:"#EF9F27"},{v:"afternoon",icon:"light_mode",label:"Pomeriggio",color:"#FFD600"},{v:"evening",icon:"bedtime",label:"Sera",color:"#7986cb"}];export{o as T};

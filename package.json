@@ -11,7 +11,10 @@
     "preview": "vite preview",
     "predeploy": "npm run build:web",
     "deploy": "gh-pages -d dist",
-    "cap:sync": "powershell -ExecutionPolicy Bypass -File fix-android.ps1"
+    "cap:sync": "powershell -ExecutionPolicy Bypass -File fix-android.ps1",
+    "emulators": "firebase emulators:start --only auth,firestore,storage --import=./.emulator-data --export-on-exit",
+    "seed:emulator": "node scripts/seed-emulator.mjs",
+    "dev:emulator": "vite --mode emulator"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.3.0",

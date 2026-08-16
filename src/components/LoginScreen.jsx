@@ -1,8 +1,15 @@
 import { useState } from 'react'
 import { signInWithPopup, signInWithCredential, GoogleAuthProvider } from 'firebase/auth'
 import { Capacitor } from '@capacitor/core'
-import { auth, googleProvider, ALLOWED_EMAILS, EMAIL_TO_USER } from '../lib/firebase'
+import { auth, googleProvider, ALLOWED_EMAILS, EMAIL_TO_USER, USE_EMULATOR } from '../lib/firebase'
 import { THEMES } from '../lib/themes'
+
+// Solo in modalità emulatore: accesso finto come flavio.rossi94@gmail.com senza
+// alcun account Google reale — l'emulatore Auth crea/riusa un utente locale con
+// quella email, che soddisfa la whitelist perché le regole controllano solo
+// l'email nel token, non che sia stato emesso da un vero account Google.
+const TEST_EMAIL = 'flavio.rossi94@gmail.com'
+const TEST_PASSWORD = 'glp-emulator-test'
 
 // Google logo SVG
 function GoogleLogo() {
@@ -59,6 +66,26 @@ export default function LoginScreen({ onLogin }) {
     }
   }
 
+  async function handleTestLogin() {
+    setLoading(true)
+    setError('')
+    try {
+      const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth')
+      try {
+        await signInWithEmailAndPassword(auth, TEST_EMAIL, TEST_PASSWORD)
+      } catch (err) {
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
+          await createUserWithEmailAndPassword(auth, TEST_EMAIL, TEST_PASSWORD)
+        } else {
+          throw err
+        }
+      }
+    } catch (e) {
+      setError('Errore login test emulatore: ' + (e.message || e.code))
+      setLoading(false)
+    }
+  }
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: theme.bg,
@@ -103,6 +130,23 @@ export default function LoginScreen({ onLogin }) {
           </>
         )}
       </button>
+
+      {/* Login di test — solo modalità emulatore, mai in produzione */}
+      {USE_EMULATOR && (
+        <button
+          onClick={handleTestLogin}
+          disabled={loading}
+          style={{
+            marginTop: 12, display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(255,202,40,0.1)', color: '#EF9F27',
+            border: '1px dashed rgba(255,202,40,0.4)', borderRadius: 12,
+            padding: '10px 20px', fontSize: '0.85em', fontWeight: 600,
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+          }}
+        >
+          🧪 Accedi come Flavio (test)
+        </button>
+      )}
 
       {/* Error message */}
       {error && (

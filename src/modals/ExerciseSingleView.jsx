@@ -87,14 +87,9 @@ export default function ExerciseSingleView() {
   const canvasRef = useRef(null)
   const chartRef  = useRef(null)
 
-  if (modal !== 'exerciseSingle') return null
-  if (authUserId !== 'flavio') return null
-
   const gd = allUsersData?.flavio
   const exerciseId = modalPayload?.exerciseId
   const exercise = (gd?.quickExercises || []).find(e => e.id === exerciseId)
-  if (!exercise) return null
-
   const exerciseLog = gd?.exerciseLog || {}
 
   const stats = useMemo(
@@ -107,7 +102,7 @@ export default function ExerciseSingleView() {
   )
 
   const milestone = getMilestoneInfo(stats.lifetimeReps)
-  const funFact = getFunFact(exercise.name, stats.lifetimeReps)
+  const funFact = getFunFact(exercise?.name, stats.lifetimeReps)
 
   // ── Chart ──
   const chartDates = useMemo(() => {
@@ -151,6 +146,10 @@ export default function ExerciseSingleView() {
     })
     return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null } }
   }, [chartDates, chartData])
+
+  if (modal !== 'exerciseSingle') return null
+  if (authUserId !== 'flavio') return null
+  if (!exercise) return null
 
   const isLight = document.documentElement.getAttribute('data-theme') === 'light'
   const sectionLabel = (text) => (

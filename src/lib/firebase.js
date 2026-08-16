@@ -1,8 +1,8 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
-import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+import { getAuth, GoogleAuthProvider, connectAuthEmulator } from 'firebase/auth'
 import { getMessaging, isSupported } from 'firebase/messaging'
-import { getStorage } from 'firebase/storage'
+import { getStorage, connectStorageEmulator } from 'firebase/storage'
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyA001klzJou17djB76Q-t2eRTKbU9NZoQs',
@@ -18,6 +18,23 @@ export const db = getFirestore(app)
 export const auth = getAuth(app)
 export const googleProvider = new GoogleAuthProvider()
 export const storage = getStorage(app)
+
+// ─── Modalità test (emulatori Firebase locali) ─────────────────────────────────
+// MAI attiva in produzione: import.meta.env.DEV è sempre `false` per qualunque
+// build (npm run build / build:web / build:android — solo `vite dev` lo rende
+// true), e Vite sostituisce questa espressione staticamente, quindi l'intero
+// blocco viene eliminato dal bundle di produzione. In più richiede anche il flag
+// esplicito VITE_USE_EMULATOR (impostato solo da `npm run dev:emulator`), così un
+// normale `npm run dev` continua a usare Firebase vero come sempre.
+export const USE_EMULATOR = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === 'true'
+
+if (USE_EMULATOR) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+  connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  connectStorageEmulator(storage, '127.0.0.1', 9199)
+  // eslint-disable-next-line no-console
+  console.warn('[GLP] 🧪 Modalità TEST attiva — connesso agli emulatori Firebase locali, nessun dato reale coinvolto. Le Cloud Functions (Coach/Psicologo AI) non sono emulate e non funzioneranno in questa modalità.')
+}
 
 // Whitelist: solo questa email può accedere
 export const ALLOWED_EMAILS = [

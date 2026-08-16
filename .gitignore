@@ -4,4 +4,9 @@ dist
 .env.local
 functions/node_modules
 android
+.emulator-data
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.jdk21
 

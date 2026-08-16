@@ -12,7 +12,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll }
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
-import { touchWorkoutSession, startRestTimer } from './workoutStats'
+import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT } from './workoutStats'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -844,7 +844,7 @@ export function AppProvider({ children }) {
       } catch (e) { console.error('[ensureDefaultExercise]', e) }
     },
 
-    async addExerciseSession(exerciseId, reps, dateStr) {
+    async addExerciseSession(exerciseId, reps, dateStr, effort) {
       if (state.authUserId !== 'flavio') return
       const gd = state.allUsersData?.flavio
       if (!gd) { console.error('[addExerciseSession] no gd'); return }
@@ -864,9 +864,10 @@ export function AppProvider({ children }) {
       const logDate = dateStr || toDateString(new Date())
       const ppr = _getPPR(ex, logDate)
       const numReps = parseInt(reps) || 0
-      const pts = parseFloat((numReps * ppr).toFixed(2))
+      const effortLevel = [1, 2, 3].includes(effort) ? effort : DEFAULT_EFFORT
+      const pts = parseFloat((numReps * ppr * getEffortMultiplier(effortLevel)).toFixed(2))
 
-      console.log('[addExerciseSession]', { exerciseId, ex, reps: numReps, ppr, pts, logDate })
+      console.log('[addExerciseSession]', { exerciseId, ex, reps: numReps, ppr, effortLevel, pts, logDate })
 
       if (!pts || pts <= 0) {
         actions.showToast('Errore nel calcolo punti — controlla ppr', '❌')
@@ -879,6 +880,7 @@ export function AppProvider({ children }) {
         exerciseId,
         reps: numReps,
         pts,
+        effort: effortLevel,
         time: new Date().toTimeString().slice(0, 8),
       }
       const ref = doc(db, 'users', 'flavio')
@@ -911,6 +913,27 @@ export function AppProvider({ children }) {
         [`exerciseLog.${dateStr}`]: newLog,
       })
       actions.showToast(`-${entry.pts} pt annullato`, '↩️')
+    },
+
+    async editExerciseSession(dateStr, logId, newReps) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.exerciseLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const ex = (gd.quickExercises || []).find(e => e.id === entry.exerciseId)
+      if (!ex) return
+      const numReps = parseInt(newReps) || 0
+      if (numReps <= 0) { actions.showToast('Ripetizioni non valide', '⚠️'); return }
+      // ppr valido alla data del log, non quello odierno — coerente con addExerciseSession.
+      // Preserva il moltiplicatore di sforzo originale della serie (non richiesto di nuovo).
+      const ppr = _getPPR(ex, dateStr)
+      const pts = parseFloat((numReps * ppr * getEffortMultiplier(entry.effort)).toFixed(2))
+      const newLog = dayLog.map(e => e.id === logId ? { ...e, reps: numReps, pts } : e)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`exerciseLog.${dateStr}`]: newLog })
+      actions.showToast('Serie modificata ✏️', '✏️')
     },
 
     async saveExercise(exercise) {

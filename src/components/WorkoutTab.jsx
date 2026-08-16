@@ -8,8 +8,13 @@ import WorkoutSessionBar from './WorkoutSessionBar'
 import WorkoutSessionSummary from './WorkoutSessionSummary'
 import WorkoutHeatmap from './WorkoutHeatmap'
 import WorkoutRecordFreshness from './WorkoutRecordFreshness'
+import WorkoutBadges from './WorkoutBadges'
+import WorkoutPlateauAlert from './WorkoutPlateauAlert'
 import { toDateString } from '../lib/habitLogic'
-import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary } from '../lib/workoutStats'
+import {
+  getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary,
+  getWorkoutBadges, getSeenBadgeIds, markBadgesSeen,
+} from '../lib/workoutStats'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
   const [sessionSummary, setSessionSummary] = useState(null)
@@ -29,6 +34,23 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Celebra i badge appena sbloccati (confronto con l'ultimo set "visto" in
+  // localStorage) — controllato ogni volta che il log cambia, quindi anche
+  // subito dopo aver aggiunto/modificato/cancellato una serie.
+  useEffect(() => {
+    if (authUserId !== 'flavio' || isReadOnly) return
+    const badges = getWorkoutBadges(exerciseLog)
+    const achievedIds = badges.filter(b => b.achieved).map(b => b.id)
+    const seenIds = getSeenBadgeIds()
+    const newlyUnlocked = badges.filter(b => b.achieved && !seenIds.includes(b.id))
+    if (newlyUnlocked.length > 0) {
+      const badge = newlyUnlocked[0]
+      actions.showToast(`Badge sbloccato: ${badge.label}!`, badge.emoji)
+      markBadgesSeen(achievedIds)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseLog])
 
   if (authUserId !== 'flavio' || isReadOnly) {
     return <div className="empty-state">Sezione workout non disponibile</div>
@@ -90,6 +112,12 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
       {/* Calendario/heatmap costanza allenamenti */}
       <WorkoutHeatmap exerciseLog={exerciseLog} />
+
+      {/* Badge / achievement */}
+      <WorkoutBadges exerciseLog={exerciseLog} />
+
+      {/* Possibili plateau — esercizi fermi da un po' */}
+      <WorkoutPlateauAlert exerciseLog={exerciseLog} quickExercises={quickExercises} />
 
       {/* Da quanto non batti un record, per esercizio */}
       <WorkoutRecordFreshness exerciseLog={exerciseLog} quickExercises={quickExercises} />

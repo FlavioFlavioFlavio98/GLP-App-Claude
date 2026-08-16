@@ -2,7 +2,13 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 import { MUSCLE_GROUPS } from '../lib/muscleMapping'
-import { groupExercisesByMuscle } from '../lib/workoutStats'
+import { groupExercisesByMuscle, getAverageRepsPerSession, getEffortMultiplier, DEFAULT_EFFORT } from '../lib/workoutStats'
+
+const EFFORT_LEVELS = [
+  { level: 1, label: 'Leggero', sub: 'riscaldamento', emoji: '🟢' },
+  { level: 2, label: 'Medio', sub: '+20% pt', emoji: '🟡' },
+  { level: 3, label: 'Massimo', sub: 'sfinimento · +50% pt', emoji: '🔴' },
+]
 
 const ALTRO_GROUP = { label: 'Altro', emoji: '🏋️' }
 
@@ -15,11 +21,13 @@ export default function QuickExerciseModal() {
   const [muscleKey, setMuscleKey] = useState(null)
   const [selId, setSelId] = useState(null)
   const [reps, setReps] = useState(10)
+  const [effort, setEffort] = useState(DEFAULT_EFFORT)
   const [saving, setSaving] = useState(false)
   const [exerciseDate, setExerciseDate] = useState(toDateString(new Date()))
 
   const gd = allUsersData?.flavio
   const exercises = (gd?.quickExercises || []).filter(e => e.active !== false)
+  const exerciseLog = gd?.exerciseLog || {}
 
   const grouped = useMemo(() => groupExercisesByMuscle(exercises), [exercises])
   const muscleKeys = useMemo(
@@ -38,6 +46,7 @@ export default function QuickExerciseModal() {
       setMuscleKey(null)
       setSelId(null)
       setReps(10)
+      setEffort(DEFAULT_EFFORT)
       setExerciseDate(toDateString(new Date()))
     }
   }, [modal])
@@ -49,7 +58,12 @@ export default function QuickExerciseModal() {
 
   // ppr: always parseFloat to handle Firestore string/number ambiguity
   const ppr = parseFloat(exercise?.pointsPerRep) || 0.1
-  const pts = parseFloat((reps * ppr).toFixed(2))
+  const pts = parseFloat((reps * ppr * getEffortMultiplier(effort)).toFixed(2))
+
+  const avgReps = useMemo(
+    () => exercise ? getAverageRepsPerSession(exerciseLog, exercise.id) : 0,
+    [exercise?.id, exerciseLog]
+  )
 
   function changeReps(delta) {
     setReps(prev => Math.max(1, Math.min(200, prev + delta)))
@@ -63,6 +77,7 @@ export default function QuickExerciseModal() {
   function pickExercise(ex) {
     setSelId(ex.id)
     setReps(10)
+    setEffort(DEFAULT_EFFORT)
     setStep('reps')
   }
 
@@ -74,7 +89,7 @@ export default function QuickExerciseModal() {
   async function handleAdd() {
     if (!exercise) { actions.showToast('Nessun esercizio selezionato', '⚠️'); return }
     setSaving(true)
-    await actions.addExerciseSession(exercise.id, reps, exerciseDate)
+    await actions.addExerciseSession(exercise.id, reps, exerciseDate, effort)
     setSaving(false)
     actions.closeModal()
   }
@@ -197,10 +212,47 @@ export default function QuickExerciseModal() {
               <button onClick={() => changeReps(5)} style={btnStyle}>+5</button>
             </div>
 
+            {/* Sforzo percepito */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
+                Sforzo percepito
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {EFFORT_LEVELS.map(lvl => (
+                  <button
+                    key={lvl.level}
+                    onClick={() => setEffort(lvl.level)}
+                    style={{
+                      flex: 1, padding: '10px 6px', borderRadius: 12, cursor: 'pointer', textAlign: 'center',
+                      background: effort === lvl.level ? 'var(--theme-glow)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${effort === lvl.level ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)'}`,
+                      color: effort === lvl.level ? 'var(--theme-color)' : 'var(--text)',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.3em', marginBottom: 2 }}>{lvl.emoji}</div>
+                    <div style={{ fontSize: '0.72em', fontWeight: 700 }}>{lvl.label}</div>
+                    <div style={{ fontSize: '0.58em', color: '#777', marginTop: 2 }}>{lvl.sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Points preview */}
-            <div style={{ textAlign: 'center', marginBottom: 22, fontSize: '1.2em', fontWeight: 800, color: 'var(--success)' }}>
+            <div style={{ textAlign: 'center', marginBottom: 8, fontSize: '1.2em', fontWeight: 800, color: 'var(--success)' }}>
               = +{pts} pt
             </div>
+
+            {/* Confronto live con la media personale dell'esercizio */}
+            {avgReps > 0 && (
+              <div style={{
+                textAlign: 'center', marginBottom: 14, fontSize: '0.78em', fontWeight: 600,
+                color: Math.round(avgReps) === reps ? '#888' : (reps > avgReps ? 'var(--success)' : '#EF9F27'),
+              }}>
+                {Math.round(avgReps) === reps
+                  ? `● in linea con la tua media (${Math.round(avgReps)} reps)`
+                  : `${reps > avgReps ? '▲' : '▼'} ${Math.abs(Math.round((reps - avgReps) / avgReps * 100))}% ${reps > avgReps ? 'sopra' : 'sotto'} la tua media (${Math.round(avgReps)} reps)`}
+              </div>
+            )}
 
             {/* Date picker */}
             <div style={{ marginBottom: 14 }}>

@@ -314,6 +314,31 @@ export function getEntriesInTimeRange(exerciseLog, startMs, endMs) {
   })
 }
 
+// ─── Sforzo percepito della serie (1=leggero, 2=medio, 3=sfinimento) ────────────
+// Bonus punti per premiare le serie portate a sfinimento: a parità di reps, una
+// serie massimale è più produttiva di una di riscaldamento. Salvato come `effort`
+// sul singolo log entry (default 1 per le serie pre-esistenti, che non lo hanno).
+export const EFFORT_MULTIPLIERS = { 1: 1, 2: 1.2, 3: 1.5 }
+export const DEFAULT_EFFORT = 1
+
+export function getEffortMultiplier(effort) {
+  return EFFORT_MULTIPLIERS[effort] || EFFORT_MULTIPLIERS[DEFAULT_EFFORT]
+}
+
+const EFFORT_EMOJI = { 1: '🟢', 2: '🟡', 3: '🔴' }
+export function getEffortEmoji(effort) {
+  return EFFORT_EMOJI[effort] || ''
+}
+
+// ─── Media ripetizioni per sessione (confronto live nel flusso Aggiungi serie) ──
+export function getAverageRepsPerSession(exerciseLog, exerciseId) {
+  let totalReps = 0, count = 0
+  Object.values(exerciseLog || {}).forEach(entries => {
+    ;(entries || []).filter(e => e.exerciseId === exerciseId).forEach(e => { totalReps += e.reps; count++ })
+  })
+  return count > 0 ? totalReps / count : 0
+}
+
 // ─── Muscoli coinvolti (per lo step "gruppo muscolare" del flusso Aggiungi serie) ──
 
 export function getPrimaryMuscleGroup(exercise) {
@@ -365,6 +390,120 @@ export function computeStreak(exerciseLog, exerciseId) {
   const currentStart = isContinuing ? last.start : null
 
   return { current, currentStart, best: best.len, bestStart: best.start, bestEnd: best.end }
+}
+
+// ─── Rilevamento plateau ──────────────────────────────────────────────────────
+// Confronta lo sforzo (reps totali) delle ultime N sessioni di allenamento di un
+// esercizio con quello del blocco di sessioni immediatamente precedente. Se la
+// crescita è sotto soglia, l'esercizio è "in plateau". Richiede uno storico
+// minimo per evitare falsi positivi su esercizi appena iniziati.
+const PLATEAU_WINDOW = 4 // quante sessioni (giorni distinti) confrontare per blocco
+const PLATEAU_MIN_DAYS = PLATEAU_WINDOW * 2
+const PLATEAU_GROWTH_THRESHOLD = 0.05 // sotto il 5% di crescita = plateau
+
+export function detectPlateau(exerciseLog, exerciseId) {
+  const dates = Object.keys(exerciseLog || {})
+    .filter(d => (exerciseLog[d] || []).some(s => s.exerciseId === exerciseId))
+    .sort()
+
+  if (dates.length < PLATEAU_MIN_DAYS) return null
+
+  function repsOnDate(d) {
+    return (exerciseLog[d] || []).filter(s => s.exerciseId === exerciseId).reduce((a, s) => a + s.reps, 0)
+  }
+
+  const recentDates = dates.slice(-PLATEAU_WINDOW)
+  const previousDates = dates.slice(-PLATEAU_WINDOW * 2, -PLATEAU_WINDOW)
+
+  const recentAvg = recentDates.reduce((a, d) => a + repsOnDate(d), 0) / recentDates.length
+  const previousAvg = previousDates.reduce((a, d) => a + repsOnDate(d), 0) / previousDates.length
+
+  if (previousAvg <= 0) return null
+
+  const growth = (recentAvg - previousAvg) / previousAvg
+  const isPlateau = growth < PLATEAU_GROWTH_THRESHOLD
+
+  return {
+    isPlateau,
+    growthPct: Math.round(growth * 100),
+    recentAvg: Math.round(recentAvg * 10) / 10,
+    previousAvg: Math.round(previousAvg * 10) / 10,
+    sessionsAnalyzed: PLATEAU_WINDOW,
+  }
+}
+
+// ─── Badge / Achievement ────────────────────────────────────────────────────────
+// Calcolati sempre "al volo" dai dati esistenti (nessun nuovo campo Firestore).
+// Un badge una volta sbloccato resta tale per sempre: si guarda sempre il record
+// storico (es. streak "best", mai quello attuale che può azzerarsi).
+
+const BADGE_SEEN_KEY = 'glp_workout_badges_seen'
+
+export function getSeenBadgeIds() {
+  try {
+    const raw = localStorage.getItem(BADGE_SEEN_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    return Array.isArray(list) ? list : []
+  } catch { return [] }
+}
+
+export function markBadgesSeen(ids) {
+  try { localStorage.setItem(BADGE_SEEN_KEY, JSON.stringify(ids)) } catch { /* ignore */ }
+}
+
+function countTrainingDays(exerciseLog) {
+  return Object.keys(exerciseLog || {}).filter(d => getDayEffort(exerciseLog, d) > 0).length
+}
+
+function countTotalSets(exerciseLog) {
+  return Object.values(exerciseLog || {}).reduce((a, day) => a + (day?.length || 0), 0)
+}
+
+function totalLifetimeEffort(exerciseLog) {
+  return Object.keys(exerciseLog || {}).reduce((a, d) => a + getDayEffort(exerciseLog, d), 0)
+}
+
+// Massimo numero di esercizi diversi registrati in un solo giorno (badge varietà)
+function maxExercisesInOneDay(exerciseLog) {
+  let max = 0
+  Object.values(exerciseLog || {}).forEach(entries => {
+    const distinct = new Set((entries || []).map(e => e.exerciseId)).size
+    if (distinct > max) max = distinct
+  })
+  return max
+}
+
+const BADGE_DEFS = [
+  // Streak (record storico — computeGlobalWorkoutStreak().best, mai il current)
+  { id: 'streak_3',  emoji: '🔥', label: 'Costanza 3',  desc: '3 giorni di fila',  group: 'Streak', target: 3,   metric: (log) => computeGlobalWorkoutStreak(log).best },
+  { id: 'streak_7',  emoji: '🔥', label: 'Costanza 7',  desc: '7 giorni di fila',  group: 'Streak', target: 7,   metric: (log) => computeGlobalWorkoutStreak(log).best },
+  { id: 'streak_14', emoji: '🔥', label: 'Costanza 14', desc: '14 giorni di fila', group: 'Streak', target: 14,  metric: (log) => computeGlobalWorkoutStreak(log).best },
+  { id: 'streak_30', emoji: '🔥', label: 'Costanza 30', desc: '30 giorni di fila', group: 'Streak', target: 30,  metric: (log) => computeGlobalWorkoutStreak(log).best },
+  // Giorni di allenamento totali (non consecutivi)
+  { id: 'days_1',    emoji: '💪', label: 'Si comincia', desc: 'Prima serie registrata',    group: 'Giorni', target: 1,   metric: countTrainingDays },
+  { id: 'days_10',   emoji: '🏋️', label: '10 giorni',   desc: '10 giorni di allenamento',  group: 'Giorni', target: 10,  metric: countTrainingDays },
+  { id: 'days_50',   emoji: '🏋️', label: '50 giorni',   desc: '50 giorni di allenamento',  group: 'Giorni', target: 50,  metric: countTrainingDays },
+  { id: 'days_100',  emoji: '🏆', label: '100 giorni',  desc: '100 giorni di allenamento', group: 'Giorni', target: 100, metric: countTrainingDays },
+  // Sforzo totale lifetime
+  { id: 'effort_1000',  emoji: '⚡', label: '1.000 pt',  desc: '1.000 pt di sforzo totale',  group: 'Sforzo', target: 1000,  metric: totalLifetimeEffort },
+  { id: 'effort_5000',  emoji: '⚡', label: '5.000 pt',  desc: '5.000 pt di sforzo totale',  group: 'Sforzo', target: 5000,  metric: totalLifetimeEffort },
+  { id: 'effort_10000', emoji: '⚡', label: '10.000 pt', desc: '10.000 pt di sforzo totale', group: 'Sforzo', target: 10000, metric: totalLifetimeEffort },
+  // Serie totali registrate
+  { id: 'sets_50',  emoji: '📋', label: '50 serie',  desc: '50 serie registrate',  group: 'Serie', target: 50,  metric: countTotalSets },
+  { id: 'sets_200', emoji: '📋', label: '200 serie', desc: '200 serie registrate', group: 'Serie', target: 200, metric: countTotalSets },
+  // Varietà
+  { id: 'variety_3', emoji: '🧩', label: 'Full body', desc: '3 esercizi diversi in un giorno', group: 'Varietà', target: 3, metric: maxExercisesInOneDay },
+]
+
+export function getWorkoutBadges(exerciseLog) {
+  return BADGE_DEFS.map(def => {
+    const current = def.metric(exerciseLog) || 0
+    return {
+      id: def.id, emoji: def.emoji, label: def.label, desc: def.desc, group: def.group,
+      target: def.target, current: Math.min(current, def.target),
+      achieved: current >= def.target,
+    }
+  })
 }
 
 // ─── "Da quanto non batti un record" ─────────────────────────────────────────

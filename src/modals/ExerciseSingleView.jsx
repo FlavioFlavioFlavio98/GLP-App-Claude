@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../lib/store'
 import { Chart } from '../lib/chartSetup'
 import { toDateString } from '../lib/habitLogic'
-import { computeAllStats, getDaysSinceLastRecord } from '../lib/workoutStats'
+import { computeAllStats, getDaysSinceLastRecord, getEffortEmoji } from '../lib/workoutStats'
 
 // ─── Milestones ───────────────────────────────────────────────────────────────
 
@@ -91,6 +91,7 @@ export default function ExerciseSingleView() {
   const exerciseId = modalPayload?.exerciseId
   const exercise = (gd?.quickExercises || []).find(e => e.id === exerciseId)
   const exerciseLog = gd?.exerciseLog || {}
+  const todayStr = toDateString(new Date())
 
   const stats = useMemo(
     () => computeAllStats(exerciseLog, exerciseId),
@@ -331,9 +332,33 @@ export default function ExerciseSingleView() {
                     borderRadius: 10,
                   }}>
                     <span style={{ fontSize: '0.75em', color: '#555', minWidth: 44 }}>{s.time?.slice(0, 5) || ''}</span>
+                    {s.effort && <span style={{ fontSize: '0.8em' }}>{getEffortEmoji(s.effort)}</span>}
                     <span style={{ flex: 1, fontWeight: 700 }}>{s.reps} reps</span>
                     {isSessionRecord && <span style={{ fontSize: '0.65em', fontWeight: 700, color: 'var(--theme-color)' }}>🏆 record</span>}
                     <span style={{ fontSize: '0.75em', color: 'var(--success)' }}>+{s.pts} pt</span>
+                    <button
+                      className="btn-icon"
+                      style={{ padding: 2 }}
+                      title="Modifica ripetizioni"
+                      onClick={async () => {
+                        const val = window.prompt(`Ripetizioni (attuali: ${s.reps}):`, s.reps)
+                        if (val === null) return
+                        await actions.editExerciseSession(todayStr, s.id, val)
+                      }}
+                    >
+                      <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>edit</span>
+                    </button>
+                    <button
+                      className="btn-icon"
+                      style={{ padding: 2 }}
+                      title="Elimina serie"
+                      onClick={async () => {
+                        if (!window.confirm(`Eliminare ${s.reps} reps (-${s.pts} pt)?`)) return
+                        await actions.deleteExerciseSession(todayStr, s.id)
+                      }}
+                    >
+                      <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>delete</span>
+                    </button>
                   </div>
                 )
               })}

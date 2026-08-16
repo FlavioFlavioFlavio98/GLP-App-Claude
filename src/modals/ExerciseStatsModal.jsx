@@ -4,6 +4,7 @@ import { _getPPR } from '../lib/store'
 import { Chart } from '../lib/chartSetup'
 import { toDateString } from '../lib/habitLogic'
 import { MUSCLE_GROUPS, getDefaultMuscles } from '../lib/muscleMapping'
+import { getEffortEmoji } from '../lib/workoutStats'
 
 const MONTH_NAMES = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic']
 
@@ -254,6 +255,7 @@ export default function ExerciseStatsModal() {
                     .map(s => (
                       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10 }}>
                         <span style={{ fontSize: '0.78em', color: '#666', minWidth: 52 }}>{s.time?.slice(0,5) || ''}</span>
+                        {s.effort && <span style={{ fontSize: '0.8em' }}>{getEffortEmoji(s.effort)}</span>}
                         <span style={{ flex: 1, fontWeight: 700 }}>{s.reps} reps</span>
                         <span style={{ fontSize: '0.78em', color: 'var(--success)', fontWeight: 600 }}>+{s.pts} pt</span>
                         <button
@@ -329,6 +331,7 @@ export default function ExerciseStatsModal() {
                     {entries.map(s => (
                       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, marginBottom: 3 }}>
                         <span style={{ fontSize: '0.72em', color: '#555', minWidth: 44 }}>{s.time?.slice(0,5)||''}</span>
+                        {s.effort && <span style={{ fontSize: '0.75em' }}>{getEffortEmoji(s.effort)}</span>}
                         <span style={{ flex: 1, fontSize: '0.82em' }}>{s.reps} reps</span>
                         <span style={{ fontSize: '0.72em', color: 'var(--success)' }}>+{s.pts} pt</span>
                         <button

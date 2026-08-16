@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../lib/store'
 import { Chart } from '../lib/chartSetup'
 import { toDateString } from '../lib/habitLogic'
-import { computeAllStats } from '../lib/workoutStats'
+import { computeAllStats, getDaysSinceLastRecord } from '../lib/workoutStats'
 
 // ─── Milestones ───────────────────────────────────────────────────────────────
 
@@ -99,6 +99,10 @@ export default function ExerciseSingleView() {
 
   const stats = useMemo(
     () => computeAllStats(exerciseLog, exerciseId),
+    [exerciseLog, exerciseId] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const recordFreshness = useMemo(
+    () => getDaysSinceLastRecord(exerciseLog, exerciseId),
     [exerciseLog, exerciseId] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
@@ -264,6 +268,11 @@ export default function ExerciseSingleView() {
           <StatCard label="Giorno" value={stats.bestDayReps || '–'} sub={stats.bestDay ? fmtDate(stats.bestDay) : null} color="#ff7043" />
           <StatCard label="Media/sessione" value={stats.avgPerSession || '–'} sub="rip. medie" color="var(--accent2)" />
         </div>
+        {recordFreshness && (
+          <div style={{ textAlign: 'center', fontSize: '0.72em', color: recordFreshness.days >= 30 ? '#e53935' : '#888', marginTop: 8 }}>
+            {recordFreshness.days === 0 ? '🏆 Record battuto oggi!' : `⏳ Nessun record da ${recordFreshness.days} giorn${recordFreshness.days === 1 ? 'o' : 'i'}`}
+          </div>
+        )}
 
         {/* ── STREAK ── */}
         {sectionLabel('🔥 Streak')}

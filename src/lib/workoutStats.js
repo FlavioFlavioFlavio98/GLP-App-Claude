@@ -367,6 +367,32 @@ export function computeStreak(exerciseLog, exerciseId) {
   return { current, currentStart, best: best.len, bestStart: best.start, bestEnd: best.end }
 }
 
+// ─── "Da quanto non batti un record" ─────────────────────────────────────────
+// Richiede uno storico minimo (giorni distinti allenati) per evitare di mostrare
+// l'indicatore su esercizi appena iniziati, dove ogni giorno è per forza un record.
+export const MIN_TRAINING_DAYS_FOR_RECORD = 5
+
+export function getDaysSinceLastRecord(exerciseLog, exerciseId) {
+  const dates = Object.keys(exerciseLog || {})
+    .filter(d => (exerciseLog[d] || []).some(s => s.exerciseId === exerciseId))
+
+  if (dates.length < MIN_TRAINING_DAYS_FOR_RECORD) return null
+
+  function repsOnDate(d) {
+    return (exerciseLog[d] || []).filter(s => s.exerciseId === exerciseId).reduce((a, s) => a + s.reps, 0)
+  }
+
+  let bestDay = null, bestReps = 0
+  dates.forEach(d => {
+    const r = repsOnDate(d)
+    if (r > bestReps) { bestReps = r; bestDay = d }
+  })
+  if (!bestDay) return null
+
+  const days = Math.round((new Date(toDateString(new Date())) - new Date(bestDay)) / 86400000)
+  return { days, bestDay, bestReps }
+}
+
 export function computeAllStats(exerciseLog, exerciseId) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const todayStr = toDateString(today)

@@ -7,6 +7,7 @@ import WorkoutEffortChart from './WorkoutEffortChart'
 import WorkoutSessionBar from './WorkoutSessionBar'
 import WorkoutSessionSummary from './WorkoutSessionSummary'
 import WorkoutHeatmap from './WorkoutHeatmap'
+import WorkoutRecordFreshness from './WorkoutRecordFreshness'
 import { toDateString } from '../lib/habitLogic'
 import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary } from '../lib/workoutStats'
 
@@ -89,6 +90,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
       {/* Calendario/heatmap costanza allenamenti */}
       <WorkoutHeatmap exerciseLog={exerciseLog} />
+
+      {/* Da quanto non batti un record, per esercizio */}
+      <WorkoutRecordFreshness exerciseLog={exerciseLog} quickExercises={quickExercises} />
 
       {/* Action buttons */}
       <button style={btnStyle} onClick={() => actions.openModal('quickExercise')}>

@@ -319,23 +319,27 @@ export default function App() {
 
       <DateNav />
 
-      {/* ── CARD GUADAGNI/COSTI/NETTO (sempre visibile su tutte le tab, comprimibile) ── */}
-      <DailySummaryPanel
-        authUserId={authUserId}
-        globalData={globalData}
-        totalHabitPoints={totalHabitPoints}
-        taskPts={taskPts}
-        extraPts={extraPts}
-        checkInPts={checkInPts}
-        readingPts={readingPts}
-        purchaseCost={purchaseCost}
-        penaltyCost={penaltyCost}
-        expiredTaskCost={expiredTaskCost}
-        trackedItems={trackedItems}
-        dailySpent={dailySpent}
-        net={net}
-        buildInfo={<BuildInfo />}
-      />
+      {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout: l'economia
+          generale di task/abitudini non è rilevante lì, dove banner e obiettivo
+          mostrano già i punti guadagnati con l'allenamento di oggi ── */}
+      {currentTab !== 'workout' && (
+        <DailySummaryPanel
+          authUserId={authUserId}
+          globalData={globalData}
+          totalHabitPoints={totalHabitPoints}
+          taskPts={taskPts}
+          extraPts={extraPts}
+          checkInPts={checkInPts}
+          readingPts={readingPts}
+          purchaseCost={purchaseCost}
+          penaltyCost={penaltyCost}
+          expiredTaskCost={expiredTaskCost}
+          trackedItems={trackedItems}
+          dailySpent={dailySpent}
+          net={net}
+          buildInfo={<BuildInfo />}
+        />
+      )}
 
       {/* ── CONTENUTO TAB (scrollabile, con padding per bottom nav) ── */}
       <div style={{ paddingBottom: 68 }}>

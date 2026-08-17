@@ -131,10 +131,13 @@ function WeightModalInner({ actions, state }) {
     ]
 
     if (goal !== null) {
+      // Il canvas 2D non risolve le CSS custom properties: va letta col valore
+      // reale, altrimenti Chart.js riceve un colore non valido e disegna in nero.
+      const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim() || '#ffca28'
       datasets.push({
         label: `Obiettivo (${goal} kg)`,
         data: entries.map(() => goal),
-        borderColor: 'var(--theme-color)',
+        borderColor: themeColor,
         borderDash: [6, 4],
         borderWidth: 1.5, pointRadius: 0, fill: false,
       })

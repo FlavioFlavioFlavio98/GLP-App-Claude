@@ -242,13 +242,19 @@ function RewardTimelineChart({ changes }) {
   useEffect(() => {
     if (!canvasRef.current || sorted.length < 2) return
     if (chartRef.current) chartRef.current.destroy()
+    // Il canvas 2D non risolve le CSS custom properties: vanno lette col valore
+    // reale prima di passarle a Chart.js, altrimenti il fillStyle non valido
+    // viene silenziosamente sostituito col nero di default del browser.
+    const cs = getComputedStyle(document.documentElement)
+    const themeColor = cs.getPropertyValue('--theme-color').trim() || '#ffca28'
+    const themeGlow = cs.getPropertyValue('--theme-glow').trim() || 'rgba(255,202,40,0.15)'
     chartRef.current = new Chart(canvasRef.current, {
       type: 'line',
       data: {
         labels: sorted.map(c => c.date.split('-').reverse().join('/')),
         datasets: [{
           data: sorted.map(c => c.reward || 0),
-          borderColor: 'var(--theme-color)', backgroundColor: 'var(--theme-glow)',
+          borderColor: themeColor, backgroundColor: themeGlow,
           fill: true, tension: 0, pointRadius: 5, borderWidth: 2, stepped: true,
         }],
       },

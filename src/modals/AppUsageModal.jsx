@@ -133,6 +133,9 @@ export default function AppUsageModal() {
   const { current: streakCurrent, record: streakRecord } = calcStreak(appUsage)
 
   // ── Chart data ─────────────────────────────────────────────────────────────
+  // Il canvas 2D non risolve le CSS custom properties: va letta col valore
+  // reale, altrimenti Chart.js riceve un colore non valido e disegna in nero.
+  const usageThemeColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim() || '#ffca28'
   const chartDates = dateRange(period)
   const chartData = {
     labels: chartDates.map(d => {
@@ -141,7 +144,7 @@ export default function AppUsageModal() {
     }),
     datasets: [{
       data: chartDates.map(d => appUsage[d] || 0),
-      backgroundColor: 'var(--theme-color)',
+      backgroundColor: usageThemeColor,
       borderRadius: 4,
       borderSkipped: false,
     }],

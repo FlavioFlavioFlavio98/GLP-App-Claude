@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 import { MUSCLE_GROUPS } from '../lib/muscleMapping'
-import { groupExercisesByMuscle, getAverageRepsPerSession, getEffortMultiplier, DEFAULT_EFFORT } from '../lib/workoutStats'
+import { groupExercisesByMuscle, getAverageRepsPerSession, getEffortMultiplier, getLastUsedLoad, DEFAULT_EFFORT } from '../lib/workoutStats'
 
 const EFFORT_LEVELS = [
   { level: 1, label: 'Leggero', sub: 'riscaldamento', emoji: '🟢' },
@@ -22,6 +22,7 @@ export default function QuickExerciseModal() {
   const [selId, setSelId] = useState(null)
   const [reps, setReps] = useState(10)
   const [effort, setEffort] = useState(DEFAULT_EFFORT)
+  const [load, setLoad] = useState(0)
   const [saving, setSaving] = useState(false)
   const [exerciseDate, setExerciseDate] = useState(toDateString(new Date()))
 
@@ -69,6 +70,10 @@ export default function QuickExerciseModal() {
     setReps(prev => Math.max(1, Math.min(200, prev + delta)))
   }
 
+  function changeLoad(delta) {
+    setLoad(prev => Math.max(0, Math.round((prev + delta) * 100) / 100))
+  }
+
   function pickMuscle(key) {
     setMuscleKey(key)
     setStep('exercise')
@@ -78,6 +83,9 @@ export default function QuickExerciseModal() {
     setSelId(ex.id)
     setReps(10)
     setEffort(DEFAULT_EFFORT)
+    // Il carico ricorda automaticamente l'ultimo usato per QUESTO esercizio — il
+    // 90% delle volte non cambia da una serie all'altra, non ha senso richiederlo.
+    setLoad(getLastUsedLoad(exerciseLog, ex.id))
     setStep('reps')
   }
 
@@ -89,7 +97,7 @@ export default function QuickExerciseModal() {
   async function handleAdd() {
     if (!exercise) { actions.showToast('Nessun esercizio selezionato', '⚠️'); return }
     setSaving(true)
-    await actions.addExerciseSession(exercise.id, reps, exerciseDate, effort)
+    await actions.addExerciseSession(exercise.id, reps, exerciseDate, effort, load)
     setSaving(false)
     actions.closeModal()
   }
@@ -210,6 +218,23 @@ export default function QuickExerciseModal() {
 
               <button onClick={() => changeReps(1)} style={{ ...btnStyle, width: 52, height: 52, fontSize: '1.4em' }}>+</button>
               <button onClick={() => changeReps(5)} style={btnStyle}>+5</button>
+            </div>
+
+            {/* Carico — ricorda automaticamente l'ultimo usato per questo esercizio */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, textAlign: 'center' }}>
+                Carico
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <button onClick={() => changeLoad(-5)} style={btnStyle}>−5</button>
+                <button onClick={() => changeLoad(-1)} style={{ ...btnStyle, width: 40, height: 40 }}>−</button>
+                <div style={{ textAlign: 'center', minWidth: 60 }}>
+                  <div style={{ fontSize: '1.5em', fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{load}</div>
+                  <div style={{ fontSize: '0.6em', color: '#555', textTransform: 'uppercase' }}>kg{load === 0 ? ' · corpo libero' : ''}</div>
+                </div>
+                <button onClick={() => changeLoad(1)} style={{ ...btnStyle, width: 40, height: 40 }}>+</button>
+                <button onClick={() => changeLoad(5)} style={btnStyle}>+5</button>
+              </div>
             </div>
 
             {/* Sforzo percepito */}

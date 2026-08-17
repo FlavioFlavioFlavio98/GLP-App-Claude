@@ -801,12 +801,17 @@ function AnalysisTab({ memory }) {
   )
 
   // Tone line chart
+  // Il canvas 2D non risolve le CSS custom properties: vanno lette col valore
+  // reale, altrimenti Chart.js riceve un fillStyle non valido e disegna in nero.
+  const cs = getComputedStyle(document.documentElement)
+  const themeColor = cs.getPropertyValue('--theme-color').trim() || '#ffca28'
+  const themeGlow = cs.getPropertyValue('--theme-glow').trim() || 'rgba(255,202,40,0.15)'
   const chartData = {
     labels: last30.map(c => c.date.slice(5)), // MM-DD
     datasets: [{
       data: last30.map(c => c.toneScore || 3),
-      borderColor: 'var(--theme-color)',
-      backgroundColor: 'var(--theme-glow)',
+      borderColor: themeColor,
+      backgroundColor: themeGlow,
       tension: 0.4,
       pointRadius: 4,
       fill: true,

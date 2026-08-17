@@ -339,6 +339,24 @@ export function getAverageRepsPerSession(exerciseLog, exerciseId) {
   return count > 0 ? totalReps / count : 0
 }
 
+// ─── Ultimo carico usato per un esercizio ──────────────────────────────────────
+// Il carico non è un default fisso ma "l'ultimo usato" — il 90% delle volte non
+// cambia da una serie all'altra, quindi vale la pena ricordarlo automaticamente
+// invece di richiederlo ogni volta. Derivato dal log stesso (nessun campo extra
+// da mantenere sincronizzato): cerca l'entry più recente per data+ora.
+export function getLastUsedLoad(exerciseLog, exerciseId) {
+  let lastDate = null, lastTime = '', lastLoad = 0
+  Object.entries(exerciseLog || {}).forEach(([dateStr, entries]) => {
+    ;(entries || []).filter(e => e.exerciseId === exerciseId).forEach(e => {
+      if (e.load === undefined || e.load === null) return
+      if (lastDate === null || dateStr > lastDate || (dateStr === lastDate && (e.time || '') > lastTime)) {
+        lastDate = dateStr; lastTime = e.time || ''; lastLoad = e.load
+      }
+    })
+  })
+  return lastLoad
+}
+
 // ─── Muscoli coinvolti (per lo step "gruppo muscolare" del flusso Aggiungi serie) ──
 
 export function getPrimaryMuscleGroup(exercise) {

@@ -219,13 +219,16 @@ function WeeklySection({ userData, currentUser }) {
     const colors = weeks.map(w => w.net >= avg ? 'rgba(76,175,80,0.7)' : 'rgba(239,83,80,0.7)')
 
     if (chartRef.current) chartRef.current.destroy()
+    // Il canvas 2D non risolve le CSS custom properties: va letta col valore
+    // reale, altrimenti Chart.js riceve un colore non valido e disegna in nero.
+    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim() || '#ffca28'
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
       data: {
         labels: weeks.map(w => w.label),
         datasets: [
           { label: 'Punti netti', data: weeks.map(w => w.net), backgroundColor: colors, borderRadius: 4 },
-          { label: 'Media', data: weeks.map(() => Math.round(avg)), borderColor: 'var(--theme-color)', borderWidth: 1, borderDash: [4, 4], type: 'line', pointRadius: 0, fill: false },
+          { label: 'Media', data: weeks.map(() => Math.round(avg)), borderColor: themeColor, borderWidth: 1, borderDash: [4, 4], type: 'line', pointRadius: 0, fill: false },
         ],
       },
       options: {
@@ -626,6 +629,12 @@ function LifeMapSection({ userData }) {
   useEffect(() => {
     if (!canvasRef.current || data.length < 3) return
     if (chartRef.current) chartRef.current.destroy()
+    // Il canvas 2D non risolve le CSS custom properties (né tantomeno var()
+    // annidate dentro rgba()): vanno lette col valore reale, altrimenti
+    // Chart.js riceve un colore non valido e disegna in nero.
+    const cs = getComputedStyle(document.documentElement)
+    const themeColor = cs.getPropertyValue('--theme-color').trim() || '#ffca28'
+    const themeGlow = cs.getPropertyValue('--theme-glow').trim() || 'rgba(255,202,40,0.15)'
     chartRef.current = new Chart(canvasRef.current, {
       type: 'radar',
       data: {
@@ -633,8 +642,8 @@ function LifeMapSection({ userData }) {
         datasets: [{
           label: 'Win Rate %',
           data: data.map(d => d.winRate),
-          backgroundColor: 'rgba(var(--theme-color-rgb,255,202,40),0.15)',
-          borderColor: 'var(--theme-color)',
+          backgroundColor: themeGlow,
+          borderColor: themeColor,
           pointBackgroundColor: data.map(d => d.color),
           pointRadius: 5, borderWidth: 2,
         }],
@@ -1331,6 +1340,11 @@ function CategoriesSection({ userData }) {
     const maxPts = Math.max(...tagList.map(t => t.pts), 1)
     const normalized = tagList.map(t => Math.round(t.pts / maxPts * 100))
     if (radarChart.current) radarChart.current.destroy()
+    // Il canvas 2D non risolve le CSS custom properties: vanno lette col valore
+    // reale, altrimenti Chart.js riceve un colore non valido e disegna in nero.
+    const csRadar = getComputedStyle(document.documentElement)
+    const radarThemeColor = csRadar.getPropertyValue('--theme-color').trim() || '#ffca28'
+    const radarThemeGlow = csRadar.getPropertyValue('--theme-glow').trim() || 'rgba(255,202,40,0.15)'
     radarChart.current = new Chart(radarRef.current, {
       type: 'radar',
       data: {
@@ -1338,8 +1352,8 @@ function CategoriesSection({ userData }) {
         datasets: [{
           label: 'Equilibrio',
           data: normalized,
-          backgroundColor: 'rgba(var(--theme-color-rgb, 255,202,40),0.12)',
-          borderColor: 'var(--theme-color)',
+          backgroundColor: radarThemeGlow,
+          borderColor: radarThemeColor,
           pointBackgroundColor: tagList.map(t => t.color),
           pointRadius: 5, borderWidth: 2,
         }],

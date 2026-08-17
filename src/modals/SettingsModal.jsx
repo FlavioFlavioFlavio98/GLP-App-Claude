@@ -187,6 +187,8 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
               />
               <span style={{ fontSize: '0.78em', color: '#666' }}>sec</span>
             </div>
+
+            <MergeExerciseVariants quickExercises={allUsersData?.flavio?.quickExercises || []} actions={actions} />
           </div>
         )}
 
@@ -768,5 +770,106 @@ function DangerZoneSection({ actions }) {
         </div>
       )}
     </>
+  )
+}
+
+// ─── Unione esercizi-varianti (es. "Squat libero" + "Squat + kettlebell 16kg") ──
+// Utility una tantum: seleziona 2+ esercizi che sono in realtà lo stesso
+// movimento a carichi diversi, assegna il carico corrispondente a ciascuno, e li
+// unisce in un solo esercizio con carico selezionabile per serie. Riassegna anche
+// tutto lo storico — operazione irreversibile, richiede conferma esplicita.
+function MergeExerciseVariants({ quickExercises, actions }) {
+  const [open, setOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [loads, setLoads] = useState({})
+  const [mergedName, setMergedName] = useState('')
+  const [merging, setMerging] = useState(false)
+
+  const active = (quickExercises || []).filter(e => e.active !== false)
+
+  function toggle(id) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function handleMerge() {
+    if (selectedIds.length < 2) { actions.showToast('Seleziona almeno 2 esercizi', '⚠️'); return }
+    if (!mergedName.trim()) { actions.showToast('Dai un nome al nuovo esercizio', '⚠️'); return }
+    const variants = selectedIds.map(id => ({ exerciseId: id, load: parseFloat(loads[id]) || 0 }))
+    const names = selectedIds.map(id => active.find(e => e.id === id)?.name).join(', ')
+    if (!window.confirm(`Unire "${names}" in un unico esercizio "${mergedName}"? Lo storico verrà riassegnato con il carico indicato per ciascuno. Operazione irreversibile.`)) return
+    setMerging(true)
+    const mergedEmoji = active.find(e => e.id === selectedIds[0])?.emoji
+    await actions.mergeExerciseVariants(variants, mergedName.trim(), mergedEmoji)
+    setMerging(false)
+    setSelectedIds([]); setLoads({}); setMergedName(''); setOpen(false)
+  }
+
+  return (
+    <div style={{ marginTop: 4, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px 0',
+        }}
+      >
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ fontSize: '0.85em', fontWeight: 600 }}>Unisci esercizi (carico)</div>
+          <div style={{ fontSize: '0.68em', color: '#555' }}>Es. "Squat libero" + "Squat + kettlebell" → un solo esercizio</div>
+        </div>
+        <span className="material-icons-round" style={{ fontSize: 20, color: '#666' }}>{open ? 'expand_less' : 'expand_more'}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {active.map(ex => (
+              <div key={ex.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                background: selectedIds.includes(ex.id) ? 'var(--theme-glow)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${selectedIds.includes(ex.id) ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)'}`,
+                borderRadius: 10,
+              }}>
+                <input type="checkbox" checked={selectedIds.includes(ex.id)} onChange={() => toggle(ex.id)} />
+                <span style={{ flex: 1, fontSize: '0.85em' }}>{ex.emoji} {ex.name}</span>
+                {selectedIds.includes(ex.id) && (
+                  <>
+                    <input
+                      type="number" min={0} step={0.5} placeholder="0"
+                      value={loads[ex.id] ?? ''}
+                      onChange={e => setLoads(prev => ({ ...prev, [ex.id]: e.target.value }))}
+                      style={{
+                        width: 56, padding: '6px 8px', borderRadius: 8, textAlign: 'center',
+                        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
+                        color: 'var(--text)', fontSize: '0.85em',
+                      }}
+                    />
+                    <span style={{ fontSize: '0.72em', color: '#666' }}>kg</span>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {selectedIds.length >= 2 && (
+            <>
+              <input
+                type="text" placeholder="Nome del nuovo esercizio unificato (es. Squat)"
+                value={mergedName}
+                onChange={e => setMergedName(e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: 10, marginBottom: 10, boxSizing: 'border-box',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+                  color: 'var(--text)', fontSize: '0.88em',
+                }}
+              />
+              <button className="btn-backup" onClick={handleMerge} disabled={merging} style={{ fontWeight: 700 }}>
+                {merging ? '⏳ Unione in corso...' : `🔀 Unisci ${selectedIds.length} esercizi`}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

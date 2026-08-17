@@ -333,7 +333,9 @@ export default function ExerciseSingleView() {
                   }}>
                     <span style={{ fontSize: '0.75em', color: '#555', minWidth: 44 }}>{s.time?.slice(0, 5) || ''}</span>
                     {s.effort && <span style={{ fontSize: '0.8em' }}>{getEffortEmoji(s.effort)}</span>}
-                    <span style={{ flex: 1, fontWeight: 700 }}>{s.reps} reps</span>
+                    <span style={{ flex: 1, fontWeight: 700 }}>
+                      {s.reps} reps{s.load > 0 ? ` · ${s.load}kg` : ''}
+                    </span>
                     {isSessionRecord && <span style={{ fontSize: '0.65em', fontWeight: 700, color: 'var(--theme-color)' }}>🏆 record</span>}
                     <span style={{ fontSize: '0.75em', color: 'var(--success)' }}>+{s.pts} pt</span>
                     <button

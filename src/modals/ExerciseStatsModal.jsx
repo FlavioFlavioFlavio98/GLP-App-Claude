@@ -122,13 +122,18 @@ export default function ExerciseStatsModal() {
   useEffect(() => {
     if (!canvasRef.current || !stats) return
     if (chartRef.current) chartRef.current.destroy()
+    // Il canvas 2D non risolve le CSS custom properties: passare 'var(--theme-color)'
+    // direttamente lascia Chart.js con un fillStyle non valido, che il browser
+    // silenziosamente sostituisce con nero — da qui le colonne invisibili su sfondo
+    // scuro. Va risolta esplicitamente col valore reale prima di passarla al canvas.
+    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim() || '#ffca28'
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
       data: {
         labels: stats.chartDates.map(d => { const [,m,dd] = d.split('-'); return `${parseInt(dd)}/${parseInt(m)}` }),
         datasets: [{
           data: stats.chartData,
-          backgroundColor: 'var(--theme-color)',
+          backgroundColor: themeColor,
           borderRadius: 3, barPercentage: 0.7,
         }],
       },
@@ -256,7 +261,9 @@ export default function ExerciseStatsModal() {
                       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10 }}>
                         <span style={{ fontSize: '0.78em', color: '#666', minWidth: 52 }}>{s.time?.slice(0,5) || ''}</span>
                         {s.effort && <span style={{ fontSize: '0.8em' }}>{getEffortEmoji(s.effort)}</span>}
-                        <span style={{ flex: 1, fontWeight: 700 }}>{s.reps} reps</span>
+                        <span style={{ flex: 1, fontWeight: 700 }}>
+                          {s.reps} reps{s.load > 0 ? ` · ${s.load}kg` : ''}
+                        </span>
                         <span style={{ fontSize: '0.78em', color: 'var(--success)', fontWeight: 600 }}>+{s.pts} pt</span>
                         <button
                           className="btn-icon"

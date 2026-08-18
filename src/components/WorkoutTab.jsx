@@ -198,7 +198,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         onClick={() => actions.openModal('quickExercise')}
         title="Aggiungi serie"
         style={{
-          position: 'fixed', right: 16, bottom: 76, zIndex: 900,
+          // Su schermi larghi l'app resta una colonna centrata (max 480px): il
+          // FAB deve seguire il bordo destro di quella colonna, non del viewport.
+          position: 'fixed', right: 'max(16px, calc(50vw - 240px + 16px))', bottom: 76, zIndex: 900,
           width: 56, height: 56, borderRadius: '50%',
           background: 'var(--theme-color)', color: '#111',
           border: 'none', cursor: 'pointer',

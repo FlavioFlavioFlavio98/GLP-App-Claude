@@ -33,6 +33,17 @@
 /* ---- RESET & BASE ---- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* L'app è pensata mobile-first (colonna singola): su schermi larghi (laptop)
+   senza questo vincolo il contenuto si allarga a dismisura invece di restare
+   una colonna leggibile — stesso pattern "cornice da telefono" di qualunque
+   PWA mobile-first vista da desktop. Gli elementi fixed (nav, FAB, overlay)
+   vanno vincolati singolarmente perché ignorano la larghezza di #root. */
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--bg);
@@ -544,6 +555,11 @@ body.offline .offline-badge { display: block; }
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   animation: fadeIn 0.18s ease;
+}
+/* Il backdrop resta a piena larghezza (giusto così), ma il foglio/contenuto
+   dentro non deve allargarsi oltre la colonna dell'app su schermi larghi */
+.modal-overlay > div {
+  max-width: 480px;
 }
 .modal-box {
   background: var(--card-solid);

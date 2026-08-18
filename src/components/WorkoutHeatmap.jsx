@@ -156,7 +156,7 @@ export default function WorkoutHeatmap({ exerciseLog }) {
           onClick={() => setExpanded(false)}
         >
           <div
-            style={{ background: 'var(--card-solid)', margin: 'auto 0', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px 18px 0 0', padding: '18px 16px 28px', border: '1px solid rgba(255,255,255,0.1)' }}
+            style={{ background: 'var(--card-solid)', margin: 'auto auto', width: '100%', maxWidth: 900, maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px 18px 0 0', padding: '18px 16px 28px', border: '1px solid rgba(255,255,255,0.1)' }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>

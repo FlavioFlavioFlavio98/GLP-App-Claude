@@ -3,8 +3,7 @@ const TABS = [
   { id: 'abitudini', icon: 'repeat',          label: 'Abitudini' },
   { id: 'task',      icon: 'checklist',       label: 'Task' },
   { id: 'workout',   icon: 'fitness_center',  label: 'Workout' },
-  { id: 'body',      icon: 'accessibility_new', label: 'Body' },
-  { id: 'mind',      icon: 'psychology',      label: 'Mind' },
+  { id: 'body',      icon: 'spa',             label: 'Benessere' },
   { id: 'stats',     icon: 'bar_chart',       label: 'Stats' },
 ]
 
@@ -12,7 +11,7 @@ export default function BottomNav({ currentTab, onTabChange }) {
   return (
     <nav style={{
       position: 'fixed', bottom: 0, left: 0, right: 0,
-      height: 60, zIndex: 1000,
+      height: 60, zIndex: 1000, maxWidth: 480, margin: '0 auto',
       background: 'var(--card-solid, #1e1e1e)',
       borderTop: '1px solid rgba(255,255,255,0.07)',
       display: 'flex',

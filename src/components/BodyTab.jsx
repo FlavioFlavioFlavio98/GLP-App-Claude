@@ -1,6 +1,8 @@
 import BarefootStats from './BarefootStats'
 import HangStats from './HangStats'
 import SunExposureSection from './SunExposureSection'
+import YouTubeSocialSection from './YouTubeSocialSection'
+import WellbeingInsights from './WellbeingInsights'
 import ActivityRateEditor from './ActivityRateEditor'
 import { getBarefootRate, setBarefootRate, getHangRate, setHangRate } from '../lib/bodyStats'
 
@@ -9,9 +11,12 @@ export default function BodyTab({ actions, authUserId, isReadOnly, globalData })
     return <div className="empty-state">Sezione non disponibile</div>
   }
 
+  const exerciseLog = globalData?.exerciseLog || {}
+  const mobilityLog = globalData?.mobilityLog || {}
   const barefootLog = globalData?.barefootLog || {}
   const hangLog = globalData?.hangLog || {}
   const sunExposureLog = globalData?.sunExposureLog || {}
+  const mindSocialLog = globalData?.mindSocialLog || {}
 
   const btnStyle = {
     display: 'flex', alignItems: 'center', gap: 12,
@@ -23,6 +28,15 @@ export default function BodyTab({ actions, authUserId, isReadOnly, globalData })
 
   return (
     <div style={{ paddingTop: 8 }}>
+      {/* Correlazioni semplici tra le varie aree tracciate */}
+      <WellbeingInsights
+        exerciseLog={exerciseLog}
+        mobilityLog={mobilityLog}
+        barefootLog={barefootLog}
+        hangLog={hangLog}
+        mindSocialLog={mindSocialLog}
+      />
+
       {/* Barefoot */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <button
@@ -66,7 +80,10 @@ export default function BodyTab({ actions, authUserId, isReadOnly, globalData })
       {/* Sun Exposure */}
       <SunExposureSection sunExposureLog={sunExposureLog} actions={actions} />
 
-      {/* Peso corporeo — spostato qui da Workout */}
+      {/* YouTube & Social — dalla ex tab Mind */}
+      <YouTubeSocialSection mindSocialLog={mindSocialLog} actions={actions} />
+
+      {/* Peso corporeo */}
       <button style={btnStyle} onClick={() => actions.openModal('weight')}>
         <span className="material-icons-round" style={{ color: 'var(--theme-color)', fontSize: 22 }}>monitor_weight</span>
         Peso corporeo

@@ -162,8 +162,10 @@ export function computeDayNet(userData, dateStr) {
   const dailySpent = penaltyCost + purchaseCost + trackedCost
 
   const extraPts = Math.round(
-    ((userData.exerciseLog || {})[dateStr] || [])
-      .reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) * 10
+    (
+      ((userData.exerciseLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
+      ((userData.mobilityLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0)
+    ) * 10
   ) / 10
 
   const checkInPts = Object.values(userData.dailyLogs?.[dateStr]?.checkIns || {})
@@ -203,6 +205,7 @@ export function calculateTotalScore(userData) {
   const dates = new Set([
     ...Object.keys(userData.dailyLogs || {}),
     ...Object.keys(userData.exerciseLog || {}),
+    ...Object.keys(userData.mobilityLog || {}),
   ])
   ;(userData.tasks || []).forEach(t => {
     if (typeof t.completedAt === 'string') dates.add(t.completedAt.slice(0, 10))

@@ -755,3 +755,84 @@ export function computeGlobalWorkoutStreak(exerciseLog) {
 
   return { current, currentStart, best: best.len, bestStart: best.start, bestEnd: best.end }
 }
+
+// ─── Mobility ───────────────────────────────────────────────────────────────
+// Sessioni di mobility/stretching, tracciate separatamente dall'allenamento
+// vero e proprio (mobilityLog, non exerciseLog): niente esercizio/reps, solo
+// durata in minuti. Il punteggio è durata × tasso — il tasso è una preferenza
+// locale (come il timer di recupero), non un dato per-esercizio su Firestore.
+
+const MOBILITY_RATE_KEY = 'glp_mobility_pts_per_min'
+export const DEFAULT_MOBILITY_RATE = 1
+
+export function getMobilityRate() {
+  try {
+    const stored = localStorage.getItem(MOBILITY_RATE_KEY)
+    const n = parseFloat(stored)
+    return (!isNaN(n) && n > 0) ? n : DEFAULT_MOBILITY_RATE
+  } catch { return DEFAULT_MOBILITY_RATE }
+}
+
+export function setMobilityRate(rate) {
+  try { localStorage.setItem(MOBILITY_RATE_KEY, String(Math.max(0.1, rate))) } catch { /* ignore */ }
+}
+
+export function getDayMobilityEffort(mobilityLog, dateStr) {
+  const total = (mobilityLog?.[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0)
+  return Math.round(total * 100) / 100
+}
+
+// Streak sui giorni con almeno una sessione mobility — stessa logica di
+// computeGlobalWorkoutStreak, applicata a mobilityLog invece che exerciseLog.
+export function computeMobilityStreak(mobilityLog) {
+  const dates = Object.keys(mobilityLog || {})
+    .filter(d => getDayMobilityEffort(mobilityLog, d) > 0)
+    .sort()
+
+  if (!dates.length) return { current: 0, best: 0, bestStart: null, bestEnd: null, currentStart: null }
+
+  const runs = []
+  let runStart = dates[0], runLen = 1
+  for (let i = 1; i < dates.length; i++) {
+    const diff = Math.round((new Date(dates[i]) - new Date(dates[i - 1])) / 86400000)
+    if (diff === 1) { runLen++ }
+    else { runs.push({ start: runStart, end: dates[i - 1], len: runLen }); runStart = dates[i]; runLen = 1 }
+  }
+  runs.push({ start: runStart, end: dates.at(-1), len: runLen })
+
+  const best = runs.reduce((a, b) => b.len > a.len ? b : a, runs[0])
+
+  const todayStr     = toDateString(new Date())
+  const yesterdayStr = toDateString(new Date(Date.now() - 86400000))
+  const last = runs.at(-1)
+  const isContinuing = last.end === todayStr || last.end === yesterdayStr
+  const current = isContinuing ? last.len : 0
+  const currentStart = isContinuing ? last.start : null
+
+  return { current, currentStart, best: best.len, bestStart: best.start, bestEnd: best.end }
+}
+
+// Statistiche aggregate mobility — oggi, ultimi 7gg, lifetime, streak. Usate
+// dalla card statistiche nella tab Workout.
+export function computeMobilityStats(mobilityLog) {
+  const todayStr = toDateString(new Date())
+  const allDates = Object.keys(mobilityLog || {})
+
+  function minutesOnDate(d) {
+    return (mobilityLog?.[d] || []).reduce((a, s) => a + (parseFloat(s.duration) || 0), 0)
+  }
+
+  const todayMinutes = minutesOnDate(todayStr)
+  const todayPts = getDayMobilityEffort(mobilityLog, todayStr)
+
+  const weekCutoff = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return toDateString(d) })()
+  const weekMinutes = allDates.filter(d => d >= weekCutoff).reduce((a, d) => a + minutesOnDate(d), 0)
+
+  const lifetimeMinutes = allDates.reduce((a, d) => a + minutesOnDate(d), 0)
+  const lifetimePts = Math.round(allDates.reduce((a, d) => a + getDayMobilityEffort(mobilityLog, d), 0) * 10) / 10
+  const sessionCount = allDates.reduce((a, d) => a + (mobilityLog?.[d]?.length || 0), 0)
+
+  const streak = computeMobilityStreak(mobilityLog)
+
+  return { todayMinutes, todayPts, weekMinutes, lifetimeMinutes, lifetimePts, sessionCount, streak }
+}

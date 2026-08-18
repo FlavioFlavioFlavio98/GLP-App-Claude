@@ -11,6 +11,7 @@ import WorkoutHeatmap from './WorkoutHeatmap'
 import WorkoutRecordFreshness from './WorkoutRecordFreshness'
 import WorkoutPlateauAlert from './WorkoutPlateauAlert'
 import WorkoutDaySummary from './WorkoutDaySummary'
+import WorkoutMobilityStats from './WorkoutMobilityStats'
 import { toDateString } from '../lib/habitLogic'
 import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary } from '../lib/workoutStats'
 
@@ -20,6 +21,7 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
   const exerciseLog = globalData?.exerciseLog || {}
   const quickExercises = globalData?.quickExercises || []
+  const mobilityLog = globalData?.mobilityLog || {}
   const todayStr = toDateString(new Date())
   const viewDate = state.viewDate || todayStr
   const isToday = viewDate === todayStr
@@ -70,6 +72,22 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         <WorkoutSessionSummary summary={sessionSummary} onClose={() => setSessionSummary(null)} />
       )}
 
+      {/* Sessione mobility — separata dall'allenamento vero e proprio, sempre
+          raggiungibile in cima alla tab */}
+      <button
+        onClick={() => actions.openModal('mobility')}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          width: '100%', padding: '10px 14px', marginBottom: 12,
+          background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)',
+          borderRadius: 12, cursor: 'pointer', color: 'var(--text)',
+          fontSize: '0.85em', fontWeight: 600,
+        }}
+      >
+        <span style={{ fontSize: '1.1em' }}>🧘</span>
+        Aggiungi sessione Mobility
+      </button>
+
       {isToday ? (
         <>
           {/* Sessione attiva — bottone "Termina sessione" */}
@@ -93,10 +111,14 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         <WorkoutDaySummary
           exerciseLog={exerciseLog}
           quickExercises={quickExercises}
+          mobilityLog={mobilityLog}
           dateStr={viewDate}
           actions={actions}
         />
       )}
+
+      {/* Statistiche mobility */}
+      <WorkoutMobilityStats mobilityLog={mobilityLog} actions={actions} />
 
       {/* Muscle heatmap */}
       <MuscleHeatmapBody

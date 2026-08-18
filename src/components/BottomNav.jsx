@@ -3,6 +3,7 @@ const TABS = [
   { id: 'abitudini', icon: 'repeat',          label: 'Abitudini' },
   { id: 'task',      icon: 'checklist',       label: 'Task' },
   { id: 'workout',   icon: 'fitness_center',  label: 'Workout' },
+  { id: 'body',      icon: 'accessibility_new', label: 'Body' },
   { id: 'stats',     icon: 'bar_chart',       label: 'Stats' },
 ]
 

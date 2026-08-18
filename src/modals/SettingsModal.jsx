@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
 import { APP_VERSION, APP_UPDATED, APP_BUILD_TIME, APP_BUILD_HASH } from '../version'
-import { getRestDuration, setRestDuration } from '../lib/workoutStats'
+import { getRestDuration, setRestDuration, getMobilityRate, setMobilityRate as setMobilityRateStorage } from '../lib/workoutStats'
 import { exportWorkoutCsv, exportWorkoutPdf } from '../lib/workoutExport'
 
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.()
@@ -35,6 +35,7 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
   const supportsWakeLock = 'wakeLock' in navigator
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [restSeconds, setRestSeconds] = useState(() => getRestDuration())
+  const [mobilityRate, setMobilityRate] = useState(() => getMobilityRate())
 
   if (modal !== 'settings') return null
 
@@ -187,6 +188,30 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
                 }}
               />
               <span style={{ fontSize: '0.78em', color: '#666' }}>sec</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.85em', fontWeight: 600 }}>Punti Mobility</div>
+                <div style={{ fontSize: '0.68em', color: '#555' }}>Punti guadagnati per ogni minuto di sessione</div>
+              </div>
+              <input
+                type="number"
+                min={0.1}
+                step={0.5}
+                value={mobilityRate}
+                onChange={e => {
+                  const n = parseFloat(e.target.value) || 0
+                  setMobilityRate(n)
+                  if (n >= 0.1) setMobilityRateStorage(n)
+                }}
+                style={{
+                  width: 64, padding: '8px 10px', borderRadius: 8, textAlign: 'center',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+                  color: 'var(--text)', fontSize: '0.9em',
+                }}
+              />
+              <span style={{ fontSize: '0.78em', color: '#666' }}>pt/min</span>
             </div>
 
             <WorkoutExportSection

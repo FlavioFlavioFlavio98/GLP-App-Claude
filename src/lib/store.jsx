@@ -12,7 +12,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll }
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
-import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT } from './workoutStats'
+import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate } from './workoutStats'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -936,6 +936,55 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`exerciseLog.${dateStr}`]: newLog })
       actions.showToast('Serie modificata ✏️', '✏️')
+    },
+
+    // ─── Mobility ── tracciata separatamente da exerciseLog: solo durata, nessun
+    // esercizio/reps. Stesso pattern add/edit/delete delle serie di allenamento.
+    async addMobilitySession(durationMin, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const numDuration = parseFloat(durationMin) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getMobilityRate()).toFixed(2))
+      const logDate = dateStr || toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        duration: numDuration,
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`mobilityLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      actions.showToast(`+${pts} pt 🧘`, '🧘')
+    },
+
+    async deleteMobilitySession(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.mobilityLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`mobilityLog.${dateStr}`]: newLog })
+      actions.showToast(`-${entry.pts} pt annullato`, '↩️')
+    },
+
+    async editMobilitySession(dateStr, logId, newDuration) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.mobilityLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const numDuration = parseFloat(newDuration) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getMobilityRate()).toFixed(2))
+      const newLog = dayLog.map(e => e.id === logId ? { ...e, duration: numDuration, pts } : e)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`mobilityLog.${dateStr}`]: newLog })
+      actions.showToast('Sessione modificata ✏️', '✏️')
     },
 
     async saveExercise(exercise) {

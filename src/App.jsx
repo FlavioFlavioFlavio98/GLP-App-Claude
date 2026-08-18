@@ -23,6 +23,7 @@ const OggiTab = lazy(() => import('./tabs/OggiTab'))
 const AbitudiniTab = lazy(() => import('./tabs/AbitudiniTab'))
 const TaskTab = lazy(() => import('./tabs/TaskTab'))
 const WorkoutTab = lazy(() => import('./components/WorkoutTab'))
+const BodyTab = lazy(() => import('./components/BodyTab'))
 const StatsTabContent = lazy(() => import('./components/StatsTabContent'))
 
 // ── Gruppi di modali: caricati on-demand al primo accesso, raggruppati per contesto d'uso ──
@@ -44,7 +45,7 @@ const HABIT_CORE_MODALS = ['add', 'edit', 'tags', 'rewardCategories', 'singleHab
 const SETTINGS_MODALS = ['settings', 'themeModal', 'notifications', 'achievements', 'avatar', 'backup', 'appUsage', 'quotesModal']
 const STATS_MODALS = ['analytics', 'stats', 'statsPage', 'purchaseHistory', 'weeklyView', 'pdfReport', 'activityLog']
 const JOURNAL_MOOD_MODALS = ['eveningReview', 'mood', 'insights', 'weeklyRecap', 'journal', 'journalView']
-const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach']
+const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory']
 
 function TabLoadingFallback() {
@@ -380,6 +381,13 @@ export default function App() {
         {currentTab === 'workout' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <WorkoutTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
+          </Suspense>
+        )}
+
+        {/* ───────── TAB: BODY ───────── */}
+        {currentTab === 'body' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <BodyTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
           </Suspense>
         )}
 

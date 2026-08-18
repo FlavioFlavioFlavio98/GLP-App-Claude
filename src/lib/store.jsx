@@ -13,6 +13,7 @@ import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calcul
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate } from './workoutStats'
+import { getBarefootRate, getHangRate } from './bodyStats'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -987,6 +988,114 @@ export function AppProvider({ children }) {
       actions.showToast('Sessione modificata ✏️', '✏️')
     },
 
+    // ─── Barefoot ── stesso pattern di Mobility, tab Body invece che Workout.
+    async addBarefootSession(durationMin, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const numDuration = parseFloat(durationMin) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getBarefootRate()).toFixed(2))
+      const logDate = dateStr || toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        duration: numDuration,
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`barefootLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      actions.showToast(`+${pts} pt 🦶`, '🦶')
+    },
+
+    async deleteBarefootSession(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.barefootLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`barefootLog.${dateStr}`]: newLog })
+      actions.showToast(`-${entry.pts} pt annullato`, '↩️')
+    },
+
+    async editBarefootSession(dateStr, logId, newDuration) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.barefootLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const numDuration = parseFloat(newDuration) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getBarefootRate()).toFixed(2))
+      const newLog = dayLog.map(e => e.id === logId ? { ...e, duration: numDuration, pts } : e)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`barefootLog.${dateStr}`]: newLog })
+      actions.showToast('Sessione modificata ✏️', '✏️')
+    },
+
+    // ─── Hang ── stesso pattern di Barefoot/Mobility, tasso di default più alto.
+    async addHangSession(durationMin, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const numDuration = parseFloat(durationMin) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getHangRate()).toFixed(2))
+      const logDate = dateStr || toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        duration: numDuration,
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`hangLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      actions.showToast(`+${pts} pt 🧗`, '🧗')
+    },
+
+    async deleteHangSession(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.hangLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`hangLog.${dateStr}`]: newLog })
+      actions.showToast(`-${entry.pts} pt annullato`, '↩️')
+    },
+
+    async editHangSession(dateStr, logId, newDuration) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.hangLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const numDuration = parseFloat(newDuration) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getHangRate()).toFixed(2))
+      const newLog = dayLog.map(e => e.id === logId ? { ...e, duration: numDuration, pts } : e)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`hangLog.${dateStr}`]: newLog })
+      actions.showToast('Sessione modificata ✏️', '✏️')
+    },
+
+    // ─── Sun Exposure ── un valore per giorno (mattina/sera), nessuna lista di
+    // sessioni: si sovrascrive, non si "aggiunge". Nessun punteggio per ora.
+    async setSunExposure(dateStr, timeOfDay, level) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const current = gd.sunExposureLog?.[dateStr] || { morning: null, evening: null }
+      const updated = { ...current, [timeOfDay]: level }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`sunExposureLog.${dateStr}`]: updated })
+    },
+
     async saveExercise(exercise) {
       // Add or update an exercise definition
       if (state.authUserId !== 'flavio') return
@@ -1023,52 +1132,6 @@ export function AppProvider({ children }) {
     // array di { exerciseId, load } — ogni serie storica di quell'esercizio viene
     // riassegnata al nuovo esercizio unificato con quel carico. Operazione singola
     // e atomica (un solo updateDoc) per non lasciare mai i dati a metà.
-    async mergeExerciseVariants(variants, mergedName, mergedEmoji) {
-      if (state.authUserId !== 'flavio') return
-      const gd = state.allUsersData?.flavio
-      if (!gd) return
-      const variantIds = variants.map(v => v.exerciseId)
-      const loadByExId = Object.fromEntries(variants.map(v => [v.exerciseId, parseFloat(v.load) || 0]))
-
-      const existing = gd.quickExercises || []
-      const sourceExercises = existing.filter(e => variantIds.includes(e.id))
-      if (sourceExercises.length < 2) { actions.showToast('Servono almeno 2 esercizi da unire', '⚠️'); return }
-
-      // Nuovo esercizio unificato: pt/rep = il più alto tra le varianti (la più
-      // impegnativa), storia changes[] unita e ordinata per data.
-      const mergedPPR = Math.max(...sourceExercises.map(e => parseFloat(e.pointsPerRep) || 0.1))
-      const mergedChanges = sourceExercises
-        .flatMap(e => e.changes || [{ date: '2020-01-01', pointsPerRep: e.pointsPerRep }])
-        .sort((a, b) => a.date.localeCompare(b.date))
-      const today = toDateString(new Date())
-      const mergedId = Date.now().toString(36)
-      const mergedExercise = {
-        id: mergedId, name: mergedName, emoji: mergedEmoji || sourceExercises[0].emoji,
-        pointsPerRep: mergedPPR, active: true,
-        changes: [...mergedChanges, { date: today, pointsPerRep: mergedPPR }],
-      }
-
-      const updatedExercises = [...existing.filter(e => !variantIds.includes(e.id)), mergedExercise]
-
-      // Riassegna ogni entry storica al nuovo id, aggiungendo il carico della
-      // variante di provenienza. I punti storici (`pts`) non vengono ricalcolati:
-      // restano quelli registrati al momento, solo l'esercizio e il carico cambiano.
-      const updatedLog = {}
-      Object.entries(gd.exerciseLog || {}).forEach(([dateStr, entries]) => {
-        updatedLog[dateStr] = (entries || []).map(e =>
-          variantIds.includes(e.exerciseId)
-            ? { ...e, exerciseId: mergedId, load: loadByExId[e.exerciseId] }
-            : e
-        )
-      })
-
-      await updateDoc(doc(db, 'users', 'flavio'), {
-        quickExercises: updatedExercises,
-        exerciseLog: updatedLog,
-      })
-      actions.showToast(`Esercizi uniti in "${mergedName}" 🔀`, '🔀')
-    },
-
     async updateExerciseMuscles(exerciseId, muscles) {
       if (state.authUserId !== 'flavio') return
       const gd = state.allUsersData?.flavio

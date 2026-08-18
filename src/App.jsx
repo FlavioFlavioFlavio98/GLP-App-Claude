@@ -32,6 +32,7 @@ const SettingsModals = lazy(() => import('./modalGroups/SettingsModals'))
 const StatsModals = lazy(() => import('./modalGroups/StatsModals'))
 const JournalMoodModals = lazy(() => import('./modalGroups/JournalMoodModals'))
 const FitnessModals = lazy(() => import('./modalGroups/FitnessModals'))
+const BodyModals = lazy(() => import('./modalGroups/BodyModals'))
 const TaskModals = lazy(() => import('./modalGroups/TaskModals'))
 
 // Pagine fullscreen indipendenti (già gated da stato booleano proprio, lazy dirette)
@@ -46,6 +47,7 @@ const SETTINGS_MODALS = ['settings', 'themeModal', 'notifications', 'achievement
 const STATS_MODALS = ['analytics', 'stats', 'statsPage', 'purchaseHistory', 'weeklyView', 'pdfReport', 'activityLog']
 const JOURNAL_MOOD_MODALS = ['eveningReview', 'mood', 'insights', 'weeklyRecap', 'journal', 'journalView']
 const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility']
+const BODY_MODALS = ['barefoot', 'hang']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory']
 
 function TabLoadingFallback() {
@@ -426,6 +428,9 @@ export default function App() {
       )}
       {FITNESS_MODALS.includes(modal) && (
         <Suspense fallback={null}><FitnessModals authUserId={authUserId} /></Suspense>
+      )}
+      {BODY_MODALS.includes(modal) && (
+        <Suspense fallback={null}><BodyModals authUserId={authUserId} /></Suspense>
       )}
       {TASK_MODALS.includes(modal) && (
         <Suspense fallback={null}><TaskModals authUserId={authUserId} /></Suspense>

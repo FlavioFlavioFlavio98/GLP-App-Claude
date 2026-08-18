@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
 import { APP_VERSION, APP_UPDATED, APP_BUILD_TIME, APP_BUILD_HASH } from '../version'
-import { getRestDuration, setRestDuration, getMobilityRate, setMobilityRate as setMobilityRateStorage } from '../lib/workoutStats'
+import { getRestDuration, setRestDuration } from '../lib/workoutStats'
 import { exportWorkoutCsv, exportWorkoutPdf } from '../lib/workoutExport'
 
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.()
@@ -31,11 +31,10 @@ async function callNativeScheduler(settings) {
 
 export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
   const { state, actions } = useApp()
-  const { modal, userColors, density, authUserId, allUsersData, currentUser, minimalMode, wakeLockEnabled, theme, lastDarkTheme } = state
+  const { modal, authUserId, allUsersData, currentUser, minimalMode, wakeLockEnabled, theme, lastDarkTheme } = state
   const supportsWakeLock = 'wakeLock' in navigator
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [restSeconds, setRestSeconds] = useState(() => getRestDuration())
-  const [mobilityRate, setMobilityRate] = useState(() => getMobilityRate())
 
   if (modal !== 'settings') return null
 
@@ -84,7 +83,6 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
         {/* PROFILO */}
         <div className="settings-section">
           <div className="settings-section-title">Profilo Utente</div>
-          <UserColorRow name="Flavio" color={userColors.flavio} onChange={c => actions.setUserColor('flavio', c)} />
           {/* Avatar button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 6 }}>
             <div style={{ fontSize: '2em', width: 40, textAlign: 'center' }}>
@@ -97,34 +95,6 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
             <button className="btn-icon" onClick={() => openAfter('avatar')} title="Modifica avatar">
               <span className="material-icons-round" style={{ fontSize: 20 }}>edit</span>
             </button>
-          </div>
-        </div>
-
-        {/* VISUALIZZAZIONE */}
-        <div className="settings-section">
-          <div className="settings-section-title">Visualizzazione</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[
-              { id: 'compact', icon: 'density_small', label: 'Compatta' },
-              { id: 'normal', icon: 'density_medium', label: 'Normale' },
-              { id: 'expanded', icon: 'density_large', label: 'Espansa' },
-            ].map(opt => (
-              <button
-                key={opt.id}
-                onClick={() => actions.setDensity(opt.id)}
-                style={{
-                  flex: 1, padding: '10px 6px', borderRadius: 10, cursor: 'pointer',
-                  background: density === opt.id ? 'var(--theme-glow)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${density === opt.id ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)'}`,
-                  color: density === opt.id ? 'var(--theme-color)' : '#888',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  transition: 'all 0.2s',
-                }}
-              >
-                <span className="material-icons-round" style={{ fontSize: 20 }}>{opt.icon}</span>
-                <span style={{ fontSize: '0.7em', fontWeight: density === opt.id ? 700 : 400 }}>{opt.label}</span>
-              </button>
-            ))}
           </div>
         </div>
 
@@ -190,30 +160,6 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
               <span style={{ fontSize: '0.78em', color: '#666' }}>sec</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.85em', fontWeight: 600 }}>Punti Mobility</div>
-                <div style={{ fontSize: '0.68em', color: '#555' }}>Punti guadagnati per ogni minuto di sessione</div>
-              </div>
-              <input
-                type="number"
-                min={0.1}
-                step={0.5}
-                value={mobilityRate}
-                onChange={e => {
-                  const n = parseFloat(e.target.value) || 0
-                  setMobilityRate(n)
-                  if (n >= 0.1) setMobilityRateStorage(n)
-                }}
-                style={{
-                  width: 64, padding: '8px 10px', borderRadius: 8, textAlign: 'center',
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
-                  color: 'var(--text)', fontSize: '0.9em',
-                }}
-              />
-              <span style={{ fontSize: '0.78em', color: '#666' }}>pt/min</span>
-            </div>
-
             <WorkoutExportSection
               exerciseLog={allUsersData?.flavio?.exerciseLog || {}}
               quickExercises={allUsersData?.flavio?.quickExercises || []}
@@ -221,7 +167,6 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
               actions={actions}
             />
 
-            <MergeExerciseVariants quickExercises={allUsersData?.flavio?.quickExercises || []} actions={actions} />
           </div>
         )}
 
@@ -598,16 +543,6 @@ function NotificationSection({ globalData, authUserId, actions }) {
   )
 }
 
-function UserColorRow({ name, color, onChange }) {
-  return (
-    <div className="user-color-row">
-      <div className="user-color-dot" style={{ background: color }}>{name[0]}</div>
-      <span className="user-color-name">{name}</span>
-      <input type="color" className="user-color-picker" value={color} onChange={e => onChange(e.target.value)} title={`Colore di ${name}`} />
-    </div>
-  )
-}
-
 function PsychStatRow({ label, value }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85em' }}>
@@ -850,107 +785,6 @@ function WorkoutExportSection({ exerciseLog, quickExercises, themeId, actions })
           {exporting === 'csv' ? 'Genero...' : 'CSV'}
         </button>
       </div>
-    </div>
-  )
-}
-
-// ─── Unione esercizi-varianti (es. "Squat libero" + "Squat + kettlebell 16kg") ──
-// Utility una tantum: seleziona 2+ esercizi che sono in realtà lo stesso
-// movimento a carichi diversi, assegna il carico corrispondente a ciascuno, e li
-// unisce in un solo esercizio con carico selezionabile per serie. Riassegna anche
-// tutto lo storico — operazione irreversibile, richiede conferma esplicita.
-function MergeExerciseVariants({ quickExercises, actions }) {
-  const [open, setOpen] = useState(false)
-  const [selectedIds, setSelectedIds] = useState([])
-  const [loads, setLoads] = useState({})
-  const [mergedName, setMergedName] = useState('')
-  const [merging, setMerging] = useState(false)
-
-  const active = (quickExercises || []).filter(e => e.active !== false)
-
-  function toggle(id) {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-  }
-
-  async function handleMerge() {
-    if (selectedIds.length < 2) { actions.showToast('Seleziona almeno 2 esercizi', '⚠️'); return }
-    if (!mergedName.trim()) { actions.showToast('Dai un nome al nuovo esercizio', '⚠️'); return }
-    const variants = selectedIds.map(id => ({ exerciseId: id, load: parseFloat(loads[id]) || 0 }))
-    const names = selectedIds.map(id => active.find(e => e.id === id)?.name).join(', ')
-    if (!window.confirm(`Unire "${names}" in un unico esercizio "${mergedName}"? Lo storico verrà riassegnato con il carico indicato per ciascuno. Operazione irreversibile.`)) return
-    setMerging(true)
-    const mergedEmoji = active.find(e => e.id === selectedIds[0])?.emoji
-    await actions.mergeExerciseVariants(variants, mergedName.trim(), mergedEmoji)
-    setMerging(false)
-    setSelectedIds([]); setLoads({}); setMergedName(''); setOpen(false)
-  }
-
-  return (
-    <div style={{ marginTop: 4, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px 0',
-        }}
-      >
-        <div style={{ textAlign: 'left' }}>
-          <div style={{ fontSize: '0.85em', fontWeight: 600 }}>Unisci esercizi (carico)</div>
-          <div style={{ fontSize: '0.68em', color: '#555' }}>Es. "Squat libero" + "Squat + kettlebell" → un solo esercizio</div>
-        </div>
-        <span className="material-icons-round" style={{ fontSize: 20, color: '#666' }}>{open ? 'expand_less' : 'expand_more'}</span>
-      </button>
-
-      {open && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-            {active.map(ex => (
-              <div key={ex.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                background: selectedIds.includes(ex.id) ? 'var(--theme-glow)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${selectedIds.includes(ex.id) ? 'var(--theme-color)' : 'rgba(255,255,255,0.08)'}`,
-                borderRadius: 10,
-              }}>
-                <input type="checkbox" checked={selectedIds.includes(ex.id)} onChange={() => toggle(ex.id)} />
-                <span style={{ flex: 1, fontSize: '0.85em' }}>{ex.emoji} {ex.name}</span>
-                {selectedIds.includes(ex.id) && (
-                  <>
-                    <input
-                      type="number" min={0} step={0.5} placeholder="0"
-                      value={loads[ex.id] ?? ''}
-                      onChange={e => setLoads(prev => ({ ...prev, [ex.id]: e.target.value }))}
-                      style={{
-                        width: 56, padding: '6px 8px', borderRadius: 8, textAlign: 'center',
-                        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
-                        color: 'var(--text)', fontSize: '0.85em',
-                      }}
-                    />
-                    <span style={{ fontSize: '0.72em', color: '#666' }}>kg</span>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {selectedIds.length >= 2 && (
-            <>
-              <input
-                type="text" placeholder="Nome del nuovo esercizio unificato (es. Squat)"
-                value={mergedName}
-                onChange={e => setMergedName(e.target.value)}
-                style={{
-                  width: '100%', padding: '10px 12px', borderRadius: 10, marginBottom: 10, boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
-                  color: 'var(--text)', fontSize: '0.88em',
-                }}
-              />
-              <button className="btn-backup" onClick={handleMerge} disabled={merging} style={{ fontWeight: 700 }}>
-                {merging ? '⏳ Unione in corso...' : `🔀 Unisci ${selectedIds.length} esercizi`}
-              </button>
-            </>
-          )}
-        </div>
-      )}
     </div>
   )
 }

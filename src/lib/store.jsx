@@ -14,6 +14,7 @@ import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
+import { computeSocialPts } from './mindStats'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -1082,6 +1083,18 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`hangLog.${dateStr}`]: newLog })
       actions.showToast('Sessione modificata ✏️', '✏️')
+    },
+
+    // ─── Mind: YouTube & Social ── una voce al giorno (non sessioni), inserita
+    // la sera: si sovrascrive. Punti calcolati qui (mai fidarsi di un valore
+    // calcolato lato client e passato com'è, per coerenza col tasso corrente).
+    async setMindSocialEntry(dateStr, afterNoon, minutes) {
+      if (state.authUserId !== 'flavio') return
+      const pts = computeSocialPts(afterNoon, minutes)
+      const entry = { afterNoon: !!afterNoon, minutes: parseFloat(minutes) || 0, pts }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`mindSocialLog.${dateStr}`]: entry })
+      actions.showToast(pts > 0 ? `+${pts} pt 🧠` : 'Salvato', '🧠')
     },
 
     // ─── Sun Exposure ── un valore per giorno (mattina/sera), nessuna lista di

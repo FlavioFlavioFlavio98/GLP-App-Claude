@@ -24,6 +24,7 @@ const AbitudiniTab = lazy(() => import('./tabs/AbitudiniTab'))
 const TaskTab = lazy(() => import('./tabs/TaskTab'))
 const WorkoutTab = lazy(() => import('./components/WorkoutTab'))
 const BodyTab = lazy(() => import('./components/BodyTab'))
+const MindTab = lazy(() => import('./components/MindTab'))
 const StatsTabContent = lazy(() => import('./components/StatsTabContent'))
 
 // ── Gruppi di modali: caricati on-demand al primo accesso, raggruppati per contesto d'uso ──
@@ -390,6 +391,13 @@ export default function App() {
         {currentTab === 'body' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <BodyTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
+          </Suspense>
+        )}
+
+        {/* ───────── TAB: MIND ───────── */}
+        {currentTab === 'mind' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <MindTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
           </Suspense>
         )}
 

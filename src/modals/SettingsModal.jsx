@@ -163,6 +163,11 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
             <WorkoutExportSection
               exerciseLog={allUsersData?.flavio?.exerciseLog || {}}
               quickExercises={allUsersData?.flavio?.quickExercises || []}
+              mobilityLog={allUsersData?.flavio?.mobilityLog || {}}
+              barefootLog={allUsersData?.flavio?.barefootLog || {}}
+              hangLog={allUsersData?.flavio?.hangLog || {}}
+              sunExposureLog={allUsersData?.flavio?.sunExposureLog || {}}
+              mindSocialLog={allUsersData?.flavio?.mindSocialLog || {}}
               themeId={theme}
               actions={actions}
             />
@@ -742,17 +747,23 @@ function DangerZoneSection({ actions }) {
 }
 
 // ─── Esportazione allenamenti (PDF leggibile o CSV per Google Sheets) ──────────
-function WorkoutExportSection({ exerciseLog, quickExercises, themeId, actions }) {
+function WorkoutExportSection({ exerciseLog, quickExercises, mobilityLog, barefootLog, hangLog, sunExposureLog, mindSocialLog, themeId, actions }) {
   const [exporting, setExporting] = useState(null) // null | 'pdf' | 'csv'
 
   const hasData = Object.keys(exerciseLog || {}).length > 0
+    || Object.keys(mobilityLog || {}).length > 0
+    || Object.keys(barefootLog || {}).length > 0
+    || Object.keys(hangLog || {}).length > 0
+    || Object.keys(sunExposureLog || {}).length > 0
+    || Object.keys(mindSocialLog || {}).length > 0
 
   async function handleExport(format) {
-    if (!hasData) { actions.showToast('Nessun allenamento da esportare', '⚠️'); return }
+    if (!hasData) { actions.showToast('Nessun dato da esportare', '⚠️'); return }
     setExporting(format)
+    const payload = { exerciseLog, quickExercises, mobilityLog, barefootLog, hangLog, sunExposureLog, mindSocialLog }
     try {
-      if (format === 'pdf') await exportWorkoutPdf({ exerciseLog, quickExercises, themeId })
-      else exportWorkoutCsv({ exerciseLog, quickExercises })
+      if (format === 'pdf') await exportWorkoutPdf({ ...payload, themeId })
+      else exportWorkoutCsv(payload)
       actions.showToast('Esportazione completata', '📤')
     } catch (e) {
       console.error('[export workout]', e)
@@ -763,8 +774,8 @@ function WorkoutExportSection({ exerciseLog, quickExercises, themeId, actions })
 
   return (
     <div style={{ marginTop: 4, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-      <div style={{ fontSize: '0.85em', fontWeight: 600, marginBottom: 2 }}>Esporta allenamenti</div>
-      <div style={{ fontSize: '0.68em', color: '#555', marginBottom: 10 }}>PDF leggibile con riepilogo e grafici, o CSV dettagliato per Google Sheets</div>
+      <div style={{ fontSize: '0.85em', fontWeight: 600, marginBottom: 2 }}>Esporta allenamenti & benessere</div>
+      <div style={{ fontSize: '0.68em', color: '#555', marginBottom: 10 }}>PDF leggibile con riepilogo e grafici, o CSV dettagliato per Google Sheets — include anche mobility, barefoot, hang, sole e social</div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           className="btn-backup"

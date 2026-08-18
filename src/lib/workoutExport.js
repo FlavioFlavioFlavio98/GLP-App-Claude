@@ -1,8 +1,12 @@
 import { Chart } from './chartSetup'
 import { THEMES } from './themes'
 import { toDateString } from './habitLogic'
-import { getPrimaryMuscleGroup } from './workoutStats'
+import { getPrimaryMuscleGroup, computeMobilityStats } from './workoutStats'
 import { MUSCLE_GROUPS } from './muscleMapping'
+import { computeBarefootStats, computeHangStats, SUN_LEVELS } from './bodyStats'
+import { computeSocialStats } from './mindStats'
+
+const SUN_LEVEL_LABELS = Object.fromEntries((SUN_LEVELS || []).map(l => [l.value, l.label]))
 
 const MONTH_NAMES_IT = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
 const EFFORT_LABELS = { 1: 'Leggero', 2: 'Medio', 3: 'Massimo' }
@@ -54,10 +58,52 @@ function csvEscape(value) {
   return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-export function exportWorkoutCsv({ exerciseLog, quickExercises }) {
+// Sessioni di durata (mobility/barefoot/hang): stessa forma {duration, pts, time}
+// per giorno — appiattite in righe ordinate cronologicamente come flattenLog.
+function flattenActivityLog(log) {
+  const rows = []
+  Object.keys(log || {}).sort().forEach(dateStr => {
+    ;(log[dateStr] || []).forEach(s => {
+      rows.push({ date: dateStr, time: (s.time || '').slice(0, 8), duration: s.duration, pts: s.pts })
+    })
+  })
+  return rows
+}
+
+function appendActivitySection(lines, title, log, unitLabel) {
+  const rows = flattenActivityLog(log)
+  if (rows.length === 0) return
+  lines.push('', `=== ${title} ===`)
+  lines.push(['Data', 'Ora', `Durata (${unitLabel})`, 'Punti'].join(';'))
+  rows.forEach(r => lines.push([r.date, r.time, r.duration, r.pts].join(';')))
+}
+
+function appendSunExposureSection(lines, sunExposureLog) {
+  const dates = Object.keys(sunExposureLog || {}).sort()
+  if (dates.length === 0) return
+  lines.push('', '=== SUN EXPOSURE ===')
+  lines.push(['Data', 'Mattina', 'Sera'].join(';'))
+  dates.forEach(d => {
+    const e = sunExposureLog[d] || {}
+    lines.push([d, SUN_LEVEL_LABELS[e.morning] || '', SUN_LEVEL_LABELS[e.evening] || ''].join(';'))
+  })
+}
+
+function appendMindSocialSection(lines, mindSocialLog) {
+  const dates = Object.keys(mindSocialLog || {}).sort()
+  if (dates.length === 0) return
+  lines.push('', '=== YOUTUBE & SOCIAL ===')
+  lines.push(['Data', 'Prima apertura dopo mezzogiorno', 'Minuti', 'Punti'].join(';'))
+  dates.forEach(d => {
+    const e = mindSocialLog[d] || {}
+    lines.push([d, e.afterNoon ? 'Sì' : 'No', e.minutes ?? 0, e.pts ?? 0].join(';'))
+  })
+}
+
+export function exportWorkoutCsv({ exerciseLog, quickExercises, mobilityLog, barefootLog, hangLog, sunExposureLog, mindSocialLog }) {
   const rows = flattenLog(exerciseLog, quickExercises)
   const header = ['Data', 'Ora', 'Esercizio', 'Gruppo muscolare', 'Ripetizioni', 'Carico (kg)', 'Sforzo', 'Punti', 'Punti/rip']
-  const lines = [header.join(';')]
+  const lines = ['=== ALLENAMENTO ===', header.join(';')]
 
   rows.forEach(r => {
     lines.push([
@@ -65,6 +111,12 @@ export function exportWorkoutCsv({ exerciseLog, quickExercises }) {
       r.reps, r.load, EFFORT_LABELS[r.effort] || r.effort, r.pts, r.pprAtTime,
     ].join(';'))
   })
+
+  appendActivitySection(lines, 'MOBILITY', mobilityLog, 'min')
+  appendActivitySection(lines, 'BAREFOOT', barefootLog, 'min')
+  appendActivitySection(lines, 'HANG', hangLog, 'min')
+  appendSunExposureSection(lines, sunExposureLog)
+  appendMindSocialSection(lines, mindSocialLog)
 
   // BOM per far riconoscere l'UTF-8 a Excel/Google Sheets (altrimenti emoji e
   // accenti nei nomi esercizio possono apparire corrotti all'importazione)
@@ -112,7 +164,7 @@ function hexToRgb(hex) {
   return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
 }
 
-export async function exportWorkoutPdf({ exerciseLog, quickExercises, themeId }) {
+export async function exportWorkoutPdf({ exerciseLog, quickExercises, themeId, mobilityLog, barefootLog, hangLog, sunExposureLog, mindSocialLog }) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -279,6 +331,37 @@ export async function exportWorkoutPdf({ exerciseLog, quickExercises, themeId })
         doc.setDrawColor(240, 240, 240); doc.line(MARGIN, y + 2, W - MARGIN, y + 2); y += 6
       })
     }
+  }
+
+  // ---- PAGINA "CORPO & MENTE" — solo se c'è almeno un dato in una delle aree ----
+  const mobilityStats = computeMobilityStats(mobilityLog)
+  const barefootStats = computeBarefootStats(barefootLog)
+  const hangStats = computeHangStats(hangLog)
+  const socialStats = computeSocialStats(mindSocialLog)
+  const sunDaysTracked = Object.keys(sunExposureLog || {}).length
+  const hasWellbeingData = mobilityStats.lifetimePts > 0 || barefootStats.lifetimePts > 0
+    || hangStats.lifetimePts > 0 || socialStats.trackedDays > 0 || sunDaysTracked > 0
+
+  if (hasWellbeingData) {
+    doc.addPage()
+    header('Corpo & Mente')
+    let y = 24
+    y = sectionTitle('Riepilogo Lifetime', y)
+    doc.setDrawColor(230, 230, 230); doc.line(MARGIN, y, W - MARGIN, y); y += 8
+
+    y = kv('🧘 Mobility — punti totali', `${mobilityStats.lifetimePts} pt`, y, [ar, ag, ab])
+    y = kv('🧘 Mobility — minuti totali', `${Math.round(mobilityStats.lifetimeMinutes)} min`, y)
+    y += 4
+    y = kv('🦶 Barefoot — punti totali', `${barefootStats.lifetimePts} pt`, y, [ar, ag, ab])
+    y = kv('🦶 Barefoot — minuti totali', `${Math.round(barefootStats.lifetimeMinutes)} min`, y)
+    y += 4
+    y = kv('🧗 Hang — punti totali', `${hangStats.lifetimePts} pt`, y, [ar, ag, ab])
+    y = kv('🧗 Hang — minuti totali', `${Math.round(hangStats.lifetimeMinutes)} min`, y)
+    y += 4
+    y = kv('☀️ Sun Exposure — giorni tracciati', `${sunDaysTracked}`, y)
+    y += 4
+    y = kv('📱 YouTube & Social — punti totali', `${socialStats.lifetimePts} pt`, y, [ar, ag, ab])
+    y = kv('📱 YouTube & Social — giorni tracciati', `${socialStats.trackedDays}`, y)
   }
 
   doc.save(`GLP_Workout_${todayStr}.pdf`)

@@ -169,6 +169,13 @@ export default function ExerciseSingleView() {
         </h1>
         <button
           className="btn-icon"
+          onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('exerciseStats', { editExerciseId: exercise.id }), 60) }}
+          title="Modifica esercizio (nome, emoji, pt/rep)"
+        >
+          <span className="material-icons-round" style={{ fontSize: 22 }}>edit</span>
+        </button>
+        <button
+          className="btn-icon"
           onClick={() => { actions.closeModal(); setTimeout(() => actions.openModal('quickExercise'), 60) }}
           title="Aggiungi sessione"
         >
@@ -250,12 +257,12 @@ export default function ExerciseSingleView() {
         {sectionLabel('📅 Periodo corrente')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 12, padding: '12px 10px' }}>
-            <div style={{ fontSize: '0.6em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Questa settimana</div>
+            <div style={{ fontSize: '0.6em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Ultimi 7gg</div>
             <div style={{ fontSize: '1.6em', fontWeight: 900, color: 'var(--theme-color)' }}>{stats.weekReps}</div>
             <div style={{ marginTop: 4 }}><DeltaBadge delta={stats.weekDelta} /></div>
           </div>
           <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 12, padding: '12px 10px' }}>
-            <div style={{ fontSize: '0.6em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Questo mese</div>
+            <div style={{ fontSize: '0.6em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Ultimi 30gg</div>
             <div style={{ fontSize: '1.6em', fontWeight: 900, color: 'var(--theme-color)' }}>{stats.monthReps}</div>
             <div style={{ marginTop: 4 }}><DeltaBadge delta={stats.monthDelta} /></div>
           </div>

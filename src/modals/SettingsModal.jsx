@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
 import { APP_VERSION, APP_UPDATED, APP_BUILD_TIME, APP_BUILD_HASH } from '../version'
 import { getRestDuration, setRestDuration } from '../lib/workoutStats'
+import { exportWorkoutCsv, exportWorkoutPdf } from '../lib/workoutExport'
 
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.()
 
@@ -187,6 +188,13 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
               />
               <span style={{ fontSize: '0.78em', color: '#666' }}>sec</span>
             </div>
+
+            <WorkoutExportSection
+              exerciseLog={allUsersData?.flavio?.exerciseLog || {}}
+              quickExercises={allUsersData?.flavio?.quickExercises || []}
+              themeId={theme}
+              actions={actions}
+            />
 
             <MergeExerciseVariants quickExercises={allUsersData?.flavio?.quickExercises || []} actions={actions} />
           </div>
@@ -770,6 +778,54 @@ function DangerZoneSection({ actions }) {
         </div>
       )}
     </>
+  )
+}
+
+// ─── Esportazione allenamenti (PDF leggibile o CSV per Google Sheets) ──────────
+function WorkoutExportSection({ exerciseLog, quickExercises, themeId, actions }) {
+  const [exporting, setExporting] = useState(null) // null | 'pdf' | 'csv'
+
+  const hasData = Object.keys(exerciseLog || {}).length > 0
+
+  async function handleExport(format) {
+    if (!hasData) { actions.showToast('Nessun allenamento da esportare', '⚠️'); return }
+    setExporting(format)
+    try {
+      if (format === 'pdf') await exportWorkoutPdf({ exerciseLog, quickExercises, themeId })
+      else exportWorkoutCsv({ exerciseLog, quickExercises })
+      actions.showToast('Esportazione completata', '📤')
+    } catch (e) {
+      console.error('[export workout]', e)
+      actions.showToast('Errore durante l\'esportazione', '❌')
+    }
+    setExporting(null)
+  }
+
+  return (
+    <div style={{ marginTop: 4, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: '0.85em', fontWeight: 600, marginBottom: 2 }}>Esporta allenamenti</div>
+      <div style={{ fontSize: '0.68em', color: '#555', marginBottom: 10 }}>PDF leggibile con riepilogo e grafici, o CSV dettagliato per Google Sheets</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          className="btn-backup"
+          style={{ flex: 1 }}
+          disabled={!!exporting}
+          onClick={() => handleExport('pdf')}
+        >
+          <span style={{ fontSize: '1.1em' }}>📄</span>
+          {exporting === 'pdf' ? 'Genero...' : 'PDF'}
+        </button>
+        <button
+          className="btn-backup"
+          style={{ flex: 1 }}
+          disabled={!!exporting}
+          onClick={() => handleExport('csv')}
+        >
+          <span style={{ fontSize: '1.1em' }}>📊</span>
+          {exporting === 'csv' ? 'Genero...' : 'CSV'}
+        </button>
+      </div>
+    </div>
   )
 }
 

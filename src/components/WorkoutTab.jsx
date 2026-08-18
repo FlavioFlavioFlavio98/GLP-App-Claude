@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useApp } from '../lib/store'
 import MuscleHeatmapBody from './MuscleHeatmapBody'
 import WorkoutMotivationBanner from './WorkoutMotivationBanner'
 import WorkoutGoalProgress from './WorkoutGoalProgress'
@@ -8,19 +9,20 @@ import WorkoutSessionBar from './WorkoutSessionBar'
 import WorkoutSessionSummary from './WorkoutSessionSummary'
 import WorkoutHeatmap from './WorkoutHeatmap'
 import WorkoutRecordFreshness from './WorkoutRecordFreshness'
-import WorkoutBadges from './WorkoutBadges'
 import WorkoutPlateauAlert from './WorkoutPlateauAlert'
+import WorkoutDaySummary from './WorkoutDaySummary'
 import { toDateString } from '../lib/habitLogic'
-import {
-  getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary,
-  getWorkoutBadges, getSeenBadgeIds, markBadgesSeen,
-} from '../lib/workoutStats'
+import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary } from '../lib/workoutStats'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
   const [sessionSummary, setSessionSummary] = useState(null)
+  const { state } = useApp()
 
   const exerciseLog = globalData?.exerciseLog || {}
   const quickExercises = globalData?.quickExercises || []
+  const todayStr = toDateString(new Date())
+  const viewDate = state.viewDate || todayStr
+  const isToday = viewDate === todayStr
 
   // Se l'ultima sessione è scaduta per inattività e non è mai stata mostrata,
   // proponi il riepilogo anche se l'utente non ha premuto "Termina sessione"
@@ -34,23 +36,6 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Celebra i badge appena sbloccati (confronto con l'ultimo set "visto" in
-  // localStorage) — controllato ogni volta che il log cambia, quindi anche
-  // subito dopo aver aggiunto/modificato/cancellato una serie.
-  useEffect(() => {
-    if (authUserId !== 'flavio' || isReadOnly) return
-    const badges = getWorkoutBadges(exerciseLog)
-    const achievedIds = badges.filter(b => b.achieved).map(b => b.id)
-    const seenIds = getSeenBadgeIds()
-    const newlyUnlocked = badges.filter(b => b.achieved && !seenIds.includes(b.id))
-    if (newlyUnlocked.length > 0) {
-      const badge = newlyUnlocked[0]
-      actions.showToast(`Badge sbloccato: ${badge.label}!`, badge.emoji)
-      markBadgesSeen(achievedIds)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exerciseLog])
 
   if (authUserId !== 'flavio' || isReadOnly) {
     return <div className="empty-state">Sezione workout non disponibile</div>
@@ -73,11 +58,10 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
   }
 
   const exercises = quickExercises.filter(e => e.active !== false)
-  const todayStr  = toDateString(new Date())
-  const todayLog  = exerciseLog[todayStr] || []
+  const dayLog = exerciseLog[viewDate] || []
 
-  function todayRepsFor(exId) {
-    return todayLog.filter(s => s.exerciseId === exId).reduce((a, s) => a + s.reps, 0)
+  function dayRepsFor(exId) {
+    return dayLog.filter(s => s.exerciseId === exId).reduce((a, s) => a + s.reps, 0)
   }
 
   return (
@@ -86,20 +70,33 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         <WorkoutSessionSummary summary={sessionSummary} onClose={() => setSessionSummary(null)} />
       )}
 
-      {/* Sessione attiva — bottone "Termina sessione" */}
-      <WorkoutSessionBar onEndSession={handleEndSession} />
+      {isToday ? (
+        <>
+          {/* Sessione attiva — bottone "Termina sessione" */}
+          <WorkoutSessionBar onEndSession={handleEndSession} />
 
-      {/* Banner motivazionale — sempre visibile, in cima alla pagina */}
-      <WorkoutMotivationBanner
-        exerciseLog={exerciseLog}
-        quickExercises={quickExercises}
-      />
+          {/* Banner motivazionale — sempre visibile, in cima alla pagina */}
+          <WorkoutMotivationBanner
+            exerciseLog={exerciseLog}
+            quickExercises={quickExercises}
+          />
 
-      {/* Obiettivo di sforzo giornaliero */}
-      <WorkoutGoalProgress exerciseLog={exerciseLog} />
+          {/* Obiettivo di sforzo giornaliero */}
+          <WorkoutGoalProgress exerciseLog={exerciseLog} />
 
-      {/* Timer di recupero — visibile solo se un countdown è attivo */}
-      <WorkoutRestTimer />
+          {/* Timer di recupero — visibile solo se un countdown è attivo */}
+          <WorkoutRestTimer />
+        </>
+      ) : (
+        // Sessione/banner/obiettivo/timer sono concetti "live", inutili su un
+        // giorno passato — al loro posto, cosa si è allenato quel giorno.
+        <WorkoutDaySummary
+          exerciseLog={exerciseLog}
+          quickExercises={quickExercises}
+          dateStr={viewDate}
+          actions={actions}
+        />
+      )}
 
       {/* Muscle heatmap */}
       <MuscleHeatmapBody
@@ -112,9 +109,6 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
       {/* Calendario/heatmap costanza allenamenti */}
       <WorkoutHeatmap exerciseLog={exerciseLog} />
-
-      {/* Badge / achievement */}
-      <WorkoutBadges exerciseLog={exerciseLog} />
 
       {/* Possibili plateau — esercizi fermi da un po' */}
       <WorkoutPlateauAlert exerciseLog={exerciseLog} quickExercises={quickExercises} />
@@ -144,7 +138,7 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {exercises.map(ex => {
-              const todayReps = todayRepsFor(ex.id)
+              const dayReps = dayRepsFor(ex.id)
               return (
                 <button
                   key={ex.id}
@@ -163,10 +157,10 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
                       {parseFloat(ex.pointsPerRep)} pt/rep
                     </div>
                   </div>
-                  {todayReps > 0 && (
+                  {dayReps > 0 && (
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: '0.88em', fontWeight: 900, color: 'var(--theme-color)' }}>{todayReps}</div>
-                      <div style={{ fontSize: '0.55em', color: '#666' }}>oggi</div>
+                      <div style={{ fontSize: '0.88em', fontWeight: 900, color: 'var(--theme-color)' }}>{dayReps}</div>
+                      <div style={{ fontSize: '0.55em', color: '#666' }}>{isToday ? 'oggi' : 'quel dì'}</div>
                     </div>
                   )}
                   <span className="material-icons-round" style={{ fontSize: 16, color: '#444', flexShrink: 0 }}>chevron_right</span>
@@ -176,6 +170,22 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
           </div>
         </div>
       )}
+
+      {/* FAB — sempre raggiungibile per aggiungere una serie al volo, indipendentemente da dove si è scrollato */}
+      <button
+        onClick={() => actions.openModal('quickExercise')}
+        title="Aggiungi serie"
+        style={{
+          position: 'fixed', right: 16, bottom: 76, zIndex: 900,
+          width: 56, height: 56, borderRadius: '50%',
+          background: 'var(--theme-color)', color: '#111',
+          border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        }}
+      >
+        <span className="material-icons-round" style={{ fontSize: 28 }}>add</span>
+      </button>
     </div>
   )
 }

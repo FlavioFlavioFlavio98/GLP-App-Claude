@@ -41,14 +41,12 @@ function computeStats(exerciseLog, exerciseId, days) {
   const todayReps = todaySessions.reduce((a, s) => a + s.reps, 0)
   const todayPts = Math.round(todaySessions.reduce((a, s) => a + s.pts, 0) * 100) / 100
 
-  // Week
+  // Ultimi 7 / 30 giorni (finestre rolling, non settimana/mese solare)
   const weekCutoff = (() => { const d = new Date(today); d.setDate(today.getDate() - 6); return toDateString(d) })()
   const weekReps = allDates.filter(d => d >= weekCutoff).reduce((a, d) => a + sessionsForDate(d).reduce((x, s) => x + s.reps, 0), 0)
 
-  // Month
-  const mm = String(today.getMonth()+1).padStart(2,'0')
-  const monthPrefix = `${today.getFullYear()}-${mm}`
-  const monthReps = allDates.filter(d => d.startsWith(monthPrefix)).reduce((a, d) => a + sessionsForDate(d).reduce((x, s) => x + s.reps, 0), 0)
+  const monthCutoff = (() => { const d = new Date(today); d.setDate(today.getDate() - 29); return toDateString(d) })()
+  const monthReps = allDates.filter(d => d >= monthCutoff).reduce((a, d) => a + sessionsForDate(d).reduce((x, s) => x + s.reps, 0), 0)
 
   // Lifetime
   const lifetimeReps = allDates.reduce((a, d) => a + sessionsForDate(d).reduce((x, s) => x + s.reps, 0), 0)
@@ -91,7 +89,7 @@ function computeStats(exerciseLog, exerciseId, days) {
 
 export default function ExerciseStatsModal() {
   const { state, actions } = useApp()
-  const { modal, allUsersData, authUserId } = state
+  const { modal, modalPayload, allUsersData, authUserId } = state
 
   // ALL hooks before any return
   const [tab, setTab] = useState('stats')   // 'stats' | 'manage'
@@ -114,6 +112,20 @@ export default function ExerciseStatsModal() {
       setSelExId(activeEx[0].id)
     }
   }, [modal, activeEx.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Arrivo diretto dalla scorciatoia "modifica" di un esercizio (es. da
+  // ExerciseSingleView) — apre subito la tab Gestisci col form di modifica.
+  useEffect(() => {
+    if (modal === 'exerciseStats' && modalPayload?.editExerciseId) {
+      const ex = exercises.find(e => e.id === modalPayload.editExerciseId)
+      if (ex) {
+        setSelExId(ex.id)
+        setTab('manage')
+        openEdit(ex)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal, modalPayload])
 
   const exercise = exercises.find(e => e.id === selExId) || activeEx[0]
   const stats = exercise ? computeStats(gd?.exerciseLog || {}, exercise.id, chartDays) : null
@@ -227,74 +239,31 @@ export default function ExerciseStatsModal() {
       <div className="single-habit-body">
 
       {tab === 'stats' && (<>
-        {/* Exercise selector chips (stats tab) */}
+        {/* Exercise selector — tendina invece di chip per risparmiare spazio verticale */}
         {activeEx.length > 1 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+          <select
+            value={selExId || ''}
+            onChange={e => setSelExId(e.target.value)}
+            style={{
+              width: '100%', padding: '10px 12px', borderRadius: 10, marginBottom: 12,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)',
+              color: 'var(--text)', fontSize: '0.9em', fontWeight: 600, boxSizing: 'border-box',
+            }}
+          >
             {activeEx.map(ex => (
-              <button
-                key={ex.id}
-                onClick={() => setSelExId(ex.id)}
-                style={{
-                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer', fontSize: '0.85em', fontWeight: 600,
-                  background: selExId === ex.id ? 'var(--theme-glow)' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${selExId === ex.id ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)'}`,
-                  color: selExId === ex.id ? 'var(--theme-color)' : '#888',
-                }}
-              >{ex.emoji} {ex.name}</button>
+              <option key={ex.id} value={ex.id}>{ex.emoji} {ex.name}</option>
             ))}
-          </div>
-        )}
-
-        {/* ── OGGI ── */}
-        {stats && (
-          <>
-            <SectionTitle>Oggi</SectionTitle>
-            {(gd?.exerciseLog?.[todayStr] || []).filter(s => s.exerciseId === (exercise?.id)).length === 0 ? (
-              <div style={{ fontSize: '0.82em', color: '#555', marginBottom: 16 }}>Nessuna sessione oggi</div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                  {(gd?.exerciseLog?.[todayStr] || [])
-                    .filter(s => s.exerciseId === (exercise?.id))
-                    .slice().reverse()
-                    .map(s => (
-                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10 }}>
-                        <span style={{ fontSize: '0.78em', color: '#666', minWidth: 52 }}>{s.time?.slice(0,5) || ''}</span>
-                        {s.effort && <span style={{ fontSize: '0.8em' }}>{getEffortEmoji(s.effort)}</span>}
-                        <span style={{ flex: 1, fontWeight: 700 }}>
-                          {s.reps} reps{s.load > 0 ? ` · ${s.load}kg` : ''}
-                        </span>
-                        <span style={{ fontSize: '0.78em', color: 'var(--success)', fontWeight: 600 }}>+{s.pts} pt</span>
-                        <button
-                          className="btn-icon"
-                          onClick={async () => {
-                            if (!window.confirm(`Annullare ${s.reps} reps (-${s.pts} pt)?`)) return
-                            await actions.deleteExerciseSession(todayStr, s.id)
-                          }}
-                          title="Annulla sessione"
-                        >
-                          <span className="material-icons-round" style={{ fontSize: 16, color: '#555' }}>delete</span>
-                        </button>
-                      </div>
-                    ))
-                  }
-                </div>
-                <div style={{ fontSize: '0.8em', color: '#666', marginBottom: 16 }}>
-                  Totale oggi: <strong style={{ color: 'var(--theme-color)' }}>{stats.todayReps} reps</strong> · <strong style={{ color: 'var(--success)' }}>+{stats.todayPts} pt</strong>
-                </div>
-              </>
-            )}
-          </>
+          </select>
         )}
 
         {/* ── STATISTICHE GRIGLIA ── */}
         {stats && (
           <>
             <SectionTitle>Statistiche</SectionTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
               <StatCard label="Oggi" value={stats.todayReps} color={stats.todayReps > 0 ? 'var(--theme-color)' : '#555'} />
-              <StatCard label="Settimana" value={stats.weekReps} />
-              <StatCard label="Mese" value={stats.monthReps} />
+              <StatCard label="Ultimi 7gg" value={stats.weekReps} />
+              <StatCard label="Ultimi 30gg" value={stats.monthReps} />
               <StatCard label="Record giorno" value={`${stats.bestDayReps}`} sub={stats.bestDay ? fmtDate(stats.bestDay) : '-'} color="var(--success)" />
               <StatCard label="Record sessione" value={`${stats.bestSessionReps}`} sub={stats.bestSession ? `${fmtDate(stats.bestSession.date)} ${stats.bestSession.time?.slice(0,5)||''}` : '-'} color="#EF9F27" />
               <StatCard label="Lifetime" value={`${stats.lifetimeReps}`} sub={`+${stats.lifetimePts} pt`} color="var(--success)" />
@@ -305,19 +274,21 @@ export default function ExerciseStatsModal() {
         {/* ── GRAFICO ── */}
         {stats && (
           <>
-            <SectionTitle>Andamento</SectionTitle>
-            <div className="switch-group" style={{ marginBottom: 12 }}>
-              {[7, 30, 90].map(d => (
-                <div key={d} className={`switch-opt${chartDays === d ? ' active' : ''}`} onClick={() => setChartDays(d)}>{d} GG</div>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <SectionTitle>Andamento</SectionTitle>
+              <div className="switch-group" style={{ margin: 0, width: 'auto' }}>
+                {[7, 30, 90].map(d => (
+                  <div key={d} className={`switch-opt${chartDays === d ? ' active' : ''}`} onClick={() => setChartDays(d)}>{d} GG</div>
+                ))}
+              </div>
             </div>
-            <div style={{ height: 160, marginBottom: 20, position: 'relative' }}>
+            <div style={{ height: 130, marginBottom: 14, position: 'relative' }}>
               <canvas ref={canvasRef} />
             </div>
           </>
         )}
 
-        {/* ── STORICO ── */}
+        {/* ── STORICO ── (oggi incluso, come prima voce) */}
         {allSessions.length === 0 && !stats && (
           <div className="empty-state">Nessuna sessione registrata</div>
         )}
@@ -325,24 +296,41 @@ export default function ExerciseStatsModal() {
         {allSessions.length > 0 && (
           <>
             <SectionTitle>Storico Sessioni</SectionTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-              {allSessions.slice(0, 20).map(({ dateStr, entries }) => {
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16,
+              maxHeight: 280, overflowY: 'auto', paddingRight: 2,
+            }}>
+              {allSessions.slice(0, 30).map(({ dateStr, entries }) => {
                 const dayReps = entries.reduce((a, s) => a + s.reps, 0)
                 const dayPts = Math.round(entries.reduce((a, s) => a + s.pts, 0) * 100) / 100
                 return (
                   <div key={dateStr}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72em', color: '#666', marginBottom: 5 }}>
-                      <span style={{ fontWeight: 700 }}>{fmtDate(dateStr)}</span>
+                      <span style={{ fontWeight: 700 }}>{dateStr === todayStr ? 'Oggi' : fmtDate(dateStr)}</span>
                       <span>{dayReps} reps · +{dayPts} pt</span>
                     </div>
                     {entries.map(s => (
                       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, marginBottom: 3 }}>
                         <span style={{ fontSize: '0.72em', color: '#555', minWidth: 44 }}>{s.time?.slice(0,5)||''}</span>
                         {s.effort && <span style={{ fontSize: '0.75em' }}>{getEffortEmoji(s.effort)}</span>}
-                        <span style={{ flex: 1, fontSize: '0.82em' }}>{s.reps} reps</span>
+                        <span style={{ flex: 1, fontSize: '0.82em' }}>
+                          {s.reps} reps{s.load > 0 ? ` · ${s.load}kg` : ''}
+                        </span>
                         <span style={{ fontSize: '0.72em', color: 'var(--success)' }}>+{s.pts} pt</span>
                         <button
                           className="btn-icon"
+                          style={{ padding: 2 }}
+                          onClick={async () => {
+                            const val = window.prompt(`Ripetizioni (attuali: ${s.reps}):`, s.reps)
+                            if (val === null) return
+                            await actions.editExerciseSession(dateStr, s.id, val)
+                          }}
+                        >
+                          <span className="material-icons-round" style={{ fontSize: 14, color: '#555' }}>edit</span>
+                        </button>
+                        <button
+                          className="btn-icon"
+                          style={{ padding: 2 }}
                           onClick={async () => {
                             if (!window.confirm(`Annullare ${s.reps} reps (-${s.pts} pt)?`)) return
                             await actions.deleteExerciseSession(dateStr, s.id)

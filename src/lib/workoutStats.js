@@ -450,80 +450,6 @@ export function detectPlateau(exerciseLog, exerciseId) {
   }
 }
 
-// ─── Badge / Achievement ────────────────────────────────────────────────────────
-// Calcolati sempre "al volo" dai dati esistenti (nessun nuovo campo Firestore).
-// Un badge una volta sbloccato resta tale per sempre: si guarda sempre il record
-// storico (es. streak "best", mai quello attuale che può azzerarsi).
-
-const BADGE_SEEN_KEY = 'glp_workout_badges_seen'
-
-export function getSeenBadgeIds() {
-  try {
-    const raw = localStorage.getItem(BADGE_SEEN_KEY)
-    const list = raw ? JSON.parse(raw) : []
-    return Array.isArray(list) ? list : []
-  } catch { return [] }
-}
-
-export function markBadgesSeen(ids) {
-  try { localStorage.setItem(BADGE_SEEN_KEY, JSON.stringify(ids)) } catch { /* ignore */ }
-}
-
-function countTrainingDays(exerciseLog) {
-  return Object.keys(exerciseLog || {}).filter(d => getDayEffort(exerciseLog, d) > 0).length
-}
-
-function countTotalSets(exerciseLog) {
-  return Object.values(exerciseLog || {}).reduce((a, day) => a + (day?.length || 0), 0)
-}
-
-function totalLifetimeEffort(exerciseLog) {
-  return Object.keys(exerciseLog || {}).reduce((a, d) => a + getDayEffort(exerciseLog, d), 0)
-}
-
-// Massimo numero di esercizi diversi registrati in un solo giorno (badge varietà)
-function maxExercisesInOneDay(exerciseLog) {
-  let max = 0
-  Object.values(exerciseLog || {}).forEach(entries => {
-    const distinct = new Set((entries || []).map(e => e.exerciseId)).size
-    if (distinct > max) max = distinct
-  })
-  return max
-}
-
-const BADGE_DEFS = [
-  // Streak (record storico — computeGlobalWorkoutStreak().best, mai il current)
-  { id: 'streak_3',  emoji: '🔥', label: 'Costanza 3',  desc: '3 giorni di fila',  group: 'Streak', target: 3,   metric: (log) => computeGlobalWorkoutStreak(log).best },
-  { id: 'streak_7',  emoji: '🔥', label: 'Costanza 7',  desc: '7 giorni di fila',  group: 'Streak', target: 7,   metric: (log) => computeGlobalWorkoutStreak(log).best },
-  { id: 'streak_14', emoji: '🔥', label: 'Costanza 14', desc: '14 giorni di fila', group: 'Streak', target: 14,  metric: (log) => computeGlobalWorkoutStreak(log).best },
-  { id: 'streak_30', emoji: '🔥', label: 'Costanza 30', desc: '30 giorni di fila', group: 'Streak', target: 30,  metric: (log) => computeGlobalWorkoutStreak(log).best },
-  // Giorni di allenamento totali (non consecutivi)
-  { id: 'days_1',    emoji: '💪', label: 'Si comincia', desc: 'Prima serie registrata',    group: 'Giorni', target: 1,   metric: countTrainingDays },
-  { id: 'days_10',   emoji: '🏋️', label: '10 giorni',   desc: '10 giorni di allenamento',  group: 'Giorni', target: 10,  metric: countTrainingDays },
-  { id: 'days_50',   emoji: '🏋️', label: '50 giorni',   desc: '50 giorni di allenamento',  group: 'Giorni', target: 50,  metric: countTrainingDays },
-  { id: 'days_100',  emoji: '🏆', label: '100 giorni',  desc: '100 giorni di allenamento', group: 'Giorni', target: 100, metric: countTrainingDays },
-  // Sforzo totale lifetime
-  { id: 'effort_1000',  emoji: '⚡', label: '1.000 pt',  desc: '1.000 pt di sforzo totale',  group: 'Sforzo', target: 1000,  metric: totalLifetimeEffort },
-  { id: 'effort_5000',  emoji: '⚡', label: '5.000 pt',  desc: '5.000 pt di sforzo totale',  group: 'Sforzo', target: 5000,  metric: totalLifetimeEffort },
-  { id: 'effort_10000', emoji: '⚡', label: '10.000 pt', desc: '10.000 pt di sforzo totale', group: 'Sforzo', target: 10000, metric: totalLifetimeEffort },
-  // Serie totali registrate
-  { id: 'sets_50',  emoji: '📋', label: '50 serie',  desc: '50 serie registrate',  group: 'Serie', target: 50,  metric: countTotalSets },
-  { id: 'sets_200', emoji: '📋', label: '200 serie', desc: '200 serie registrate', group: 'Serie', target: 200, metric: countTotalSets },
-  // Varietà
-  { id: 'variety_3', emoji: '🧩', label: 'Full body', desc: '3 esercizi diversi in un giorno', group: 'Varietà', target: 3, metric: maxExercisesInOneDay },
-]
-
-export function getWorkoutBadges(exerciseLog) {
-  return BADGE_DEFS.map(def => {
-    const current = def.metric(exerciseLog) || 0
-    return {
-      id: def.id, emoji: def.emoji, label: def.label, desc: def.desc, group: def.group,
-      target: def.target, current: Math.min(current, def.target),
-      achieved: current >= def.target,
-    }
-  })
-}
-
 // ─── "Da quanto non batti un record" ─────────────────────────────────────────
 // Richiede uno storico minimo (giorni distinti allenati) per evitare di mostrare
 // l'indicatore su esercizi appena iniziati, dove ogni giorno è per forza un record.
@@ -586,16 +512,18 @@ export function computeAllStats(exerciseLog, exerciseId) {
   })
   const weekDelta = lastWeekReps === 0 ? null : Math.round((weekReps - lastWeekReps) / lastWeekReps * 100)
 
-  // ── Month ──
-  const mm = String(today.getMonth() + 1).padStart(2, '0')
-  const monthPrefix = `${today.getFullYear()}-${mm}`
-  const lastMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-  const lastMonthPrefix = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`
+  // ── Ultimi 30 giorni (finestra rolling, non mese solare) ──
+  const monthStart = new Date(today); monthStart.setDate(today.getDate() - 29)
+  const lastMonthStart = new Date(today); lastMonthStart.setDate(today.getDate() - 59)
+  const lastMonthEnd   = new Date(today); lastMonthEnd.setDate(today.getDate() - 30)
+  const monthStartStr     = toDateString(monthStart)
+  const lastMonthStartStr = toDateString(lastMonthStart)
+  const lastMonthEndStr   = toDateString(lastMonthEnd)
 
   let monthReps = 0, lastMonthReps = 0
   allDates.forEach(d => {
-    if (d.startsWith(monthPrefix))     monthReps     += repsOnDate(d)
-    if (d.startsWith(lastMonthPrefix)) lastMonthReps += repsOnDate(d)
+    if (d >= monthStartStr)     monthReps     += repsOnDate(d)
+    if (d >= lastMonthStartStr && d <= lastMonthEndStr) lastMonthReps += repsOnDate(d)
   })
   const monthDelta = lastMonthReps === 0 ? null : Math.round((monthReps - lastMonthReps) / lastMonthReps * 100)
 
@@ -767,6 +695,33 @@ export function buildWorkoutHeatmap(exerciseLog, year) {
       })
       d.setDate(d.getDate() + 1)
     }
+  }
+  return cells
+}
+
+// Vista compatta "ultime N settimane" (rolling, ancorata a oggi) — usata nella
+// tab Workout al posto della griglia annuale completa, poco leggibile in
+// miniatura. La griglia annuale resta disponibile nella vista espansa.
+export function buildRecentWeeksHeatmap(exerciseLog, weeksBack = 14) {
+  const today = new Date()
+  const totalDays = weeksBack * 7
+  // Ancora la fine alla domenica corrente, così le colonne sono sempre complete
+  const dowMon0 = (today.getDay() + 6) % 7 // 0=Lun..6=Dom
+  const end = new Date(today); end.setDate(today.getDate() + (6 - dowMon0))
+  const start = new Date(end); start.setDate(end.getDate() - totalDays + 1)
+
+  const cells = []
+  const d = new Date(start)
+  for (let i = 0; i < totalDays; i++) {
+    const dateStr = toDateString(d)
+    const inFuture = d > today
+    const effort = !inFuture ? getDayEffort(exerciseLog, dateStr) : 0
+    cells.push({
+      dateStr, effort, hasData: effort > 0,
+      dow: (d.getDay() + 6) % 7, month: d.getMonth(), day: d.getDate(),
+      week: Math.floor(i / 7), inYear: !inFuture,
+    })
+    d.setDate(d.getDate() + 1)
   }
   return cells
 }

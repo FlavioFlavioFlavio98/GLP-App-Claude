@@ -5,6 +5,7 @@ import { toDateString } from '../lib/habitLogic'
 export default function WorkoutGoalProgress({ exerciseLog }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [showInfo, setShowInfo] = useState(false)
 
   const todayStr = toDateString(new Date())
   const todayEffort = getDayEffort(exerciseLog, todayStr)
@@ -34,8 +35,19 @@ export default function WorkoutGoalProgress({ exerciseLog }) {
       borderRadius: 14, padding: '14px 16px', marginBottom: 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: '0.68em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
-          🎯 Obiettivo di oggi
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: '0.68em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>
+            🎯 Obiettivo di oggi
+          </div>
+          {!editing && !goal.isCustom && (
+            <button
+              onClick={() => setShowInfo(v => !v)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: 0, display: 'flex' }}
+              title="Come viene calcolato"
+            >
+              <span className="material-icons-round" style={{ fontSize: 14 }}>help_outline</span>
+            </button>
+          )}
         </div>
         {!editing && (
           <button
@@ -48,6 +60,12 @@ export default function WorkoutGoalProgress({ exerciseLog }) {
           </button>
         )}
       </div>
+
+      {showInfo && !editing && (
+        <div style={{ fontSize: '0.68em', color: '#888', background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 10px', marginBottom: 10, lineHeight: 1.5 }}>
+          È la media del tuo sforzo negli ultimi 14 giorni allenati (oggi escluso), aumentata del 5% per spingerti a migliorare gradualmente. Si ricalcola ogni giorno — puoi anche impostarne uno tuo con la matita.
+        </div>
+      )}
 
       {editing ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

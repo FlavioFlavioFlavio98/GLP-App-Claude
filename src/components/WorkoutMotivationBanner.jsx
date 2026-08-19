@@ -48,7 +48,7 @@ export default function WorkoutMotivationBanner({ exerciseLog, quickExercises, d
 
   const notable = todayExercises
     .map(exercise => ({ exercise, record: getExerciseRecordStatus(exerciseLog, exercise.id) }))
-    .filter(({ record }) => (record.isNewRecord || record.closeToRecord) && !dismissedIds?.has(exercise.id))
+    .filter(({ exercise, record }) => (record.isNewRecord || record.closeToRecord) && !dismissedIds?.has(exercise.id))
 
   if (notable.length > 0) {
     return (

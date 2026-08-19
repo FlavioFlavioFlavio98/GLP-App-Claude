@@ -91,14 +91,21 @@ export function startRestTimer() {
   return timer
 }
 
+// Oltre questa soglia il cronometro è quasi certamente abbandonato (sessione
+// mai terminata, telefono spento, browser chiuso...) — va auto-cancellato
+// invece di accumulare migliaia di "marchi" e sparare altrettanti beep in
+// sequenza al prossimo giro di polling.
+const MAX_REST_TIMER_HOURS = 3
+
 export function getActiveRestTimer() {
   try {
     const raw = localStorage.getItem(REST_TIMER_KEY)
     if (!raw) return null
     const timer = JSON.parse(raw)
     if (!timer?.startedAt) return null
-    const interval = getRestDuration()
     const elapsed = (Date.now() - timer.startedAt) / 1000
+    if (elapsed > MAX_REST_TIMER_HOURS * 3600) { cancelRestTimer(); return null }
+    const interval = getRestDuration()
     const marksPassed = Math.floor(elapsed / interval) // 0 finché non scatta il primo beep
     return { ...timer, elapsed, interval, marksPassed }
   } catch { return null }
@@ -114,6 +121,9 @@ export function cancelRestTimer() {
 // dal browser finché l'utente non ha interagito con la pagina): resta comunque la
 // vibrazione e l'indicatore visivo nel componente del timer.
 export function playRestBeep(count = 1) {
+  // Difesa in profondità oltre al cap del cronometro in getActiveRestTimer():
+  // non suonare comunque più di 10 beep in una volta.
+  count = Math.max(1, Math.min(10, Math.round(count)))
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext
     if (Ctx) {

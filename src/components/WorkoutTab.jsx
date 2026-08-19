@@ -19,6 +19,7 @@ import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSes
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
   const [sessionSummary, setSessionSummary] = useState(null)
+  const [dismissedRecordIds, setDismissedRecordIds] = useState(() => new Set())
   const { state } = useApp()
 
   const exerciseLog = globalData?.exerciseLog || {}
@@ -52,6 +53,7 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
     endWorkoutSession()
     markSessionSeen(session)
     setSessionSummary(summary)
+    setDismissedRecordIds(new Set())
   }
 
   const btnStyle = {
@@ -118,10 +120,14 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
           {/* Sessione attiva — bottone "Termina sessione" */}
           <WorkoutSessionBar onEndSession={handleEndSession} />
 
-          {/* Banner motivazionale — sempre visibile, in cima alla pagina */}
+          {/* Banner motivazionale — un banner per ogni gruppo muscolare allenato
+              oggi vicino/che ha battuto il record, resta finché non lo chiudi o
+              termini la sessione */}
           <WorkoutMotivationBanner
             exerciseLog={exerciseLog}
             quickExercises={quickExercises}
+            dismissedIds={dismissedRecordIds}
+            onDismiss={id => setDismissedRecordIds(prev => new Set(prev).add(id))}
           />
 
           {/* Obiettivo di sforzo giornaliero */}

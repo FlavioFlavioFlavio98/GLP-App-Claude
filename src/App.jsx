@@ -124,6 +124,30 @@ export default function App() {
     return () => { document.removeEventListener('visibilitychange', onVisibility); disable() }
   }, [wakeLockEnabled])
 
+  // Beep di recupero — polling qui (livello App, sempre montato) invece che dentro
+  // WorkoutRestTimer, così i beep continuano anche navigando su un'altra tab
+  // durante l'allenamento, non solo restando sulla tab Workout.
+  const restBeepRef = useRef({ startedAt: null, lastMark: 0 })
+  useEffect(() => {
+    if (authUserId !== 'flavio') return
+    let cancelled = false
+    let mod = null
+    import('./lib/workoutStats').then(m => { if (!cancelled) mod = m })
+    const id = setInterval(() => {
+      if (!mod) return
+      const timer = mod.getActiveRestTimer()
+      if (!timer) { restBeepRef.current = { startedAt: null, lastMark: 0 }; return }
+      if (restBeepRef.current.startedAt !== timer.startedAt) {
+        restBeepRef.current = { startedAt: timer.startedAt, lastMark: 0 }
+      }
+      if (timer.marksPassed > restBeepRef.current.lastMark) {
+        restBeepRef.current.lastMark = timer.marksPassed
+        mod.playRestBeep(timer.marksPassed)
+      }
+    }, 500)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [authUserId])
+
   // Apply theme CSS vars + track for Versatile achievement
   useEffect(() => { applyTheme(theme); trackThemeUsed(theme) }, [theme])
   useEffect(() => { applyUserColors(userColors.flavio) }, [userColors])

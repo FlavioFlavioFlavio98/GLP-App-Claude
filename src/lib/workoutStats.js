@@ -62,12 +62,15 @@ export function setDailyGoalOverride(value) {
 }
 
 // ─── Timer di recupero ───────────────────────────────────────────────────────────
-// Anche questo vive solo in localStorage (come la sessione): nessun campo Firestore,
-// il countdown è puramente un aiuto visivo lato client durante l'allenamento.
+// Vive solo in localStorage (come la sessione): nessun campo Firestore. Non è più
+// un countdown a durata fissa ma un cronometro che sale da quando è stata salvata
+// l'ultima serie — ogni multiplo dell'intervallo (default 60s) fa suonare tanti
+// beep quanti sono i minuti passati, così il feedback continua finché non si
+// registra una nuova serie (che lo resetta) o si termina la sessione.
 
-const REST_DURATION_KEY = 'glp_workout_rest_duration' // default generale, in secondi
-const REST_TIMER_KEY = 'glp_workout_rest_timer'        // countdown attivo
-export const DEFAULT_REST_SECONDS = 90
+const REST_DURATION_KEY = 'glp_workout_rest_duration' // intervallo beep, in secondi
+const REST_TIMER_KEY = 'glp_workout_rest_timer'        // cronometro attivo
+export const DEFAULT_REST_SECONDS = 60
 
 export function getRestDuration() {
   try {
@@ -81,21 +84,9 @@ export function setRestDuration(seconds) {
   try { localStorage.setItem(REST_DURATION_KEY, String(Math.max(10, Math.round(seconds)))) } catch { /* ignore */ }
 }
 
-// Avvia (o riavvia) il countdown — da chiamare dopo ogni serie salvata oggi.
-export function startRestTimer(durationSeconds) {
-  const duration = durationSeconds || getRestDuration()
-  const timer = { startedAt: Date.now(), duration }
-  try { localStorage.setItem(REST_TIMER_KEY, JSON.stringify(timer)) } catch { /* ignore */ }
-  return timer
-}
-
-// Estende/riduce il countdown attivo "al volo" (es. +15s/-15s), senza toccare il
-// default generale nelle impostazioni.
-export function adjustRestTimer(deltaSeconds) {
-  const active = getActiveRestTimer()
-  if (!active) return null
-  const remaining = Math.max(0, active.remaining + deltaSeconds)
-  const timer = { startedAt: Date.now(), duration: remaining }
+// Avvia (o riavvia) il cronometro — da chiamare dopo ogni serie salvata oggi.
+export function startRestTimer() {
+  const timer = { startedAt: Date.now() }
   try { localStorage.setItem(REST_TIMER_KEY, JSON.stringify(timer)) } catch { /* ignore */ }
   return timer
 }
@@ -105,10 +96,11 @@ export function getActiveRestTimer() {
     const raw = localStorage.getItem(REST_TIMER_KEY)
     if (!raw) return null
     const timer = JSON.parse(raw)
-    if (!timer?.startedAt || !timer?.duration) return null
+    if (!timer?.startedAt) return null
+    const interval = getRestDuration()
     const elapsed = (Date.now() - timer.startedAt) / 1000
-    const remaining = Math.max(0, timer.duration - elapsed)
-    return { ...timer, remaining, finished: remaining <= 0 }
+    const marksPassed = Math.floor(elapsed / interval) // 0 finché non scatta il primo beep
+    return { ...timer, elapsed, interval, marksPassed }
   } catch { return null }
 }
 
@@ -116,29 +108,33 @@ export function cancelRestTimer() {
   try { localStorage.removeItem(REST_TIMER_KEY) } catch { /* ignore */ }
 }
 
-// Beep leggero (Web Audio, nessun asset esterno) + vibrazione a fine countdown.
-// Va bene se il beep non parte (es. contesto audio bloccato dal browser finché
-// l'utente non ha interagito con la pagina) — resta comunque la vibrazione e
-// l'indicatore visivo nel componente del timer.
-export function playRestFinishedAlert() {
+// Beep leggero (Web Audio, nessun asset esterno), ripetuto `count` volte — così
+// "sento 2 beep" comunica direttamente "sono 2 minuti che non aggiungo una serie",
+// senza dover guardare lo schermo. Va bene se l'audio non parte (contesto bloccato
+// dal browser finché l'utente non ha interagito con la pagina): resta comunque la
+// vibrazione e l'indicatore visivo nel componente del timer.
+export function playRestBeep(count = 1) {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext
     if (Ctx) {
       const ctx = new Ctx()
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = 'sine'
-      osc.frequency.value = 880
-      gain.gain.setValueAtTime(0.001, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
-      osc.connect(gain); gain.connect(ctx.destination)
-      osc.start()
-      osc.stop(ctx.currentTime + 0.4)
-      osc.onended = () => ctx.close()
+      for (let i = 0; i < count; i++) {
+        const startAt = ctx.currentTime + i * 0.3
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'sine'
+        osc.frequency.value = 880
+        gain.gain.setValueAtTime(0.001, startAt)
+        gain.gain.exponentialRampToValueAtTime(0.2, startAt + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.22)
+        osc.connect(gain); gain.connect(ctx.destination)
+        osc.start(startAt)
+        osc.stop(startAt + 0.25)
+      }
+      setTimeout(() => ctx.close(), (count * 0.3 + 0.3) * 1000)
     }
   } catch { /* audio non disponibile, va bene */ }
-  try { navigator.vibrate?.([120, 60, 120]) } catch { /* vibration non disponibile */ }
+  try { navigator.vibrate?.(Array(count).fill([120, 80]).flat()) } catch { /* vibration non disponibile */ }
 }
 
 // ─── Banner motivazionale ───────────────────────────────────────────────────────
@@ -153,6 +149,23 @@ export function getMostRecentLoggedExercise(exerciseLog, quickExercises) {
   const last = sorted[sorted.length - 1]
   const exercise = (quickExercises || []).find(e => e.id === last.exerciseId)
   return exercise ? { exercise, entry: last } : null
+}
+
+// Tutti gli esercizi distinti loggati oggi (non solo l'ultimo) — usato per mostrare
+// un banner "vicino al record" per OGNI gruppo muscolare allenato nella sessione,
+// non solo per l'esercizio più recente. Ordine = prima comparsa nella giornata.
+export function getTodayLoggedExercises(exerciseLog, quickExercises) {
+  const todayStr = toDateString(new Date())
+  const entries = [...(exerciseLog?.[todayStr] || [])].sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+  const seen = new Set()
+  const result = []
+  for (const entry of entries) {
+    if (seen.has(entry.exerciseId)) continue
+    seen.add(entry.exerciseId)
+    const exercise = (quickExercises || []).find(e => e.id === entry.exerciseId)
+    if (exercise) result.push(exercise)
+  }
+  return result
 }
 
 // Confronta le ripetizioni di oggi per un esercizio col record storico
@@ -269,9 +282,11 @@ export function touchWorkoutSession() {
   return session
 }
 
-// Chiusura esplicita (bottone "Termina sessione")
+// Chiusura esplicita (bottone "Termina sessione") — ferma anche i beep di recupero,
+// altrimenti continuerebbero a suonare senza una sessione a cui riferirsi.
 export function endWorkoutSession() {
   localStorage.removeItem(SESSION_STORAGE_KEY)
+  cancelRestTimer()
 }
 
 function timeStrToMs(dateStr, timeStr) {

@@ -51,19 +51,22 @@ export default function QuickExerciseModal() {
     }
   }, [modal])
 
-  if (modal !== 'quickExercise') return null
-  if (authUserId !== 'flavio') return null
-
   const exercise = exercises.find(e => e.id === selId) ?? null
 
-  // ppr: always parseFloat to handle Firestore string/number ambiguity
-  const ppr = parseFloat(exercise?.pointsPerRep) || 0.1
-  const pts = parseFloat((reps * ppr * getEffortMultiplier(effort)).toFixed(2))
-
+  // avgReps va calcolato PRIMA di qualunque return condizionale: essendo un hook
+  // (useMemo), va chiamato in ogni render con lo stesso ordine, altrimenti React
+  // crasha con "Rendered fewer hooks than expected" quando il modal si apre.
   const avgReps = useMemo(
     () => exercise ? getAverageRepsPerSession(exerciseLog, exercise.id) : 0,
     [exercise?.id, exerciseLog]
   )
+
+  if (modal !== 'quickExercise') return null
+  if (authUserId !== 'flavio') return null
+
+  // ppr: always parseFloat to handle Firestore string/number ambiguity
+  const ppr = parseFloat(exercise?.pointsPerRep) || 0.1
+  const pts = parseFloat((reps * ppr * getEffortMultiplier(effort)).toFixed(2))
 
   function changeReps(delta) {
     setReps(prev => Math.max(1, Math.min(200, prev + delta)))

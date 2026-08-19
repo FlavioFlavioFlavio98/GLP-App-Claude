@@ -1,5 +1,5 @@
 import {
-  getMostRecentLoggedExercise, getExerciseRecordStatus, getEffortPercentile,
+  getMostRecentLoggedExercise, getTodayLoggedExercises, getExerciseRecordStatus, getEffortPercentile,
 } from '../lib/workoutStats'
 
 const MONTHS = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre']
@@ -9,63 +9,19 @@ function fmtDateLong(d) {
   return `${parseInt(dd)} ${MONTHS[parseInt(m) - 1]}`
 }
 
-export default function WorkoutMotivationBanner({ exerciseLog, quickExercises }) {
-  const recent = getMostRecentLoggedExercise(exerciseLog, quickExercises)
+const toneStyles = {
+  record:  { bg: 'linear-gradient(135deg, rgba(255,202,40,0.18), rgba(255,112,67,0.12))', border: 'var(--theme-color)' },
+  push:    { bg: 'rgba(255,112,67,0.10)', border: '#ff7043' },
+  compare: { bg: 'var(--card)', border: 'var(--card-border)' },
+}
 
-  let icon = '💪'
-  let title = ''
-  let sub = null
-  let tone = 'neutral' // 'record' | 'push' | 'compare' | 'neutral'
-
-  if (!recent) {
-    // Nessuna serie loggata oggi ancora — stato sempre visibile, non a scomparsa
-    const { percentile, totalDays } = getEffortPercentile(exerciseLog)
-    icon = '🎯'
-    title = 'Non ti sei ancora allenato oggi'
-    sub = totalDays > 0
-      ? `Registra la prima serie per iniziare a costruire lo sforzo di oggi`
-      : `Registra la tua prima serie per iniziare a tracciare i progressi`
-  } else {
-    const record = getExerciseRecordStatus(exerciseLog, recent.exercise.id)
-
-    if (record.isNewRecord) {
-      tone = 'record'
-      icon = '🏆'
-      title = `Nuovo record! ${record.todayReps} ${recent.exercise.name.toLowerCase()} oggi`
-      sub = `Superato il precedente di ${record.prevBestReps} del ${fmtDateLong(record.prevBestDate)}`
-    } else if (record.closeToRecord) {
-      tone = 'push'
-      icon = '🔥'
-      title = `Mancano ${record.remaining} rip. per battere il record`
-      sub = `${recent.exercise.name}: record storico ${record.prevBestReps} rip.`
-    } else {
-      tone = 'compare'
-      const { todayEffort, percentile, totalDays } = getEffortPercentile(exerciseLog)
-      icon = '📊'
-      if (percentile === null) {
-        title = `Oggi: ${todayEffort}pt di sforzo`
-        sub = `Prima giornata di allenamento tracciata — continua così!`
-      } else {
-        title = `Oggi: ${todayEffort}pt di sforzo`
-        sub = percentile >= 50
-          ? `Meglio dell'${percentile}% dei tuoi ${totalDays} giorni di allenamento`
-          : `Sopra il ${percentile}% dei tuoi ${totalDays} giorni di allenamento — puoi ancora spingere`
-      }
-    }
-  }
-
-  const toneStyles = {
-    record:  { bg: 'linear-gradient(135deg, rgba(255,202,40,0.18), rgba(255,112,67,0.12))', border: 'var(--theme-color)' },
-    push:    { bg: 'rgba(255,112,67,0.10)', border: '#ff7043' },
-    compare: { bg: 'var(--card)', border: 'var(--card-border)' },
-    neutral: { bg: 'var(--card)', border: 'var(--card-border)' },
-  }[tone]
-
+function BannerCard({ icon, title, sub, tone, onDismiss }) {
+  const styles = toneStyles[tone]
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      padding: '14px 16px', borderRadius: 14, marginBottom: 12,
-      background: toneStyles.bg, border: `1px solid ${toneStyles.border}`,
+      padding: '14px 16px', borderRadius: 14, marginBottom: 8,
+      background: styles.bg, border: `1px solid ${styles.border}`,
     }}>
       <span style={{ fontSize: '1.8em', flexShrink: 0 }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -74,6 +30,72 @@ export default function WorkoutMotivationBanner({ exerciseLog, quickExercises })
         </div>
         {sub && <div style={{ fontSize: '0.72em', color: 'var(--text-sec)', marginTop: 2 }}>{sub}</div>}
       </div>
+      {onDismiss && (
+        <button className="btn-icon" onClick={onDismiss} title="Chiudi" style={{ flexShrink: 0 }}>
+          <span className="material-icons-round" style={{ fontSize: 18, color: '#888' }}>close</span>
+        </button>
+      )}
     </div>
+  )
+}
+
+// Un banner per ogni esercizio allenato oggi che è vicino/ha battuto il record —
+// resta visibile finché non si chiude con la X o si termina la sessione (vedi
+// dismissedIds/onDismiss, gestiti da WorkoutTab), invece di sparire da solo non
+// appena si logga un esercizio diverso.
+export default function WorkoutMotivationBanner({ exerciseLog, quickExercises, dismissedIds, onDismiss }) {
+  const todayExercises = getTodayLoggedExercises(exerciseLog, quickExercises)
+
+  const notable = todayExercises
+    .map(exercise => ({ exercise, record: getExerciseRecordStatus(exerciseLog, exercise.id) }))
+    .filter(({ record }) => (record.isNewRecord || record.closeToRecord) && !dismissedIds?.has(exercise.id))
+
+  if (notable.length > 0) {
+    return (
+      <>
+        {notable.map(({ exercise, record }) => (
+          <BannerCard
+            key={exercise.id}
+            tone={record.isNewRecord ? 'record' : 'push'}
+            icon={record.isNewRecord ? '🏆' : '🔥'}
+            title={record.isNewRecord
+              ? `Nuovo record! ${record.todayReps} ${exercise.name.toLowerCase()} oggi`
+              : `Mancano ${record.remaining} rip. per battere il record di ${exercise.name}`}
+            sub={record.isNewRecord
+              ? `Superato il precedente di ${record.prevBestReps} del ${fmtDateLong(record.prevBestDate)}`
+              : `${exercise.emoji} record storico ${record.prevBestReps} rip.`}
+            onDismiss={() => onDismiss?.(exercise.id)}
+          />
+        ))}
+      </>
+    )
+  }
+
+  // Nessun record da segnalare — riepilogo generico dello sforzo di oggi
+  const recent = getMostRecentLoggedExercise(exerciseLog, quickExercises)
+  if (!recent) {
+    const { totalDays } = getEffortPercentile(exerciseLog)
+    return (
+      <BannerCard
+        tone="compare" icon="🎯"
+        title="Non ti sei ancora allenato oggi"
+        sub={totalDays > 0
+          ? 'Registra la prima serie per iniziare a costruire lo sforzo di oggi'
+          : 'Registra la tua prima serie per iniziare a tracciare i progressi'}
+      />
+    )
+  }
+
+  const { todayEffort, percentile, totalDays } = getEffortPercentile(exerciseLog)
+  return (
+    <BannerCard
+      tone="compare" icon="📊"
+      title={`Oggi: ${todayEffort}pt di sforzo`}
+      sub={percentile === null
+        ? 'Prima giornata di allenamento tracciata — continua così!'
+        : percentile >= 50
+          ? `Meglio dell'${percentile}% dei tuoi ${totalDays} giorni di allenamento`
+          : `Sopra il ${percentile}% dei tuoi ${totalDays} giorni di allenamento — puoi ancora spingere`}
+    />
   )
 }

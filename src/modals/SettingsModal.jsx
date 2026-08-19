@@ -138,8 +138,8 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
             <div className="settings-section-title">🏋️ Allenamento</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.85em', fontWeight: 600 }}>Timer di recupero</div>
-                <div style={{ fontSize: '0.68em', color: '#555' }}>Countdown proposto dopo ogni serie</div>
+                <div style={{ fontSize: '0.85em', fontWeight: 600 }}>Intervallo beep recupero</div>
+                <div style={{ fontSize: '0.68em', color: '#555' }}>Un beep ogni N secondi dall'ultima serie (2° beep doppio, 3° triplo...)</div>
               </div>
               <input
                 type="number"

@@ -12,7 +12,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll }
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
-import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate } from './workoutStats'
+import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate, getStudyRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
 import { computeSocialPts } from './mindStats'
 
@@ -986,6 +986,56 @@ export function AppProvider({ children }) {
       const newLog = dayLog.map(e => e.id === logId ? { ...e, duration: numDuration, pts } : e)
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`mobilityLog.${dateStr}`]: newLog })
+      actions.showToast('Sessione modificata ✏️', '✏️')
+    },
+
+    // ─── Studio workout ── stesso pattern di Mobility, con nota libera opzionale
+    // al posto del legame a un gruppo muscolare specifico.
+    async addStudySession(durationMin, note, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const numDuration = parseFloat(durationMin) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getStudyRate()).toFixed(2))
+      const logDate = dateStr || toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        duration: numDuration,
+        note: (note || '').trim().slice(0, 200),
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`studyLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      actions.showToast(`+${pts} pt 📚`, '📚')
+    },
+
+    async deleteStudySession(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.studyLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`studyLog.${dateStr}`]: newLog })
+      actions.showToast(`-${entry.pts} pt annullato`, '↩️')
+    },
+
+    async editStudySession(dateStr, logId, newDuration, newNote) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.studyLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const numDuration = parseFloat(newDuration) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = parseFloat((numDuration * getStudyRate()).toFixed(2))
+      const newLog = dayLog.map(e => e.id === logId ? { ...e, duration: numDuration, note: (newNote || '').trim().slice(0, 200), pts } : e)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`studyLog.${dateStr}`]: newLog })
       actions.showToast('Sessione modificata ✏️', '✏️')
     },
 

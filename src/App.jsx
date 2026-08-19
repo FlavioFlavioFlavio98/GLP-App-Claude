@@ -46,7 +46,7 @@ const HABIT_CORE_MODALS = ['add', 'edit', 'tags', 'rewardCategories', 'singleHab
 const SETTINGS_MODALS = ['settings', 'themeModal', 'notifications', 'achievements', 'avatar', 'backup', 'appUsage', 'quotesModal']
 const STATS_MODALS = ['analytics', 'stats', 'statsPage', 'purchaseHistory', 'weeklyView', 'pdfReport', 'activityLog']
 const JOURNAL_MOOD_MODALS = ['eveningReview', 'mood', 'insights', 'weeklyRecap', 'journal', 'journalView']
-const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility']
+const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility', 'study']
 const BODY_MODALS = ['barefoot', 'hang']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory']
 

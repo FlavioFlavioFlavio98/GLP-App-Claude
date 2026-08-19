@@ -836,3 +836,79 @@ export function computeMobilityStats(mobilityLog) {
 
   return { todayMinutes, todayPts, weekMinutes, lifetimeMinutes, lifetimePts, sessionCount, streak }
 }
+
+// ─── Studio workout ───────────────────────────────────────────────────────────
+// Tempo dedicato a studiare tecnica/allenamento (video, articoli...), tracciato
+// come mobilityLog ma senza legame a un gruppo muscolare specifico — una nota
+// libera opzionale copre il dettaglio ("30 min flessioni su YouTube").
+
+const STUDY_RATE_KEY = 'glp_study_pts_per_min'
+export const DEFAULT_STUDY_RATE = 0.5
+
+export function getStudyRate() {
+  try {
+    const stored = localStorage.getItem(STUDY_RATE_KEY)
+    const n = parseFloat(stored)
+    return (!isNaN(n) && n > 0) ? n : DEFAULT_STUDY_RATE
+  } catch { return DEFAULT_STUDY_RATE }
+}
+
+export function setStudyRate(rate) {
+  try { localStorage.setItem(STUDY_RATE_KEY, String(Math.max(0.1, rate))) } catch { /* ignore */ }
+}
+
+export function getDayStudyEffort(studyLog, dateStr) {
+  const total = (studyLog?.[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0)
+  return Math.round(total * 100) / 100
+}
+
+export function computeStudyStreak(studyLog) {
+  const dates = Object.keys(studyLog || {})
+    .filter(d => getDayStudyEffort(studyLog, d) > 0)
+    .sort()
+
+  if (!dates.length) return { current: 0, best: 0, bestStart: null, bestEnd: null, currentStart: null }
+
+  const runs = []
+  let runStart = dates[0], runLen = 1
+  for (let i = 1; i < dates.length; i++) {
+    const diff = Math.round((new Date(dates[i]) - new Date(dates[i - 1])) / 86400000)
+    if (diff === 1) { runLen++ }
+    else { runs.push({ start: runStart, end: dates[i - 1], len: runLen }); runStart = dates[i]; runLen = 1 }
+  }
+  runs.push({ start: runStart, end: dates.at(-1), len: runLen })
+
+  const best = runs.reduce((a, b) => b.len > a.len ? b : a, runs[0])
+
+  const todayStr     = toDateString(new Date())
+  const yesterdayStr = toDateString(new Date(Date.now() - 86400000))
+  const last = runs.at(-1)
+  const isContinuing = last.end === todayStr || last.end === yesterdayStr
+  const current = isContinuing ? last.len : 0
+  const currentStart = isContinuing ? last.start : null
+
+  return { current, currentStart, best: best.len, bestStart: best.start, bestEnd: best.end }
+}
+
+export function computeStudyStats(studyLog) {
+  const todayStr = toDateString(new Date())
+  const allDates = Object.keys(studyLog || {})
+
+  function minutesOnDate(d) {
+    return (studyLog?.[d] || []).reduce((a, s) => a + (parseFloat(s.duration) || 0), 0)
+  }
+
+  const todayMinutes = minutesOnDate(todayStr)
+  const todayPts = getDayStudyEffort(studyLog, todayStr)
+
+  const weekCutoff = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return toDateString(d) })()
+  const weekMinutes = allDates.filter(d => d >= weekCutoff).reduce((a, d) => a + minutesOnDate(d), 0)
+
+  const lifetimeMinutes = allDates.reduce((a, d) => a + minutesOnDate(d), 0)
+  const lifetimePts = Math.round(allDates.reduce((a, d) => a + getDayStudyEffort(studyLog, d), 0) * 10) / 10
+  const sessionCount = allDates.reduce((a, d) => a + (studyLog?.[d]?.length || 0), 0)
+
+  const streak = computeStudyStreak(studyLog)
+
+  return { todayMinutes, todayPts, weekMinutes, lifetimeMinutes, lifetimePts, sessionCount, streak }
+}

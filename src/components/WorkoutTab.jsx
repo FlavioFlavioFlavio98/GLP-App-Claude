@@ -12,9 +12,10 @@ import WorkoutRecordFreshness from './WorkoutRecordFreshness'
 import WorkoutPlateauAlert from './WorkoutPlateauAlert'
 import WorkoutDaySummary from './WorkoutDaySummary'
 import WorkoutMobilityStats from './WorkoutMobilityStats'
+import WorkoutStudyStats from './WorkoutStudyStats'
 import ActivityRateEditor from './ActivityRateEditor'
 import { toDateString } from '../lib/habitLogic'
-import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary, getMobilityRate, setMobilityRate } from '../lib/workoutStats'
+import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary, getMobilityRate, setMobilityRate, getStudyRate, setStudyRate } from '../lib/workoutStats'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
   const [sessionSummary, setSessionSummary] = useState(null)
@@ -23,6 +24,7 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
   const exerciseLog = globalData?.exerciseLog || {}
   const quickExercises = globalData?.quickExercises || []
   const mobilityLog = globalData?.mobilityLog || {}
+  const studyLog = globalData?.studyLog || {}
   const todayStr = toDateString(new Date())
   const viewDate = state.viewDate || todayStr
   const isToday = viewDate === todayStr
@@ -92,6 +94,25 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         <ActivityRateEditor getRate={getMobilityRate} setRate={setMobilityRate} unit="pt/min" label="Punti Mobility" />
       </div>
 
+      {/* Sessione di studio — video/articoli su tecnica e allenamento, senza
+          legame a un gruppo muscolare specifico (vedi nota libera nel modal) */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button
+          onClick={() => actions.openModal('study')}
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px 14px',
+            background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)',
+            borderRadius: 12, cursor: 'pointer', color: 'var(--text)',
+            fontSize: '0.85em', fontWeight: 600,
+          }}
+        >
+          <span style={{ fontSize: '1.1em' }}>📚</span>
+          Aggiungi sessione Studio
+        </button>
+        <ActivityRateEditor getRate={getStudyRate} setRate={setStudyRate} unit="pt/min" label="Punti Studio" />
+      </div>
+
       {isToday ? (
         <>
           {/* Sessione attiva — bottone "Termina sessione" */}
@@ -123,6 +144,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
 
       {/* Statistiche mobility */}
       <WorkoutMobilityStats mobilityLog={mobilityLog} actions={actions} />
+
+      {/* Statistiche studio */}
+      <WorkoutStudyStats studyLog={studyLog} actions={actions} />
 
       {/* Muscle heatmap */}
       <MuscleHeatmapBody

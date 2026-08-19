@@ -4,8 +4,9 @@ import ExerciseSingleView from '../modals/ExerciseSingleView'
 import WeightModal from '../modals/WeightModal'
 import CoachPage from '../modals/CoachPage'
 import MobilitySessionModal from '../modals/MobilitySessionModal'
+import StudySessionModal from '../modals/StudySessionModal'
 
-export const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility']
+export const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility', 'study']
 
 export default function FitnessModals({ authUserId }) {
   return (
@@ -16,6 +17,7 @@ export default function FitnessModals({ authUserId }) {
       {authUserId === 'flavio' && <WeightModal />}
       {authUserId === 'flavio' && <CoachPage />}
       {authUserId === 'flavio' && <MobilitySessionModal />}
+      {authUserId === 'flavio' && <StudySessionModal />}
     </>
   )
 }

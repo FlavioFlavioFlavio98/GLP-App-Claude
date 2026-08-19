@@ -1,23 +1,24 @@
 // ─── Muscle groups definition ────────────────────────────────────────────────
 
 export const MUSCLE_GROUPS = {
-  // FRONT
-  pettorali:    { label: 'Pettorali',     side: 'front', emoji: '💪' },
+  // FRONT — ogni emoji richiama il gruppo muscolare specifico, non un'icona
+  // generica ripetuta: petto=scudo, spalle ant.=triangolo, avambracci=pugno...
+  pettorali:    { label: 'Pettorali',     side: 'front', emoji: '🛡️' },
   addominali:   { label: 'Addominali',    side: 'front', emoji: '🔥' },
-  spalle_ant:   { label: 'Spalle ant.',   side: 'front', emoji: '🔶' },
+  spalle_ant:   { label: 'Spalle ant.',   side: 'front', emoji: '🔺' },
   bicipiti:     { label: 'Bicipiti',      side: 'front', emoji: '💪' },
-  avambracci:   { label: 'Avambracci',    side: 'front', emoji: '🤜' },
+  avambracci:   { label: 'Avambracci',    side: 'front', emoji: '✊' },
   quadricipiti: { label: 'Quadricipiti',  side: 'front', emoji: '🦵' },
-  polpacci_ant: { label: 'Polpacci',      side: 'front', emoji: '🦵' },
+  polpacci_ant: { label: 'Polpacci',      side: 'front', emoji: '🦶' },
   // BACK
-  dorsali:      { label: 'Dorsali',       side: 'back',  emoji: '🔙' },
-  trapezio:     { label: 'Trapezio',      side: 'back',  emoji: '🔙' },
+  dorsali:      { label: 'Dorsali',       side: 'back',  emoji: '🦅' },
+  trapezio:     { label: 'Trapezio',      side: 'back',  emoji: '⛰️' },
   spalle_post:  { label: 'Spalle post.',  side: 'back',  emoji: '🔶' },
-  tricipiti:    { label: 'Tricipiti',     side: 'back',  emoji: '💪' },
+  tricipiti:    { label: 'Tricipiti',     side: 'back',  emoji: '🦾' },
   glutei:       { label: 'Glutei',        side: 'back',  emoji: '🍑' },
-  femorali:     { label: 'Femorali',      side: 'back',  emoji: '🦵' },
-  polpacci_post:{ label: 'Polpacci post', side: 'back',  emoji: '🦵' },
-  lombari:      { label: 'Lombari',       side: 'back',  emoji: '🔙' },
+  femorali:     { label: 'Femorali',      side: 'back',  emoji: '🍖' },
+  polpacci_post:{ label: 'Polpacci post', side: 'back',  emoji: '🐾' },
+  lombari:      { label: 'Lombari',       side: 'back',  emoji: '🌀' },
 }
 
 // ─── Default mappings by exercise name keywords ───────────────────────────────

@@ -36,6 +36,11 @@ service cloud.firestore {
           allow read, write: if isAllowedUser();
         }
       }
+
+      // Foto Progressi (check fisico periodico)
+      match /bodyPhotos/{photoId} {
+        allow read, write: if isAllowedUser();
+      }
     }
 
     // Config (ex PIN) — non più usata, blocca tutto

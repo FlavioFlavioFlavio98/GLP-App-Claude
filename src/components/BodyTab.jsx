@@ -3,6 +3,8 @@ import HangStats from './HangStats'
 import SunExposureSection from './SunExposureSection'
 import YouTubeSocialSection from './YouTubeSocialSection'
 import WellbeingInsights from './WellbeingInsights'
+import BodyReminders from './BodyReminders'
+import BodyPhotosSection from './BodyPhotosSection'
 import ActivityRateEditor from './ActivityRateEditor'
 import { getBarefootRate, setBarefootRate, getHangRate, setHangRate } from '../lib/bodyStats'
 
@@ -17,6 +19,7 @@ export default function BodyTab({ actions, authUserId, isReadOnly, globalData })
   const hangLog = globalData?.hangLog || {}
   const sunExposureLog = globalData?.sunExposureLog || {}
   const mindSocialLog = globalData?.mindSocialLog || {}
+  const weightLog = globalData?.weightLog || {}
 
   const btnStyle = {
     display: 'flex', alignItems: 'center', gap: 12,
@@ -28,6 +31,9 @@ export default function BodyTab({ actions, authUserId, isReadOnly, globalData })
 
   return (
     <div style={{ paddingTop: 8 }}>
+      {/* Promemoria foto/peso mancanti — sempre in cima, non ignorabili */}
+      <BodyReminders authUserId={authUserId} weightLog={weightLog} />
+
       {/* Correlazioni semplici tra le varie aree tracciate */}
       <WellbeingInsights
         exerciseLog={exerciseLog}
@@ -82,6 +88,9 @@ export default function BodyTab({ actions, authUserId, isReadOnly, globalData })
 
       {/* YouTube & Social — dalla ex tab Mind */}
       <YouTubeSocialSection mindSocialLog={mindSocialLog} actions={actions} />
+
+      {/* Foto Progressi — check fisico periodico */}
+      <BodyPhotosSection authUserId={authUserId} />
 
       {/* Peso corporeo */}
       <button style={btnStyle} onClick={() => actions.openModal('weight')}>

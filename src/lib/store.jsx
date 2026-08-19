@@ -807,6 +807,43 @@ export function AppProvider({ children }) {
         actions.showToast('Peso salvato!', '⚖️')
       } catch (e) { console.error('[saveWeight error]', e); actions.showToast('Errore salvataggio', '❌') }
     },
+
+    // ─── Foto Progressi ─────────────────────────────────────────────────────────
+    // Check fisico periodico (foto multiple per sessione) — stessa struttura a
+    // sottocollezione + Storage già usata per le readings (PDF).
+    async uploadBodyPhotos(files, note, dateStr) {
+      const { authUserId } = state
+      if (authUserId !== 'flavio') return
+      const realUid = auth.currentUser?.uid
+      if (!realUid) { actions.showToast('Utente non autenticato', '❌'); return }
+      const ts = Date.now()
+      const photos = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `body-photos/${realUid}/${ts}_${i}_${safeName}`
+        const sRef = storageRef(storage, path)
+        await uploadBytes(sRef, file)
+        const url = await getDownloadURL(sRef)
+        photos.push({ url, storagePath: path })
+      }
+      await addDoc(collection(db, 'users', 'flavio', 'bodyPhotos'), {
+        dateStr: dateStr || toDateString(new Date()),
+        note: (note || '').trim().slice(0, 200),
+        photos,
+        createdAt: serverTimestamp(),
+      })
+      actions.showToast('Check fisico salvato! 📸', '📸')
+    },
+
+    async deleteBodyPhotoEntry(entry) {
+      if (state.authUserId !== 'flavio') return
+      for (const p of (entry.photos || [])) {
+        try { await deleteObject(storageRef(storage, p.storagePath)) } catch { /* già eliminato */ }
+      }
+      await deleteDoc(doc(db, 'users', 'flavio', 'bodyPhotos', entry.id))
+      actions.showToast('Check fisico eliminato', '🗑️')
+    },
     async deleteWeight(dateStr) {
       if (state.authUserId !== 'flavio') return
       try {

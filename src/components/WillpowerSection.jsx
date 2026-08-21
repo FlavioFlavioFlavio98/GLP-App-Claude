@@ -45,6 +45,20 @@ export default function WillpowerSection({ willpowerLog, actions }) {
         Registra un momento
       </button>
 
+      <button
+        onClick={() => actions.openModal('willpowerStats')}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '10px 12px', marginBottom: 12,
+          background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 10, cursor: 'pointer', color: 'var(--text-sec)',
+          fontSize: '0.8em', fontWeight: 600,
+        }}
+      >
+        <span className="material-icons-round" style={{ fontSize: 16 }}>bar_chart</span>
+        Statistiche complete
+      </button>
+
       {stats.total === 0 ? (
         <div style={{ fontSize: '0.78em', color: '#888', textAlign: 'center', padding: '6px 0' }}>
           Nessuna voce negli ultimi 7 giorni

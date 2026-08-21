@@ -50,7 +50,7 @@ const STATS_MODALS = ['analytics', 'stats', 'statsPage', 'purchaseHistory', 'wee
 const JOURNAL_MOOD_MODALS = ['eveningReview', 'mood', 'insights', 'weeklyRecap', 'journal', 'journalView']
 const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility', 'study']
 const BODY_MODALS = ['barefoot', 'hang']
-const MENTE_MODALS = ['willpowerEntry']
+const MENTE_MODALS = ['willpowerEntry', 'willpowerStats']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory']
 
 function TabLoadingFallback() {

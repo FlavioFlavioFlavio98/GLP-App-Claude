@@ -14,6 +14,7 @@ import { saveFcmToken, updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate, getStudyRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
+import { getWillpowerRate } from './willpowerStats'
 import { computeSocialPts } from './mindStats'
 
 const AppContext = createContext(null)
@@ -1082,6 +1083,41 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`studyLog.${dateStr}`]: newLog })
       actions.showToast('Sessione modificata ✏️', '✏️')
+    },
+
+    // ─── Willpower ── log rapido +/- , non una sessione con durata: si registra
+    // subito se si è fatta o no la cosa a cui si resisteva.
+    async addWillpowerEntry(text, succeeded, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const trimmed = (text || '').trim().slice(0, 100)
+      if (!trimmed) { actions.showToast('Descrivi cosa hai fatto/non fatto', '⚠️'); return }
+      const rate = getWillpowerRate()
+      const pts = succeeded ? rate : -rate
+      const logDate = dateStr || toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        text: trimmed,
+        succeeded: !!succeeded,
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`willpowerLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate(succeeded ? 'light' : 'heavy')
+      actions.showToast(succeeded ? `+${rate} pt 💪` : `-${rate} pt 😔`, succeeded ? '💪' : '😔')
+    },
+
+    async deleteWillpowerEntry(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.willpowerLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`willpowerLog.${dateStr}`]: newLog })
+      actions.showToast('Voce eliminata', '↩️')
     },
 
     // ─── Barefoot ── stesso pattern di Mobility, tab Body invece che Workout.

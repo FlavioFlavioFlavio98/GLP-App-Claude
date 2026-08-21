@@ -4,6 +4,7 @@ const TABS = [
   { id: 'task',      icon: 'checklist',       label: 'Task' },
   { id: 'workout',   icon: 'fitness_center',  label: 'Workout' },
   { id: 'body',      icon: 'spa',             label: 'Benessere' },
+  { id: 'mente',     icon: 'psychology',      label: 'Mente' },
   { id: 'stats',     icon: 'bar_chart',       label: 'Stats' },
 ]
 

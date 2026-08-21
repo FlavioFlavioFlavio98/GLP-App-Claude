@@ -64,6 +64,16 @@ export default function NotificationsModal() {
     })
   }
 
+  async function handleTestRealPush() {
+    actions.showToast('Invio notifica push...', '⏳')
+    try {
+      await actions.sendTestPush()
+      actions.showToast('Push inviata! Dovrebbe arrivare a breve', '📬')
+    } catch (e) {
+      actions.showToast('Errore: ' + (e.message || 'invio fallito'), '❌')
+    }
+  }
+
   async function handleSendBackupNow() {
     if (!emailSettings?.address) { actions.showToast('Imposta prima l\'email!', '❌'); return }
     actions.showToast('Invio backup...', '⏳')
@@ -171,7 +181,11 @@ export default function NotificationsModal() {
             )}
             <button className="btn-backup" onClick={() => sendTestNotification()}>
               <span className="material-icons-round" style={{ fontSize: 18 }}>notifications</span>
-              Testa notifica
+              Testa notifica locale
+            </button>
+            <button className="btn-backup" onClick={handleTestRealPush}>
+              <span className="material-icons-round" style={{ fontSize: 18 }}>cloud</span>
+              Testa notifica push reale (dal server)
             </button>
           </div>
         )}

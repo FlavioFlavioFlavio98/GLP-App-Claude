@@ -716,6 +716,14 @@ export function AppProvider({ children }) {
       const result = await fn({ userId, email })
       return result.data
     },
+    // Test end-to-end reale del pushing FCM (a differenza di sendTestNotification
+    // in fcm.js, che mostra solo una notifica locale senza passare dal server).
+    async sendTestPush() {
+      const functions = getFunctions(app, 'europe-west1')
+      const fn = httpsCallable(functions, 'sendTestPush')
+      const result = await fn()
+      return result.data
+    },
 
     // ─── Voice Notes ──────────────────────────────────────────────────────────
     async saveVoiceNote(itemId, itemType, date, rawText) {

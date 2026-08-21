@@ -12,7 +12,7 @@ import { doc, setDoc, collection, getDocs } from 'firebase/firestore'
 import { db, getMessagingInstance } from './firebase'
 
 // ⚠️  Replace with your VAPID key from Firebase Console > Cloud Messaging
-export const VAPID_KEY = 'REPLACE_WITH_YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE'
+export const VAPID_KEY = 'BP_S9XE4wePvtvch398aZJnM7onaz7Mq91TRuqZiHARgiQd26kiNRbP8-LsQgzuK_6DkGraHFb_Wzli7u7ONuvA'
 
 // ─── Permission ───────────────────────────────────────────────────────────────
 

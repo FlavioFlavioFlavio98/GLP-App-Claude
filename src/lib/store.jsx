@@ -1087,11 +1087,11 @@ export function AppProvider({ children }) {
 
     // ─── Willpower ── log rapido +/- , non una sessione con durata: si registra
     // subito se si è fatta o no la cosa a cui si resisteva.
-    async addWillpowerEntry(text, succeeded, dateStr) {
+    async addWillpowerEntry(text, succeeded, dateStr, points) {
       if (state.authUserId !== 'flavio') return
       const trimmed = (text || '').trim().slice(0, 100)
       if (!trimmed) { actions.showToast('Descrivi cosa hai fatto/non fatto', '⚠️'); return }
-      const rate = getWillpowerRate()
+      const rate = parseFloat(points) > 0 ? parseFloat(points) : getWillpowerRate()
       const pts = succeeded ? rate : -rate
       const logDate = dateStr || toDateString(new Date())
       const logEntry = {

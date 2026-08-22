@@ -152,6 +152,14 @@ export default function App() {
     import('./lib/workoutStats').then(m => { if (!cancelled) mod = m })
     const id = setInterval(() => {
       if (!mod) return
+      // Se la sessione di allenamento è scaduta (45 min di inattività) o è stata
+      // terminata, i beep non hanno più senso — non aspettare il tetto di
+      // sicurezza a 3 ore, cancella subito.
+      if (!mod.getActiveWorkoutSession()) {
+        if (mod.getActiveRestTimer()) mod.cancelRestTimer()
+        restBeepRef.current = { startedAt: null, lastMark: 0 }
+        return
+      }
       const timer = mod.getActiveRestTimer()
       if (!timer) { restBeepRef.current = { startedAt: null, lastMark: 0 }; return }
       if (restBeepRef.current.startedAt !== timer.startedAt) {
@@ -356,10 +364,10 @@ export default function App() {
 
       <DateNav />
 
-      {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout: l'economia
-          generale di task/abitudini non è rilevante lì, dove banner e obiettivo
-          mostrano già i punti guadagnati con l'allenamento di oggi ── */}
-      {currentTab !== 'workout' && (
+      {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout/Benessere/
+          Mente: l'economia generale di task/abitudini non è rilevante lì, dove
+          ogni tab mostra già le proprie statistiche specifiche ── */}
+      {!['workout', 'body', 'mente'].includes(currentTab) && (
         <DailySummaryPanel
           authUserId={authUserId}
           globalData={globalData}

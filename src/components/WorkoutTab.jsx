@@ -73,70 +73,75 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
     return dayLog.filter(s => s.exerciseId === exId).reduce((a, s) => a + s.reps, 0)
   }
 
+  // Bottoni "Aggiungi sessione" utili in cima solo finché non sono già stati
+  // usati oggi — fatto quello, il pulsante scende più in basso e lascia spazio
+  // alle statistiche di oggi, che sono ciò che si vuole vedere per prime.
+  const mobilityDoneToday = (mobilityLog[todayStr] || []).length > 0
+  const studyDoneToday = (studyLog[todayStr] || []).length > 0
+
+  const MobilityAddRow = (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <button
+        onClick={() => actions.openModal('mobility')}
+        style={{
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '10px 14px',
+          background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)',
+          borderRadius: 12, cursor: 'pointer', color: 'var(--text)',
+          fontSize: '0.85em', fontWeight: 600,
+        }}
+      >
+        <span style={{ fontSize: '1.1em' }}>🧘</span>
+        Aggiungi sessione Mobility
+      </button>
+      <ActivityRateEditor getRate={getMobilityRate} setRate={setMobilityRate} unit="pt/min" label="Punti Mobility" />
+    </div>
+  )
+
+  const StudyAddRow = (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <button
+        onClick={() => actions.openModal('study')}
+        style={{
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '10px 14px',
+          background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)',
+          borderRadius: 12, cursor: 'pointer', color: 'var(--text)',
+          fontSize: '0.85em', fontWeight: 600,
+        }}
+      >
+        <span style={{ fontSize: '1.1em' }}>📚</span>
+        Aggiungi sessione Studio
+      </button>
+      <ActivityRateEditor getRate={getStudyRate} setRate={setStudyRate} unit="pt/min" label="Punti Studio" />
+    </div>
+  )
+
   return (
     <div style={{ paddingTop: 8 }}>
       {sessionSummary && (
         <WorkoutSessionSummary summary={sessionSummary} onClose={() => setSessionSummary(null)} />
       )}
 
-      {/* Sessione mobility — separata dall'allenamento vero e proprio, sempre
-          raggiungibile in cima alla tab */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <button
-          onClick={() => actions.openModal('mobility')}
-          style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)',
-            borderRadius: 12, cursor: 'pointer', color: 'var(--text)',
-            fontSize: '0.85em', fontWeight: 600,
-          }}
-        >
-          <span style={{ fontSize: '1.1em' }}>🧘</span>
-          Aggiungi sessione Mobility
-        </button>
-        <ActivityRateEditor getRate={getMobilityRate} setRate={setMobilityRate} unit="pt/min" label="Punti Mobility" />
-      </div>
-
-      {/* Sessione di studio — video/articoli su tecnica e allenamento, senza
-          legame a un gruppo muscolare specifico (vedi nota libera nel modal) */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <button
-          onClick={() => actions.openModal('study')}
-          style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)',
-            borderRadius: 12, cursor: 'pointer', color: 'var(--text)',
-            fontSize: '0.85em', fontWeight: 600,
-          }}
-        >
-          <span style={{ fontSize: '1.1em' }}>📚</span>
-          Aggiungi sessione Studio
-        </button>
-        <ActivityRateEditor getRate={getStudyRate} setRate={setStudyRate} unit="pt/min" label="Punti Studio" />
-      </div>
-
       {isToday ? (
         <>
           {/* Sessione attiva — bottone "Termina sessione" */}
           <WorkoutSessionBar onEndSession={handleEndSession} />
 
-          {/* Banner motivazionale — un banner per ogni gruppo muscolare allenato
-              oggi vicino/che ha battuto il record, resta finché non lo chiudi o
-              termini la sessione */}
+          {/* Statistiche di oggi per prime: banner motivazionale (sforzo/record),
+              obiettivo, timer di recupero */}
           <WorkoutMotivationBanner
             exerciseLog={exerciseLog}
             quickExercises={quickExercises}
             dismissedIds={dismissedRecordIds}
             onDismiss={id => setDismissedRecordIds(prev => new Set(prev).add(id))}
           />
-
-          {/* Obiettivo di sforzo giornaliero */}
           <WorkoutGoalProgress exerciseLog={exerciseLog} />
-
-          {/* Timer di recupero — visibile solo se un countdown è attivo */}
           <WorkoutRestTimer />
+
+          {/* Aggiungi sessione Mobility/Studio in cima solo se non ancora fatte oggi */}
+          {!mobilityDoneToday && MobilityAddRow}
+          {!studyDoneToday && StudyAddRow}
         </>
       ) : (
         // Sessione/banner/obiettivo/timer sono concetti "live", inutili su un
@@ -150,23 +155,13 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
         />
       )}
 
-      {/* Statistiche mobility */}
+      {/* Mobility/Studio già fatte oggi: bottone (per un'altra sessione) +
+          statistiche, spostati qui più in basso invece che in cima */}
+      {isToday && mobilityDoneToday && MobilityAddRow}
       <WorkoutMobilityStats mobilityLog={mobilityLog} actions={actions} />
 
-      {/* Statistiche studio */}
+      {isToday && studyDoneToday && StudyAddRow}
       <WorkoutStudyStats studyLog={studyLog} actions={actions} />
-
-      {/* Muscle heatmap */}
-      <MuscleHeatmapBody
-        exerciseLog={exerciseLog}
-        quickExercises={quickExercises}
-      />
-
-      {/* Sforzo pesato nel tempo */}
-      <WorkoutEffortChart exerciseLog={exerciseLog} />
-
-      {/* Calendario/heatmap costanza allenamenti */}
-      <WorkoutHeatmap exerciseLog={exerciseLog} />
 
       {/* Possibili plateau — esercizi fermi da un po' */}
       <WorkoutPlateauAlert exerciseLog={exerciseLog} quickExercises={quickExercises} />
@@ -224,6 +219,14 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
           </div>
         </div>
       )}
+
+      {/* Sezioni usate raramente — in fondo, sotto la lista esercizi */}
+      <MuscleHeatmapBody
+        exerciseLog={exerciseLog}
+        quickExercises={quickExercises}
+      />
+      <WorkoutEffortChart exerciseLog={exerciseLog} />
+      <WorkoutHeatmap exerciseLog={exerciseLog} />
 
       {/* FAB — sempre raggiungibile per aggiungere una serie al volo, indipendentemente da dove si è scrollato */}
       <button

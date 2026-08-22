@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 import { MUSCLE_GROUPS } from '../lib/muscleMapping'
-import { groupExercisesByMuscle, getAverageRepsPerSession, getEffortMultiplier, DEFAULT_EFFORT } from '../lib/workoutStats'
+import { groupExercisesByMuscle, sortExercisesForQuickAdd, getAverageRepsPerSession, getEffortMultiplier, DEFAULT_EFFORT } from '../lib/workoutStats'
 
 const EFFORT_LEVELS = [
   { level: 1, label: 'Leggero', sub: 'riscaldamento', emoji: '🟢' },
@@ -29,7 +29,10 @@ export default function QuickExerciseModal() {
   const exercises = (gd?.quickExercises || []).filter(e => e.active !== false)
   const exerciseLog = gd?.exerciseLog || {}
 
-  const grouped = useMemo(() => groupExercisesByMuscle(exercises), [exercises])
+  // Esercizi già fatti oggi in cima (più recente prima), poi il resto in ordine
+  // alfabetico — meno scroll per trovare quello giusto durante l'allenamento.
+  const sortedExercises = useMemo(() => sortExercisesForQuickAdd(exercises, exerciseLog), [exercises, exerciseLog])
+  const grouped = useMemo(() => groupExercisesByMuscle(sortedExercises), [sortedExercises])
   const muscleKeys = useMemo(
     () => Object.keys(grouped).sort((a, b) => {
       if (a === 'altro') return 1

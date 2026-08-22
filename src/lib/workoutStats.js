@@ -394,6 +394,30 @@ export function getPrimaryMuscleGroup(exercise) {
 
 // Raggruppa gli esercizi per gruppo muscolare primario. Gli esercizi senza
 // mappatura riconoscibile finiscono in 'altro'.
+// Ordina gli esercizi per l'aggiunta rapida (widget + modal "Aggiungi serie"):
+// quelli già loggati oggi vengono prima (più recente prima — se hai appena
+// fatto flessioni è probabile che tra poco ne rifarai un'altra serie), poi il
+// resto in ordine alfabetico. Così si scrolla meno per trovare l'esercizio
+// giusto invece di cercarlo in un elenco lungo sempre nello stesso ordine.
+export function sortExercisesForQuickAdd(exercises, exerciseLog) {
+  const todayStr = toDateString(new Date())
+  const todayLog = exerciseLog?.[todayStr] || []
+
+  const lastTimeById = {}
+  todayLog.forEach(s => {
+    const t = s.time || ''
+    if (!lastTimeById[s.exerciseId] || t > lastTimeById[s.exerciseId]) lastTimeById[s.exerciseId] = t
+  })
+
+  return [...(exercises || [])].sort((a, b) => {
+    const ta = lastTimeById[a.id], tb = lastTimeById[b.id]
+    if (ta && tb) return tb.localeCompare(ta) // entrambi fatti oggi: più recente prima
+    if (ta && !tb) return -1
+    if (!ta && tb) return 1
+    return (a.name || '').localeCompare(b.name || '') // nessuno dei due fatto oggi: alfabetico
+  })
+}
+
 export function groupExercisesByMuscle(exercises) {
   const groups = {}
   ;(exercises || []).forEach(ex => {

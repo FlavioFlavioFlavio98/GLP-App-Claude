@@ -15,7 +15,7 @@ import WorkoutMobilityStats from './WorkoutMobilityStats'
 import WorkoutStudyStats from './WorkoutStudyStats'
 import ActivityRateEditor from './ActivityRateEditor'
 import { toDateString } from '../lib/habitLogic'
-import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary, getMobilityRate, setMobilityRate, getStudyRate, setStudyRate } from '../lib/workoutStats'
+import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary, getMobilityRate, setMobilityRate, getStudyRate, setStudyRate, sortExercisesForQuickAdd } from '../lib/workoutStats'
 
 export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData }) {
   const [sessionSummary, setSessionSummary] = useState(null)
@@ -64,7 +64,9 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
     fontSize: '0.92em', fontWeight: 600, textAlign: 'left',
   }
 
-  const exercises = quickExercises.filter(e => e.active !== false)
+  // Esercizi già fatti oggi in cima (più recente prima), poi il resto in ordine
+  // alfabetico — stesso criterio del modal "Aggiungi serie" e del widget Android.
+  const exercises = sortExercisesForQuickAdd(quickExercises.filter(e => e.active !== false), exerciseLog)
   const dayLog = exerciseLog[viewDate] || []
 
   function dayRepsFor(exId) {

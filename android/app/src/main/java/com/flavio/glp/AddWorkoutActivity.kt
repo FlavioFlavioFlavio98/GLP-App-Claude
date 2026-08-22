@@ -154,12 +154,31 @@ class AddWorkoutActivity : Activity() {
             .get()
             .addOnSuccessListener { doc ->
                 @Suppress("UNCHECKED_CAST")
-                exercises = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
-                if (exercises.isEmpty()) {
+                val rawExercises = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
+                if (rawExercises.isEmpty()) {
                     Toast.makeText(this, "Nessun esercizio configurato", Toast.LENGTH_SHORT).show()
                     finish()
                     return@addOnSuccessListener
                 }
+
+                // Esercizi già fatti oggi in cima (più recente prima), poi il resto in
+                // ordine alfabetico — stesso criterio della web/Android app, così si
+                // scrolla meno per trovare quello giusto durante l'allenamento.
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                @Suppress("UNCHECKED_CAST")
+                val todayLog = (doc.get("exerciseLog") as? Map<String, Any>)?.get(today) as? List<Map<String, Any>> ?: emptyList()
+                val lastTimeById = mutableMapOf<String, String>()
+                todayLog.forEach { s ->
+                    val exId = s["exerciseId"] as? String ?: return@forEach
+                    val t = s["time"] as? String ?: ""
+                    if (t > (lastTimeById[exId] ?: "")) lastTimeById[exId] = t
+                }
+                exercises = rawExercises
+                    .map { ex -> ex to (lastTimeById[ex["id"] as? String]) }
+                    .sortedWith(compareByDescending<Pair<Map<String, Any>, String?>> { it.second != null }
+                        .thenByDescending { it.second ?: "" }
+                        .thenBy { (it.first["name"] as? String) ?: "" })
+                    .map { it.first }
 
                 exercises.forEachIndexed { index, ex ->
                     val emoji = ex["emoji"] as? String ?: "💪"

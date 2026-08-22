@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
@@ -73,6 +74,37 @@ class MainActivity : BridgeActivity() {
 
         // Gestisci deep link se l'app è aperta da una notifica
         handleNotificationIntent(intent)
+
+        setupBackHandling()
+    }
+
+    // Lo swipe-back di sistema (o il tasto indietro) chiudeva subito l'app perché
+    // la WebView non ha una vera history di navigazione (è una SPA React, non
+    // pagine multiple). Ora: primo tentativo delegato a window.__nativeBackHandler
+    // in App.jsx (chiude modal/torna alla tab Oggi); solo se la web app dice che
+    // non c'è nulla da chiudere, serve un secondo swipe entro 2s per uscire —
+    // altrimenti mostriamo solo un Toast di conferma.
+    private var lastBackPressAt = 0L
+
+    private fun setupBackHandling() {
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                bridge.webView.evaluateJavascript(
+                    "(window.__nativeBackHandler ? String(window.__nativeBackHandler()) : 'false')"
+                ) { rawResult ->
+                    val handled = rawResult?.trim('"') == "true"
+                    if (handled) return@evaluateJavascript
+
+                    val now = System.currentTimeMillis()
+                    if (now - lastBackPressAt < 2000) {
+                        finish()
+                    } else {
+                        lastBackPressAt = now
+                        Toast.makeText(this@MainActivity, "Trascina di nuovo per uscire", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        })
     }
 
     override fun onNewIntent(intent: Intent) {

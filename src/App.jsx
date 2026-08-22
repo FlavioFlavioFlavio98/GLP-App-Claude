@@ -126,6 +126,21 @@ export default function App() {
     return () => { document.removeEventListener('visibilitychange', onVisibility); disable() }
   }, [wakeLockEnabled])
 
+  // Gesto swipe-back Android — MainActivity.kt chiama questa funzione prima di
+  // decidere se uscire dall'app: se c'è un modal/pagina aperta o non siamo sulla
+  // tab Oggi, la chiudiamo/torniamo a Oggi (return true = "gestito qui, non
+  // uscire"); solo se siamo già alla radice si passa al doppio swipe per uscire.
+  useEffect(() => {
+    window.__nativeBackHandler = () => {
+      if (showReadings) { setShowReadings(false); return true }
+      if (showPsychPage) { setShowPsychPage(false); return true }
+      if (modal) { actions.closeModal(); return true }
+      if (currentTab !== 'oggi') { changeTab('oggi'); return true }
+      return false
+    }
+    return () => { delete window.__nativeBackHandler }
+  }, [modal, currentTab, showReadings, showPsychPage])
+
   // Beep di recupero — polling qui (livello App, sempre montato) invece che dentro
   // WorkoutRestTimer, così i beep continuano anche navigando su un'altra tab
   // durante l'allenamento, non solo restando sulla tab Workout.

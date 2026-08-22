@@ -15,12 +15,25 @@ class AddWorkoutActivity : Activity() {
     private var exercises = listOf<Map<String, Any>>()
     private var selectedIndex = 0
     private var reps = 10
+    private var effort = 1
 
     private lateinit var repsView: TextView
     private lateinit var ptsResult: TextView
     private lateinit var exerciseName: TextView
     private lateinit var ptsLabel: TextView
     private lateinit var chipGroup: LinearLayout
+    private lateinit var effortChips: List<TextView>
+
+    private fun effortMultiplier(level: Int) = when (level) {
+        2 -> 1.2
+        3 -> 1.5
+        else -> 1.0
+    }
+
+    private fun currentPts(): Double {
+        val ppr = (exercises.getOrNull(selectedIndex)?.get("pointsPerRep") as? Double) ?: 0.1
+        return (reps * ppr * effortMultiplier(effort) * 100).toLong() / 100.0
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -125,6 +138,45 @@ class AddWorkoutActivity : Activity() {
         root.addView(counterRow)
         root.addView(ptsResult)
 
+        // Sforzo percepito — stessa scala 1/2/3 = leggero/medio/massimo della web app
+        val effortLabel = TextView(this).apply {
+            text = "SFORZO PERCEPITO"
+            textSize = 10f
+            setTextColor(android.graphics.Color.parseColor("#55557A"))
+            letterSpacing = 0.1f
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(6))
+        }
+        root.addView(effortLabel)
+
+        val effortRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(16) }
+        }
+        val effortDefs = listOf(Triple(1, "🟢", "Leggero"), Triple(2, "🟡", "Medio"), Triple(3, "🔴", "Massimo"))
+        effortChips = effortDefs.map { (level, emoji, label) ->
+            TextView(this).apply {
+                text = "$emoji $label"
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setPadding(0, dp(9), 0, dp(9))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (level < 3) marginEnd = dp(6)
+                }
+                setOnClickListener {
+                    effort = level
+                    updateEffortColors()
+                    ptsResult.text = "= +${currentPts()}pt"
+                }
+            }
+        }
+        effortChips.forEach { effortRow.addView(it) }
+        root.addView(effortRow)
+        updateEffortColors()
+
         // Bottone aggiungi
         val addBtn = TextView(this).apply {
             text = "💪 Aggiungi"
@@ -139,8 +191,7 @@ class AddWorkoutActivity : Activity() {
             )
             setOnClickListener {
                 val ex = exercises.getOrNull(selectedIndex) ?: return@setOnClickListener
-                val pts = (reps * ((ex["pointsPerRep"] as? Double) ?: 0.1) * 100).toLong() / 100.0
-                saveWorkout(ex, reps, pts)
+                saveWorkout(ex, reps, currentPts(), effort)
                 finish()
             }
         }
@@ -222,11 +273,18 @@ class AddWorkoutActivity : Activity() {
             setOnClickListener {
                 reps = maxOf(1, reps + delta)
                 repsView.text = reps.toString()
-                val pts = exercises.getOrNull(selectedIndex)?.let {
-                    (reps * ((it["pointsPerRep"] as? Double) ?: 0.1) * 100).toLong() / 100.0
-                } ?: 0.0
-                ptsResult.text = "= +${pts}pt"
+                ptsResult.text = "= +${currentPts()}pt"
             }
+        }
+    }
+
+    private fun updateEffortColors() {
+        if (!::effortChips.isInitialized) return
+        effortChips.forEachIndexed { i, chip ->
+            val active = (i + 1) == effort
+            chip.setBackgroundResource(if (active) R.drawable.chip_selected else R.drawable.chip_unselected)
+            chip.setTextColor(if (active) android.graphics.Color.parseColor("#FFCA28") else android.graphics.Color.parseColor("#C7C7D1"))
+            chip.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
     }
 
@@ -238,9 +296,7 @@ class AddWorkoutActivity : Activity() {
 
         exerciseName.text = "$emoji $name"
         ptsLabel.text = "${pts}pt / rep"
-
-        val totalPts = (reps * pts * 100).toLong() / 100.0
-        ptsResult.text = "= +${totalPts}pt"
+        ptsResult.text = "= +${currentPts()}pt"
 
         for (i in 0 until chipGroup.childCount) {
             val chip = chipGroup.getChildAt(i) as? TextView ?: continue
@@ -256,7 +312,7 @@ class AddWorkoutActivity : Activity() {
         }
     }
 
-    private fun saveWorkout(exercise: Map<String, Any>, reps: Int, pts: Double) {
+    private fun saveWorkout(exercise: Map<String, Any>, reps: Int, pts: Double, effort: Int) {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
@@ -268,6 +324,7 @@ class AddWorkoutActivity : Activity() {
             "exerciseId" to (exercise["id"] as? String ?: "manual"),
             "reps" to reps,
             "pts" to pts,
+            "effort" to effort,
             "time" to timeStr
         )
 

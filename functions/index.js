@@ -152,59 +152,10 @@ exports.summarizeConversation = onCall(
   }
 )
 
-// ── Push notifications helper ────────────────────────────────────────────────
-// I token vivono in users/flavio/fcmTokens/{tokenId} (un doc per dispositivo,
-// vedi saveFcmToken in src/lib/fcm.js) — non in un campo piatto sul doc utente.
-async function sendPushToFlavio(title, body, link) {
-  try {
-    const { getMessaging } = require('firebase-admin/messaging')
-    const tokensSnap = await admin.firestore().collection('users').doc('flavio').collection('fcmTokens').get()
-    const tokens = tokensSnap.docs.map(d => d.data()?.token).filter(Boolean)
-    if (tokens.length === 0) { console.log('[push] no FCM tokens'); return }
-    const res = await getMessaging().sendEachForMulticast({
-      tokens,
-      notification: { title, body },
-      webpush: { fcmOptions: { link: link || 'https://flavioflavioflavio98.github.io/GLP-App-Claude/' } },
-    })
-    console.log('[push] sent:', title, `${res.successCount}/${tokens.length} ok`)
-  } catch (e) {
-    console.error('[push] error:', e.message)
-  }
-}
-
-// Test end-to-end reale (a differenza del test locale in fcm.js che mostra solo
-// una notifica sul dispositivo senza passare dal server): verifica che il token
-// FCM salvato sia valido e che l'invio via Admin SDK funzioni davvero.
-exports.sendTestPush = onCall(
-  { region: REGION, invoker: 'public' },
-  async (request) => {
-    authCheck(request)
-    const tokensSnap = await admin.firestore().collection('users').doc('flavio').collection('fcmTokens').get()
-    if (tokensSnap.empty) throw new HttpsError('failed-precondition', 'Nessun token FCM salvato — abilita prima le notifiche')
-    await sendPushToFlavio('🔔 Test GLP', 'Le notifiche push funzionano correttamente!')
-    return { sent: true }
-  }
-)
-
-exports.notifyMorningCheckIn = onSchedule(
-  { schedule: '30 7 * * *', timeZone: 'Europe/Rome', region: REGION },
-  async () => { await sendPushToFlavio('🌅 Check-in mattino', 'Inizia bene la giornata! +1pt ti aspetta.') }
-)
-
-exports.notifyMiddayCheckIn = onSchedule(
-  { schedule: '30 12 * * *', timeZone: 'Europe/Rome', region: REGION },
-  async () => { await sendPushToFlavio('☀️ Check-in mezzogiorno', 'Come sta andando? +1pt per aggiornarsi.') }
-)
-
-exports.notifyEveningCheckIn = onSchedule(
-  { schedule: '0 20 * * *', timeZone: 'Europe/Rome', region: REGION },
-  async () => { await sendPushToFlavio('🌙 Check-in serale', 'Momento di riflettere sulla giornata. +1pt') }
-)
-
-exports.notifyHabitsReminder = onSchedule(
-  { schedule: '0 21 * * *', timeZone: 'Europe/Rome', region: REGION },
-  async () => { await sendPushToFlavio('💪 Abitudini', 'Hai ancora abitudini da completare oggi?') }
-)
+// Notifiche/reminder: gestiti dall'app Android nativa (AlarmManager, vedi
+// NotificationScheduler.kt) invece che via push FCM — rimossa perché dipendeva
+// da server/token/rete al momento dello scatto, meno affidabile delle notifiche
+// locali sul dispositivo.
 
 // ── expireTasks ───────────────────────────────────────────────────────────────
 exports.expireTasks = onSchedule(

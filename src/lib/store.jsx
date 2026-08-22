@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
-import { saveFcmToken, updatePersistentNotification } from './fcm'
+import { updatePersistentNotification } from './fcm'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate, getStudyRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
@@ -680,10 +680,7 @@ export function AppProvider({ children }) {
       return { success: errors.length === 0, errors }
     },
 
-    // ─── FCM / Notifications ─────────────────────────────────────────────────
-    async initFcmToken(userId) {
-      try { await saveFcmToken(userId) } catch { /* non-critical */ }
-    },
+    // ─── Notifications ───────────────────────────────────────────────────────
     async loadNotificationSettings(userId) {
       try {
         const snap = await getDoc(doc(db, 'users', userId, 'settings', 'notifications'))
@@ -715,14 +712,6 @@ export function AppProvider({ children }) {
       const functions = getFunctions(app, 'europe-west1')
       const fn = httpsCallable(functions, 'sendBackupNow')
       const result = await fn({ userId, email })
-      return result.data
-    },
-    // Test end-to-end reale del pushing FCM (a differenza di sendTestNotification
-    // in fcm.js, che mostra solo una notifica locale senza passare dal server).
-    async sendTestPush() {
-      const functions = getFunctions(app, 'europe-west1')
-      const fn = httpsCallable(functions, 'sendTestPush')
-      const result = await fn()
       return result.data
     },
 

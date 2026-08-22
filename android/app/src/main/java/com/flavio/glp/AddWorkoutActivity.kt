@@ -34,36 +34,42 @@ class AddWorkoutActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 40, 48, 32)
-            setBackgroundColor(android.graphics.Color.parseColor("#1E1E1E"))
+            setPadding(40, 32, 40, 28)
+            setBackgroundResource(R.drawable.dialog_bg_gradient)
         }
 
-        // Chip group esercizi — match_parent con weight uguale per ogni chip
+        // Chip esercizi — scroll orizzontale, ogni chip largo quanto il suo testo
+        // (prima erano compressi tutti in una riga a larghezza uguale e il testo
+        // andava a capo lettera per lettera con nomi lunghi come "Trazioni Red Band")
         chipGroup = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+        }
+        val chipScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 8 }
+            ).apply { bottomMargin = 14 }
+            addView(chipGroup)
         }
-        root.addView(chipGroup)
+        root.addView(chipScroll)
 
         // Nome esercizio selezionato
         exerciseName = TextView(this).apply {
-            textSize = 18f
+            textSize = 19f
             setTypeface(null, android.graphics.Typeface.BOLD)
             gravity = Gravity.CENTER
             setTextColor(android.graphics.Color.WHITE)
-            setPadding(0, 24, 0, 4)
+            setPadding(0, 10, 0, 2)
         }
         root.addView(exerciseName)
 
         // Pts per rep
         ptsLabel = TextView(this).apply {
             textSize = 11f
-            setTextColor(android.graphics.Color.parseColor("#888888"))
+            setTextColor(android.graphics.Color.parseColor("#55557A"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 18)
         }
         root.addView(ptsLabel)
 
@@ -82,7 +88,7 @@ class AddWorkoutActivity : Activity() {
             textSize = 14f
             setTextColor(android.graphics.Color.parseColor("#4CAF50"))
             gravity = Gravity.CENTER
-            setPadding(0, 8, 0, 24)
+            setPadding(0, 8, 0, 22)
         }
 
         val counterRow = LinearLayout(this).apply {
@@ -96,8 +102,9 @@ class AddWorkoutActivity : Activity() {
 
         val repsLabel = TextView(this).apply {
             text = "REPS"
-            textSize = 11f
-            setTextColor(android.graphics.Color.parseColor("#888888"))
+            textSize = 10f
+            setTextColor(android.graphics.Color.parseColor("#55557A"))
+            letterSpacing = 0.1f
             gravity = Gravity.CENTER
         }
         val centerCol = LinearLayout(this).apply {
@@ -109,25 +116,26 @@ class AddWorkoutActivity : Activity() {
         centerCol.addView(repsView)
         centerCol.addView(repsLabel)
 
-        counterRow.addView(makeBtn("-5", -5))
-        counterRow.addView(makeBtn("-", -1))
+        counterRow.addView(makeStepBtn("-5", -5))
+        counterRow.addView(makeStepBtn("-", -1))
         counterRow.addView(centerCol)
-        counterRow.addView(makeBtn("+", 1))
-        counterRow.addView(makeBtn("+5", 5))
+        counterRow.addView(makeStepBtn("+", 1))
+        counterRow.addView(makeStepBtn("+5", 5))
 
         root.addView(counterRow)
         root.addView(ptsResult)
 
         // Bottone aggiungi
-        val addBtn = Button(this).apply {
+        val addBtn = TextView(this).apply {
             text = "💪 Aggiungi"
-            textSize = 16f
-            setBackgroundColor(android.graphics.Color.parseColor("#FFCA28"))
-            setTextColor(android.graphics.Color.BLACK)
+            textSize = 15f
             setTypeface(null, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setTextColor(android.graphics.Color.parseColor("#121212"))
+            setBackgroundResource(R.drawable.chip_selected)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                dp(46)
             )
             setOnClickListener {
                 val ex = exercises.getOrNull(selectedIndex) ?: return@setOnClickListener
@@ -156,18 +164,15 @@ class AddWorkoutActivity : Activity() {
                 exercises.forEachIndexed { index, ex ->
                     val emoji = ex["emoji"] as? String ?: "💪"
                     val name = ex["name"] as? String ?: "Esercizio"
-                    val chip = Button(this).apply {
-                        text = "$emoji ${name.uppercase()}"
-                        textSize = 10f
-                        minWidth = 0
-                        minimumWidth = 0
-                        isAllCaps = false
-                        setPadding(8, 6, 8, 6)
+                    val chip = TextView(this).apply {
+                        text = "$emoji $name"
+                        textSize = 12f
+                        gravity = Gravity.CENTER
+                        setPadding(dp(14), dp(9), dp(14), dp(9))
                         layoutParams = LinearLayout.LayoutParams(
-                            0,
                             LinearLayout.LayoutParams.WRAP_CONTENT,
-                            1f
-                        ).apply { setMargins(4, 0, 4, 8) }
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply { marginEnd = dp(8) }
                         setOnClickListener {
                             selectedIndex = index
                             updateSelection()
@@ -184,14 +189,17 @@ class AddWorkoutActivity : Activity() {
             }
     }
 
-    private fun makeBtn(label: String, delta: Int): Button {
-        return Button(this).apply {
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun makeStepBtn(label: String, delta: Int): TextView {
+        return TextView(this).apply {
             text = label
-            textSize = 13f
-            minWidth = 0
-            minimumWidth = 0
-            setPadding(12, 8, 12, 8)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            textSize = 14f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setTextColor(android.graphics.Color.parseColor("#C7C7D1"))
+            setBackgroundResource(R.drawable.chip_unselected)
+            layoutParams = LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) }
             setOnClickListener {
                 reps = maxOf(1, reps + delta)
                 repsView.text = reps.toString()
@@ -216,13 +224,15 @@ class AddWorkoutActivity : Activity() {
         ptsResult.text = "= +${totalPts}pt"
 
         for (i in 0 until chipGroup.childCount) {
-            val chip = chipGroup.getChildAt(i) as? Button ?: continue
+            val chip = chipGroup.getChildAt(i) as? TextView ?: continue
             if (i == selectedIndex) {
-                chip.setBackgroundColor(android.graphics.Color.parseColor("#FFCA28"))
-                chip.setTextColor(android.graphics.Color.BLACK)
+                chip.setBackgroundResource(R.drawable.chip_selected)
+                chip.setTextColor(android.graphics.Color.parseColor("#FFCA28"))
+                chip.setTypeface(null, android.graphics.Typeface.BOLD)
             } else {
-                chip.setBackgroundColor(android.graphics.Color.parseColor("#333333"))
-                chip.setTextColor(android.graphics.Color.WHITE)
+                chip.setBackgroundResource(R.drawable.chip_unselected)
+                chip.setTextColor(android.graphics.Color.parseColor("#C7C7D1"))
+                chip.setTypeface(null, android.graphics.Typeface.NORMAL)
             }
         }
     }
@@ -244,10 +254,7 @@ class AddWorkoutActivity : Activity() {
 
         FirebaseFirestore.getInstance()
             .collection("users").document("flavio")
-            .update(
-                "exerciseLog.$today", FieldValue.arrayUnion(logEntry),
-                "score", FieldValue.increment(pts)
-            )
+            .update("exerciseLog.$today", FieldValue.arrayUnion(logEntry))
             .addOnSuccessListener {
                 Toast.makeText(this, "+${pts}pt per $reps ${exercise["name"]} 💪", Toast.LENGTH_SHORT).show()
             }

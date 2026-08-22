@@ -19,9 +19,9 @@ class AddWillpowerActivity : Activity() {
 
     private lateinit var textInput: EditText
     private lateinit var pointsRow: LinearLayout
-    private lateinit var successBtn: Button
-    private lateinit var failBtn: Button
-    private lateinit var saveBtn: Button
+    private lateinit var successBtn: TextView
+    private lateinit var failBtn: TextView
+    private lateinit var saveBtn: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,37 +36,37 @@ class AddWillpowerActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 40, 48, 32)
-            setBackgroundColor(android.graphics.Color.parseColor("#1E1E1E"))
+            setPadding(dp(22), dp(20), dp(22), dp(18))
+            setBackgroundResource(R.drawable.dialog_bg_gradient)
         }
 
         val title = TextView(this).apply {
             text = "🔥 Willpower"
-            textSize = 13f
+            textSize = 15f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            setTextColor(android.graphics.Color.parseColor("#888888"))
+            setTextColor(android.graphics.Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 16)
+            setPadding(0, 0, 0, dp(14))
         }
         root.addView(title)
 
         textInput = EditText(this).apply {
-            hint = "Es. Filo interdentale"
-            inputType = InputType.TYPE_CLASS_TEXT
+            hint = "Cosa dovevi fare?"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             setTextColor(android.graphics.Color.WHITE)
-            setHintTextColor(android.graphics.Color.parseColor("#666666"))
-            setBackgroundColor(android.graphics.Color.parseColor("#2A2A2A"))
-            setPadding(24, 20, 24, 20)
+            setHintTextColor(android.graphics.Color.parseColor("#666680"))
+            setBackgroundResource(R.drawable.chip_unselected)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 16 }
+            ).apply { bottomMargin = dp(12) }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { updateSaveEnabled() }
+            })
         }
-        textInput.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) { updateSaveEnabled() }
-        })
         root.addView(textInput)
 
         val outcomeRow = LinearLayout(this).apply {
@@ -74,20 +74,20 @@ class AddWillpowerActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 16 }
+            ).apply { bottomMargin = dp(12) }
         }
-        successBtn = Button(this).apply {
-            text = "✅ L'ho fatto"
+        successBtn = TextView(this).apply {
+            text = "✅  Fatto"
             textSize = 13f
-            isAllCaps = false
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 6 }
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(6) }
             setOnClickListener { pickOutcome(true) }
         }
-        failBtn = Button(this).apply {
-            text = "❌ Non l'ho fatto"
+        failBtn = TextView(this).apply {
+            text = "❌  Non fatto"
             textSize = 13f
-            isAllCaps = false
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 6 }
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, dp(42), 1f)
             setOnClickListener { pickOutcome(false) }
         }
         outcomeRow.addView(successBtn)
@@ -101,32 +101,34 @@ class AddWillpowerActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 20 }
+            ).apply { bottomMargin = dp(16) }
         }
         for (v in 1..5) {
-            val chip = Button(this).apply {
+            val chip = TextView(this).apply {
                 text = v.toString()
                 textSize = 13f
-                minWidth = 0
-                minimumWidth = 0
-                isAllCaps = false
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(3, 0, 3, 0) }
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+                    marginEnd = if (v < 5) dp(6) else 0
+                }
                 setOnClickListener { pickPoints(v) }
             }
             pointsRow.addView(chip)
         }
         root.addView(pointsRow)
 
-        saveBtn = Button(this).apply {
+        saveBtn = TextView(this).apply {
             text = "Salva"
-            textSize = 16f
-            setBackgroundColor(android.graphics.Color.parseColor("#FFCA28"))
-            setTextColor(android.graphics.Color.BLACK)
+            textSize = 15f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            isEnabled = false
+            gravity = Gravity.CENTER
+            setTextColor(android.graphics.Color.parseColor("#666680"))
+            setBackgroundResource(R.drawable.chip_unselected)
+            alpha = 0.5f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                dp(46)
             )
             setOnClickListener { save() }
         }
@@ -134,6 +136,8 @@ class AddWillpowerActivity : Activity() {
 
         setContentView(root)
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun pickOutcome(value: Boolean) {
         succeeded = value
@@ -153,24 +157,34 @@ class AddWillpowerActivity : Activity() {
     private fun updateOutcomeColors() {
         val successColor = android.graphics.Color.parseColor("#4CAF50")
         val failColor = android.graphics.Color.parseColor("#E53935")
-        successBtn.setBackgroundColor(if (succeeded == true) successColor else android.graphics.Color.parseColor("#2A2A2A"))
-        successBtn.setTextColor(if (succeeded == true) android.graphics.Color.BLACK else successColor)
-        failBtn.setBackgroundColor(if (succeeded == false) failColor else android.graphics.Color.parseColor("#2A2A2A"))
-        failBtn.setTextColor(if (succeeded == false) android.graphics.Color.BLACK else failColor)
+        successBtn.setBackgroundResource(if (succeeded == true) R.drawable.chip_selected else R.drawable.chip_unselected)
+        successBtn.setTextColor(if (succeeded == true) successColor else android.graphics.Color.parseColor("#C7C7D1"))
+        successBtn.setTypeface(null, if (succeeded == true) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        failBtn.setBackgroundResource(if (succeeded == false) R.drawable.chip_selected else R.drawable.chip_unselected)
+        failBtn.setTextColor(if (succeeded == false) failColor else android.graphics.Color.parseColor("#C7C7D1"))
+        failBtn.setTypeface(null, if (succeeded == false) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
     }
 
     private fun updatePointsColors() {
         val color = if (succeeded == true) android.graphics.Color.parseColor("#4CAF50") else android.graphics.Color.parseColor("#E53935")
         for (i in 0 until pointsRow.childCount) {
-            val chip = pointsRow.getChildAt(i) as? Button ?: continue
+            val chip = pointsRow.getChildAt(i) as? TextView ?: continue
             val active = (i + 1) == points
-            chip.setBackgroundColor(if (active) color else android.graphics.Color.parseColor("#2A2A2A"))
-            chip.setTextColor(if (active) android.graphics.Color.BLACK else color)
+            chip.setBackgroundResource(if (active) R.drawable.chip_selected else R.drawable.chip_unselected)
+            chip.setTextColor(if (active) color else android.graphics.Color.parseColor("#C7C7D1"))
         }
     }
 
     private fun updateSaveEnabled() {
-        saveBtn.isEnabled = succeeded != null && points > 0 && textInput.text.toString().trim().isNotEmpty()
+        val enabled = succeeded != null && points > 0 && textInput.text.toString().trim().isNotEmpty()
+        saveBtn.alpha = if (enabled) 1f else 0.5f
+        if (enabled) {
+            saveBtn.setBackgroundResource(R.drawable.chip_selected)
+            saveBtn.setTextColor(android.graphics.Color.parseColor("#121212"))
+        } else {
+            saveBtn.setBackgroundResource(R.drawable.chip_unselected)
+            saveBtn.setTextColor(android.graphics.Color.parseColor("#666680"))
+        }
     }
 
     private fun save() {

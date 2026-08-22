@@ -28,8 +28,14 @@ class NotificationReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val type = intent.getStringExtra("type") ?: return
         createChannel(context)
+
+        if (intent.getBooleanExtra("custom", false)) {
+            showCustomReminder(context, intent)
+            return
+        }
+
+        val type = intent.getStringExtra("type") ?: return
 
         val widgetPrefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
 
@@ -93,6 +99,38 @@ class NotificationReceiver : BroadcastReceiver() {
         try {
             NotificationManagerCompat.from(context).notify(openTab.hashCode(), notif)
             android.util.Log.d("GLP_Notif", "Showed $type notification: $text")
+        } catch (e: SecurityException) {
+            android.util.Log.w("GLP_Notif", "POST_NOTIFICATIONS not granted: ${e.message}")
+        }
+    }
+
+    private fun showCustomReminder(context: Context, intent: Intent) {
+        val id = intent.getStringExtra("id") ?: return
+        val title = intent.getStringExtra("title") ?: "GLP"
+        val message = intent.getStringExtra("message") ?: ""
+
+        val tapIntent = context.packageManager
+            .getLaunchIntentForPackage(context.packageName)
+            ?.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP }
+            ?: return
+
+        val tapPi = PendingIntent.getActivity(
+            context, id.hashCode(), tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_glp)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setContentIntent(tapPi)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(context).notify(id.hashCode(), notif)
+            android.util.Log.d("GLP_Notif", "Showed custom reminder: $title")
         } catch (e: SecurityException) {
             android.util.Log.w("GLP_Notif", "POST_NOTIFICATIONS not granted: ${e.message}")
         }

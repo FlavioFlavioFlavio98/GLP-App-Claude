@@ -242,6 +242,7 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
 
         {/* NOTIFICHE ANDROID */}
         <NotificationSection globalData={state.globalData} authUserId={authUserId} actions={actions} />
+        <CustomRemindersSection />
 
         {/* MODALITÀ */}
         <div className="settings-section">
@@ -544,6 +545,131 @@ function NotificationSection({ globalData, authUserId, actions }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Reminder personalizzati (testo libero) — sostituiscono le notifiche push
+// web (rimosse: dipendevano da server/token, meno affidabili delle notifiche
+// locali native già usate sopra per abitudini/task/letture).
+function CustomRemindersSection() {
+  const [reminders, setReminders] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!IS_NATIVE) { setLoading(false); return }
+    const { NotificationPlugin } = window.Capacitor.Plugins
+    if (!NotificationPlugin) { setLoading(false); return }
+    NotificationPlugin.getCustomReminders()
+      .then(res => setReminders(res?.reminders || []))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function persist(next) {
+    setReminders(next)
+    if (!IS_NATIVE) return
+    try {
+      const { NotificationPlugin } = window.Capacitor.Plugins
+      if (!NotificationPlugin) return
+      const perm = await NotificationPlugin.requestPermission()
+      if (perm?.status === 'denied') {
+        alert('Permesso notifiche negato. Abilitalo nelle impostazioni di sistema.')
+        return
+      }
+      await NotificationPlugin.saveCustomReminders({ reminders: next })
+    } catch (e) {
+      console.warn('NotificationPlugin saveCustomReminders error:', e)
+    }
+  }
+
+  function addReminder() {
+    if (reminders.length >= 10) return
+    persist([...reminders, {
+      id: Date.now().toString(),
+      title: 'Promemoria GLP',
+      message: '',
+      hour: 9, minute: 0,
+      enabled: true,
+    }])
+  }
+
+  function updateReminder(id, patch) {
+    persist(reminders.map(r => r.id === id ? { ...r, ...patch } : r))
+  }
+
+  function removeReminder(id) {
+    persist(reminders.filter(r => r.id !== id))
+  }
+
+  if (loading) return null
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">⏰ Reminder personalizzati</div>
+
+      {!IS_NATIVE ? (
+        <div style={{
+          padding: '10px 12px', borderRadius: 10, fontSize: '0.78em',
+          background: 'rgba(255,255,255,0.04)', color: '#666',
+          border: '1px solid rgba(255,255,255,0.07)',
+        }}>
+          Disponibile solo sull'app Android
+        </div>
+      ) : (
+        <>
+          {reminders.map(r => (
+            <div key={r.id} style={{
+              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 10, padding: '10px 12px', marginBottom: 8,
+            }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                <input
+                  type="time"
+                  value={`${String(r.hour).padStart(2, '0')}:${String(r.minute).padStart(2, '0')}`}
+                  onChange={e => {
+                    const [h, m] = e.target.value.split(':').map(Number)
+                    updateReminder(r.id, { hour: h || 0, minute: m || 0 })
+                  }}
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: 'var(--theme-color)', padding: '4px 8px', fontWeight: 700, flex: '0 0 auto' }}
+                />
+                <input
+                  type="text"
+                  value={r.title}
+                  onChange={e => updateReminder(r.id, { title: e.target.value })}
+                  placeholder="Titolo"
+                  style={{ flex: 1, padding: '4px 8px', fontSize: '0.85em' }}
+                />
+                <button
+                  onClick={() => updateReminder(r.id, { enabled: !r.enabled })}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+                    background: r.enabled ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)',
+                    position: 'relative', flexShrink: 0,
+                  }}
+                >
+                  <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: r.enabled ? 21 : 3, transition: 'left 0.2s' }} />
+                </button>
+                <button className="btn-icon" onClick={() => removeReminder(r.id)}>
+                  <span className="material-icons-round" style={{ fontSize: 18, color: 'var(--danger)' }}>delete</span>
+                </button>
+              </div>
+              <input
+                type="text"
+                value={r.message}
+                onChange={e => updateReminder(r.id, { message: e.target.value })}
+                placeholder="Testo del promemoria (es. Bevi un bicchiere d'acqua)"
+                style={{ width: '100%', padding: '6px 8px', fontSize: '0.8em', boxSizing: 'border-box' }}
+              />
+            </div>
+          ))}
+          {reminders.length < 10 && (
+            <button className="btn-backup" onClick={addReminder}>
+              <span className="material-icons-round" style={{ fontSize: 18 }}>add</span>
+              Aggiungi reminder
+            </button>
+          )}
+        </>
+      )}
     </div>
   )
 }

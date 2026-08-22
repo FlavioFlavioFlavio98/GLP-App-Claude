@@ -53,6 +53,53 @@ class NotificationPlugin : Plugin() {
     }
 
     /**
+     * Reminder custom con testo libero — sostituisce il vecchio meccanismo push
+     * web (FCM), rimosso: le notifiche locali programmate qui sono più
+     * affidabili perché non dipendono da server/token/rete al momento dello
+     * scatto, solo da AlarmManager sul dispositivo.
+     * reminders = [{ id, title, message, hour, minute, enabled }, ...]
+     */
+    @PluginMethod
+    fun saveCustomReminders(call: PluginCall) {
+        val arr = call.getArray("reminders") ?: run {
+            call.reject("Missing 'reminders' parameter")
+            return
+        }
+        val list = mutableListOf<CustomReminder>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            list.add(CustomReminder(
+                id = obj.optString("id", System.currentTimeMillis().toString()),
+                title = obj.optString("title", "GLP"),
+                message = obj.optString("message", ""),
+                hour = obj.optInt("hour", 9),
+                minute = obj.optInt("minute", 0),
+                enabled = obj.optBoolean("enabled", true)
+            ))
+        }
+        NotificationScheduler.saveCustomReminders(context, list)
+        NotificationReceiver.createChannel(context)
+        call.resolve(JSObject().apply { put("saved", true) })
+    }
+
+    @PluginMethod
+    fun getCustomReminders(call: PluginCall) {
+        val reminders = NotificationScheduler.getCustomReminders(context)
+        val result = com.getcapacitor.JSArray()
+        reminders.forEach { r ->
+            result.put(JSObject().apply {
+                put("id", r.id)
+                put("title", r.title)
+                put("message", r.message)
+                put("hour", r.hour)
+                put("minute", r.minute)
+                put("enabled", r.enabled)
+            })
+        }
+        call.resolve(JSObject().apply { put("reminders", result) })
+    }
+
+    /**
      * Controlla e richiede POST_NOTIFICATIONS (richiesto da Android 13+).
      * Restituisce { status: "granted" | "denied" | "prompt" }
      */

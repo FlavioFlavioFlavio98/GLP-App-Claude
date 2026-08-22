@@ -104,7 +104,6 @@ export default function App() {
     setCurrentTab(tab)
     localStorage.setItem('glp_tab', tab)
   }
-  const fcmInitialized = useRef(false)
   const wakeLockRef = useRef(null)
 
   // Sort mode si chiude automaticamente al cambio data
@@ -186,13 +185,6 @@ export default function App() {
     window.addEventListener('offline', setOffline)
     return () => { window.removeEventListener('online', setOnline); window.removeEventListener('offline', setOffline) }
   }, [])
-
-  // FCM: init after auth
-  useEffect(() => {
-    if (authStatus !== 'authenticated' || !authUserId || fcmInitialized.current) return
-    fcmInitialized.current = true
-    setTimeout(() => { actions.initFcmToken(authUserId) }, 3000)
-  }, [authStatus, authUserId])
 
   // Ensure default exercise for Flavio when data loads
   useEffect(() => {

@@ -73,6 +73,20 @@ export default function DayRecapSection({ dayRecapLog, actions }) {
       {todayEntry ? (
         <>
           <RecapCard entry={todayEntry} />
+          <button
+            onClick={async () => {
+              if (!window.confirm('Eliminare il riepilogo di oggi?')) return
+              await actions.deleteDayRecap(todayStr)
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, marginTop: 10,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--danger, #e53935)', fontSize: '0.72em', padding: 0,
+            }}
+          >
+            <span className="material-icons-round" style={{ fontSize: 14 }}>delete</span>
+            Elimina riepilogo di oggi
+          </button>
           <details style={{ marginTop: 10 }}>
             <summary style={{ fontSize: '0.72em', color: '#666', cursor: 'pointer' }}>Rigenera con nuovo testo</summary>
             <div style={{ marginTop: 8 }}>
@@ -129,6 +143,21 @@ export default function DayRecapSection({ dayRecapLog, actions }) {
                 {expandedDate === d && (
                   <div style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, marginTop: 4 }}>
                     <RecapCard entry={dayRecapLog[d]} />
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`Eliminare il riepilogo del ${fmtDate(d)}?`)) return
+                        await actions.deleteDayRecap(d)
+                        setExpandedDate(null)
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, marginTop: 10,
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: 'var(--danger, #e53935)', fontSize: '0.72em', padding: 0,
+                      }}
+                    >
+                      <span className="material-icons-round" style={{ fontSize: 14 }}>delete</span>
+                      Elimina
+                    </button>
                   </div>
                 )}
               </div>

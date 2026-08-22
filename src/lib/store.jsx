@@ -6,7 +6,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   doc, onSnapshot, updateDoc, setDoc, getDoc, deleteDoc,
   arrayUnion, collection, getDocs, increment, runTransaction,
-  addDoc, serverTimestamp,
+  addDoc, serverTimestamp, deleteField,
 } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
@@ -1143,6 +1143,13 @@ export function AppProvider({ children }) {
       else { actions.showToast('Riepilogo aggiornato', '📝') }
 
       return entry
+    },
+
+    async deleteDayRecap(dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`dayRecapLog.${dateStr}`]: deleteField() })
+      actions.showToast('Riepilogo eliminato', '🗑️')
     },
 
     // ─── Barefoot ── stesso pattern di Mobility, tab Body invece che Workout.

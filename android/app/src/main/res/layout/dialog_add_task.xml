@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/dialog_bg_gradient"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <!-- Titolo -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Nuova Task"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- Campo nome -->
+        <EditText
+            android:id="@+id/task_name_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Nome task..."
+            android:textColorHint="#444460"
+            android:textColor="#FFFFFF"
+            android:inputType="textCapSentences"
+            android:padding="12dp"
+            android:background="#1A1A28"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- Chip "già fatta" -->
+        <TextView
+            android:id="@+id/chip_gia_fatta"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:text="☐  Segna come già fatta"
+            android:textSize="13sp"
+            android:textColor="#C7C7D1"
+            android:gravity="center_vertical"
+            android:paddingStart="14dp"
+            android:background="@drawable/chip_unselected"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- ─── SCADENZA ─── -->
+        <TextView
+            android:id="@+id/deadline_section_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SCADENZA"
+            android:textColor="#55557A"
+            android:textSize="10sp"
+            android:letterSpacing="0.10"
+            android:layout_marginBottom="6dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:id="@+id/deadline_oggi"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="Oggi"
+                android:textSize="13sp"
+                android:textColor="#FFCA28"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/chip_selected"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/deadline_domani"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="Domani"
+                android:textSize="13sp"
+                android:textColor="#C7C7D1"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/deadline_cal"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="Altro"
+                android:textSize="13sp"
+                android:textColor="#C7C7D1"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"/>
+
+        </LinearLayout>
+
+        <!-- Data selezionata (discreta) -->
+        <TextView
+            android:id="@+id/deadline_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#55557A"
+            android:textSize="11sp"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#10FFFFFF"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- ─── PRIORITÀ ─── -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="PRIORITÀ"
+            android:textColor="#55557A"
+            android:textSize="10sp"
+            android:letterSpacing="0.10"
+            android:layout_marginBottom="6dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:id="@+id/priority_low"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="BASSA"
+                android:textSize="11sp"
+                android:textColor="#C7C7D1"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/priority_medium"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="MEDIA"
+                android:textSize="11sp"
+                android:textColor="#FFCA28"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/chip_selected"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/priority_high"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="ALTA"
+                android:textSize="11sp"
+                android:textColor="#C7C7D1"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"/>
+
+        </LinearLayout>
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#10FFFFFF"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- ─── REWARD ─── -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="REWARD (PT)"
+            android:textColor="#55557A"
+            android:textSize="10sp"
+            android:letterSpacing="0.10"
+            android:layout_marginBottom="6dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:id="@+id/reward_1"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="+1"
+                android:textSize="14sp"
+                android:textColor="#C7C7D1"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/reward_2"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="+2"
+                android:textSize="14sp"
+                android:textColor="#FFCA28"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/chip_selected"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/reward_3"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="+3"
+                android:textSize="14sp"
+                android:textColor="#C7C7D1"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/reward_5"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="+5"
+                android:textSize="14sp"
+                android:textColor="#C7C7D1"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"/>
+
+        </LinearLayout>
+
+        <!-- ─── PENALITÀ (nascosta in modalità già fatta) ─── -->
+        <LinearLayout
+            android:id="@+id/penalty_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="PENALITÀ (PT)"
+                android:textColor="#55557A"
+                android:textSize="10sp"
+                android:letterSpacing="0.10"
+                android:layout_marginBottom="6dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="14dp">
+
+                <TextView
+                    android:id="@+id/penalty_0"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="40dp"
+                    android:text="-0"
+                    android:textSize="14sp"
+                    android:textColor="#C7C7D1"
+                    android:gravity="center"
+                    android:background="@drawable/chip_unselected"
+                    android:layout_marginEnd="6dp"/>
+
+                <TextView
+                    android:id="@+id/penalty_1"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="40dp"
+                    android:text="-1"
+                    android:textSize="14sp"
+                    android:textColor="#FFCA28"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:background="@drawable/chip_selected"
+                    android:layout_marginEnd="6dp"/>
+
+                <TextView
+                    android:id="@+id/penalty_2"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="40dp"
+                    android:text="-2"
+                    android:textSize="14sp"
+                    android:textColor="#C7C7D1"
+                    android:gravity="center"
+                    android:background="@drawable/chip_unselected"
+                    android:layout_marginEnd="6dp"/>
+
+                <TextView
+                    android:id="@+id/penalty_3"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="40dp"
+                    android:text="-3"
+                    android:textSize="14sp"
+                    android:textColor="#C7C7D1"
+                    android:gravity="center"
+                    android:background="@drawable/chip_unselected"/>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- ─── BOTTONI ─── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btn_annulla"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="44dp"
+                android:text="Annulla"
+                android:textColor="#666680"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:background="@drawable/chip_unselected"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:id="@+id/btn_crea"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="44dp"
+                android:text="Crea"
+                android:textColor="#121212"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/chip_selected"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

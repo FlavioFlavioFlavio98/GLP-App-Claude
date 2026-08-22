@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GLP</string>
+    <string name="title_activity_main">GLP</string>
+    <string name="package_name">com.flavio.glp</string>
+    <string name="custom_url_scheme">com.flavio.glp</string>
+    <string name="widget_description">Mostra le tue task attive di oggi</string>
+    <string name="widget_label">GLP Task</string>
+    <string name="widget_add_task_description">Aggiungi una task velocemente</string>
+    <string name="widget_workout_description">Aggiungi un allenamento velocemente</string>
+    <string name="widget_day_description">Statistiche giornaliere GLP</string>
+    <string name="widget_habits_description">Abitudini del giorno</string>
+    <string name="widget_willpower_description">Registra un momento di willpower velocemente</string>
+</resources>

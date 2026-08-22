@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_background"
+    android:paddingHorizontal="6dp"
+    android:paddingVertical="4dp"
+    android:gravity="center_vertical">
+
+    <!-- BLOCCO GUADAGNI (~40%) — sfondo verde, 2 righe -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="2"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:background="@drawable/widget_green_bg"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="3dp"
+        android:layout_marginEnd="4dp">
+
+        <TextView
+            android:id="@+id/day_earned"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="+0pt"
+            android:textColor="#4CAF50"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false"/>
+
+        <TextView
+            android:id="@+id/day_earned_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#7BC67E"
+            android:textSize="10sp"
+            android:includeFontPadding="false"/>
+
+    </LinearLayout>
+
+    <!-- BLOCCO COSTI (~40%) — sfondo rosso, 2 righe -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="2"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:background="@drawable/widget_red_bg"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="3dp"
+        android:layout_marginEnd="4dp">
+
+        <TextView
+            android:id="@+id/day_spent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="-0pt"
+            android:textColor="#EF5350"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false"/>
+
+        <TextView
+            android:id="@+id/day_spent_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#EF9A9A"
+            android:textSize="10sp"
+            android:includeFontPadding="false"/>
+
+    </LinearLayout>
+
+    <!-- BLOCCO NETTO (~20%) — solo numero giallo + refresh, allineati a destra -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end">
+
+        <TextView
+            android:id="@+id/day_net"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="+0pt"
+            android:textColor="#FFCA28"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="4dp"/>
+
+        <TextView
+            android:id="@+id/day_refresh"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:text="↻"
+            android:textColor="#444466"
+            android:textSize="13sp"
+            android:gravity="center"/>
+
+    </LinearLayout>
+
+    <!-- ID tenuti per compatibilità con DayWidgetProvider — tutti invisibili 0x0 -->
+    <TextView android:id="@+id/day_habits_row"
+        android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+    <TextView android:id="@+id/day_extra_row"
+        android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+    <TextView android:id="@+id/day_tasks_row_earned"
+        android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+    <TextView android:id="@+id/day_penalty_row"
+        android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+    <TextView android:id="@+id/day_tasks_row"
+        android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+    <TextView android:id="@+id/day_updated"
+        android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+
+</LinearLayout>

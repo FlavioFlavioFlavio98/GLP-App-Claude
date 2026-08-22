@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+
+        <!-- Widget Task con lista e refresh -->
+        <receiver android:name=".TaskWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="com.flavio.glp.REFRESH_WIDGET"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/task_widget_info"/>
+        </receiver>
+
+        <!-- Widget 1x1 aggiungi task -->
+        <receiver android:name=".AddTaskWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/add_task_widget_info"/>
+        </receiver>
+
+        <!-- Activity dialog aggiungi task (aperta dal widget 1x1) -->
+        <activity
+            android:name=".AddTaskActivity"
+            android:theme="@style/WorkoutDialogTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"/>
+
+        <!-- Activity seleziona data per widget task -->
+        <activity
+            android:name=".SelectDateActivity"
+            android:theme="@style/WorkoutDialogTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"/>
+
+        <!-- Activity conferma completamento task dal widget 4x4 -->
+        <activity
+            android:name=".CompleteTaskActivity"
+            android:theme="@style/WorkoutDialogTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"/>
+
+        <!-- Widget 1x1 workout -->
+        <receiver android:name=".WorkoutWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/workout_widget_info"/>
+        </receiver>
+
+        <!-- Activity dialog aggiungi workout (aperta dal widget 1x1 workout) -->
+        <activity
+            android:name=".AddWorkoutActivity"
+            android:theme="@style/WorkoutDialogTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"/>
+
+        <!-- Widget 1x1 willpower -->
+        <receiver android:name=".WillpowerWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/willpower_widget_info"/>
+        </receiver>
+
+        <!-- Activity dialog aggiungi willpower (aperta dal widget 1x1 willpower) -->
+        <activity
+            android:name=".AddWillpowerActivity"
+            android:theme="@style/WorkoutDialogTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:windowSoftInputMode="stateVisible|adjustResize"/>
+
+        <!-- Service per azioni abitudini dal widget -->
+        <service android:name=".HabitActionService" android:exported="false"/>
+
+        <!-- Widget 2x4 abitudini del giorno -->
+        <receiver android:name=".HabitsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="com.flavio.glp.REFRESH_HABITS"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/habits_widget_info"/>
+        </receiver>
+
+        <!-- Widget 4x4 statistiche giornata -->
+        <receiver android:name=".DayWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="com.flavio.glp.REFRESH_DAY_WIDGET"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/day_widget_info"/>
+        </receiver>
+
+        <!-- Service per sync Google Fit -->
+        <service android:name=".FitSyncService" android:exported="false"/>
+
+        <!-- Receiver per allarmi notifiche locali -->
+        <receiver android:name=".NotificationReceiver"
+            android:exported="false"/>
+
+        <!-- Receiver per riprogrammare gli allarmi al riavvio del dispositivo -->
+        <receiver android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+
+    <!-- Notifiche locali -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+
+    <!-- Health Connect -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
+</manifest>

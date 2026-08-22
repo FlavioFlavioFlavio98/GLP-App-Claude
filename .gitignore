@@ -3,7 +3,20 @@ dist
 .env
 .env.local
 functions/node_modules
-android
+
+# Android — codice nativo tracciato, ma non gli artefatti di build/config locale
+android/build
+android/app/build
+android/capacitor-cordova-android-plugins/build
+android/.gradle
+android/.idea
+android/local.properties
+android/app/release
+android/app/src/main/assets/public
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+*.iml
+
 .emulator-data
 firebase-debug.log
 firestore-debug.log

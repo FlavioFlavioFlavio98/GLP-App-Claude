@@ -331,6 +331,72 @@ exports.geminiChat = onCall(
   }
 )
 
+// ── generateDayRecap ────────────────────────────────────────────────────────
+// Trascrizione vocale libera (tipicamente lunga, non strutturata) → riepilogo
+// a categorie fisse con elenco puntato, per il ricordo di fine giornata
+// (tab Mente). Categorie sempre le stesse così il riepilogo si legge allo
+// stesso modo ogni giorno — solo quelle con contenuto reale vengono incluse.
+const DAY_RECAP_CATEGORIES = [
+  { key: 'allenamento',  label: 'Allenamento',       emoji: '💪' },
+  { key: 'alimentazione',label: 'Alimentazione',     emoji: '🍽️' },
+  { key: 'mente',        label: 'Mente & Relax',     emoji: '🧘' },
+  { key: 'lavoro',       label: 'Lavoro/Produttività', emoji: '💼' },
+  { key: 'relazioni',    label: 'Relazioni',         emoji: '❤️' },
+  { key: 'altro',        label: 'Altro',             emoji: '✨' },
+]
+
+exports.generateDayRecap = onCall(
+  { region: REGION, secrets: [geminiKey], invoker: 'public' },
+  async (request) => {
+    if (!request.auth || request.auth.token.email !== ALLOWED_EMAIL)
+      throw new HttpsError('permission-denied', 'Non autorizzato')
+    const { transcript } = request.data
+    if (!transcript || transcript.trim().length < 10)
+      throw new HttpsError('invalid-argument', 'transcript obbligatorio')
+
+    const genAI = new GoogleGenerativeAI(geminiKey.value())
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const categoryList = DAY_RECAP_CATEGORIES.map(c => `- ${c.key}: ${c.label}`).join('\n')
+
+    const prompt = `Sei un assistente che organizza la trascrizione di una nota vocale in cui una persona racconta cosa ha fatto durante la giornata, per aiutarla a ricordarsi a fine giornata di cosa può essere fiera.
+
+TRASCRIZIONE:
+"""
+${transcript}
+"""
+
+Estrai SOLO le azioni/eventi positivi o rilevanti realmente menzionati (non inventare nulla, non aggiungere consigli o giudizi) e organizzali in queste categorie fisse:
+${categoryList}
+
+Per ogni categoria con contenuto reale, scrivi una lista di frasi brevi (max 10 parole ciascuna, stile elenco puntato, in seconda/prima persona naturale, es. "Allenamento gambe 45 minuti"). Ometti completamente le categorie senza contenuto — non inventare voci per riempirle.
+
+Rispondi SOLO con JSON valido, senza backtick e senza altro testo:
+{
+  "categories": [
+    { "key": "allenamento", "items": ["voce 1", "voce 2"] }
+  ]
+}`
+
+    const result = await model.generateContent(prompt)
+    const text = result.response.text()
+    const clean = text.replace(/```json\n?|```\n?/g, '').trim()
+    let parsed
+    try { parsed = JSON.parse(clean) } catch { parsed = { categories: [] } }
+
+    const byKey = {}
+    ;(parsed.categories || []).forEach(c => {
+      if (Array.isArray(c.items) && c.items.length > 0) byKey[c.key] = c.items
+    })
+
+    const categories = DAY_RECAP_CATEGORIES
+      .filter(c => byKey[c.key])
+      .map(c => ({ key: c.key, label: c.label, emoji: c.emoji, items: byKey[c.key] }))
+
+    return { categories }
+  }
+)
+
 // ── updatePsychProfile ────────────────────────────────────────────────────────
 exports.updatePsychProfile = onCall(
   { region: REGION, secrets: [geminiKey], invoker: 'public' },

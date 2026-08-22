@@ -167,6 +167,7 @@ export function computeDayNet(userData, dateStr) {
       ((userData.mobilityLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
       ((userData.studyLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
       ((userData.willpowerLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
+      (parseFloat((userData.dayRecapLog || {})[dateStr]?.pts) || 0) +
       ((userData.barefootLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
       ((userData.hangLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
       (parseFloat((userData.mindSocialLog || {})[dateStr]?.pts) || 0)
@@ -213,6 +214,7 @@ export function calculateTotalScore(userData) {
     ...Object.keys(userData.mobilityLog || {}),
     ...Object.keys(userData.studyLog || {}),
     ...Object.keys(userData.willpowerLog || {}),
+    ...Object.keys(userData.dayRecapLog || {}),
     ...Object.keys(userData.barefootLog || {}),
     ...Object.keys(userData.hangLog || {}),
     ...Object.keys(userData.mindSocialLog || {}),

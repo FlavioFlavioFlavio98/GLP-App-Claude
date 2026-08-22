@@ -15,6 +15,7 @@ import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate, getStudyRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
+import { getDayRecapRate } from './dayRecapStats'
 import { computeSocialPts } from './mindStats'
 
 const AppContext = createContext(null)
@@ -1107,6 +1108,41 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`willpowerLog.${dateStr}`]: newLog })
       actions.showToast('Voce eliminata', '↩️')
+    },
+
+    // ─── Riepilogo Giornata ── trascrizione vocale incollata → riepilogo AI a
+    // categorie fisse (vedi generateDayRecap in Cloud Functions). I punti si
+    // guadagnano solo alla prima generazione del giorno, non rigenerando.
+    async generateDayRecap(transcript, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const trimmed = (transcript || '').trim()
+      if (trimmed.length < 10) { actions.showToast('Incolla un testo più lungo', '⚠️'); return }
+
+      const logDate = dateStr || toDateString(new Date())
+      const gd = state.allUsersData?.flavio
+      const alreadyGenerated = !!gd?.dayRecapLog?.[logDate]
+
+      const functions = getFunctions(app, 'europe-west1')
+      const fn = httpsCallable(functions, 'generateDayRecap', { timeout: 60000 })
+      const result = await fn({ transcript: trimmed.slice(0, 8000) })
+      const categories = result.data?.categories || []
+
+      const rate = getDayRecapRate()
+      const pts = alreadyGenerated ? 0 : rate
+
+      const entry = {
+        categories,
+        transcript: trimmed.slice(0, 8000),
+        pts,
+        createdAt: new Date().toISOString(),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`dayRecapLog.${logDate}`]: entry })
+
+      if (pts > 0) { actions.vibrate('light'); actions.showToast(`+${pts} pt 📝`, '📝') }
+      else { actions.showToast('Riepilogo aggiornato', '📝') }
+
+      return entry
     },
 
     // ─── Barefoot ── stesso pattern di Mobility, tab Body invece che Workout.

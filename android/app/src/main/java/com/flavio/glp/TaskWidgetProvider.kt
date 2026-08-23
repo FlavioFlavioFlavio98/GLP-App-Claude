@@ -53,8 +53,8 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     val completed = TaskWidgetUtils.completedTasksForDate(tasks, targetDate)
 
                     prefs.edit()
-                        .putString("active_tasks", Gson().toJson(active.take(5)))
-                        .putString("completed_tasks_widget", Gson().toJson(completed.take(5)))
+                        .putString("active_tasks", Gson().toJson(active.take(MAX_ROWS)))
+                        .putString("completed_tasks_widget", Gson().toJson(completed.take(MAX_ROWS)))
                         .apply()
 
                     updateWidget(context, manager, appWidgetId)
@@ -64,10 +64,11 @@ class TaskWidgetProvider : AppWidgetProvider() {
 
     companion object {
 
-        private val ROW_IDS  = listOf(R.id.task_row_0, R.id.task_row_1, R.id.task_row_2, R.id.task_row_3, R.id.task_row_4)
-        private val DOT_IDS  = listOf(R.id.task_dot_0, R.id.task_dot_1, R.id.task_dot_2, R.id.task_dot_3, R.id.task_dot_4)
-        private val NAME_IDS = listOf(R.id.task_0, R.id.task_1, R.id.task_2, R.id.task_3, R.id.task_4)
-        private val META_IDS = listOf(R.id.task_meta_0, R.id.task_meta_1, R.id.task_meta_2, R.id.task_meta_3, R.id.task_meta_4)
+        const val MAX_ROWS = 12
+        private val ROW_IDS  = listOf(R.id.task_row_0, R.id.task_row_1, R.id.task_row_2, R.id.task_row_3, R.id.task_row_4, R.id.task_row_5, R.id.task_row_6, R.id.task_row_7, R.id.task_row_8, R.id.task_row_9, R.id.task_row_10, R.id.task_row_11)
+        private val DOT_IDS  = listOf(R.id.task_dot_0, R.id.task_dot_1, R.id.task_dot_2, R.id.task_dot_3, R.id.task_dot_4, R.id.task_dot_5, R.id.task_dot_6, R.id.task_dot_7, R.id.task_dot_8, R.id.task_dot_9, R.id.task_dot_10, R.id.task_dot_11)
+        private val NAME_IDS = listOf(R.id.task_0, R.id.task_1, R.id.task_2, R.id.task_3, R.id.task_4, R.id.task_5, R.id.task_6, R.id.task_7, R.id.task_8, R.id.task_9, R.id.task_10, R.id.task_11)
+        private val META_IDS = listOf(R.id.task_meta_0, R.id.task_meta_1, R.id.task_meta_2, R.id.task_meta_3, R.id.task_meta_4, R.id.task_meta_5, R.id.task_meta_6, R.id.task_meta_7, R.id.task_meta_8, R.id.task_meta_9, R.id.task_meta_10, R.id.task_meta_11)
 
         fun updateWidget(
             context: Context,
@@ -133,7 +134,7 @@ class TaskWidgetProvider : AppWidgetProvider() {
             val completedTasks: List<Map<String, Any>> =
                 Gson().fromJson(prefs.getString("completed_tasks_widget", "[]") ?: "[]", type) ?: emptyList()
 
-            val rows = (activeTasks.map { it to false } + completedTasks.map { it to true }).take(5)
+            val rows = (activeTasks.map { it to false } + completedTasks.map { it to true }).take(MAX_ROWS)
 
             if (rows.isEmpty()) {
                 views.setViewVisibility(R.id.widget_empty, View.VISIBLE)
@@ -166,6 +167,9 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     }
                     views.setTextViewText(META_IDS[index], meta)
 
+                    // Completata → cerchio pieno verde (spuntato); attiva → solo
+                    // contorno colorato per priorità, stile checkbox non ancora toccato.
+                    views.setImageViewResource(DOT_IDS[index], if (isCompleted) R.drawable.circle_dot else R.drawable.circle_ring)
                     views.setInt(
                         DOT_IDS[index], "setColorFilter",
                         if (isCompleted) android.graphics.Color.parseColor("#4CAF50") else TaskWidgetUtils.priorityColor(priority)
@@ -193,7 +197,7 @@ class TaskWidgetProvider : AppWidgetProvider() {
                         views.setOnClickPendingIntent(ROW_IDS[index], completePi)
                     }
                 }
-                for (i in rows.size until 5) {
+                for (i in rows.size until MAX_ROWS) {
                     views.setViewVisibility(ROW_IDS[i], View.GONE)
                 }
             }

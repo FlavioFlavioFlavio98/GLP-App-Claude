@@ -283,7 +283,7 @@ class AddTaskActivity : Activity() {
             Gson().fromJson(json, type) ?: mutableListOf()
         } catch (e: Exception) { mutableListOf() }
         current.add(task)
-        prefs.edit().putString("active_tasks", Gson().toJson(current.take(5))).apply()
+        prefs.edit().putString("active_tasks", Gson().toJson(current.take(TaskWidgetProvider.MAX_ROWS))).apply()
 
         val manager = AppWidgetManager.getInstance(this)
         val ids = manager.getAppWidgetIds(ComponentName(this, TaskWidgetProvider::class.java))

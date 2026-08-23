@@ -124,8 +124,8 @@ class WidgetUpdateWorker(
             // ── Salva in SharedPreferences ────────────────────────────────────
             val prefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
             prefs.edit()
-                .putString("active_tasks",   Gson().toJson(activeTasks.take(5)))
-                .putString("completed_tasks_widget", Gson().toJson(completedTasksWidget.take(5)))
+                .putString("active_tasks",   Gson().toJson(activeTasks.take(TaskWidgetProvider.MAX_ROWS)))
+                .putString("completed_tasks_widget", Gson().toJson(completedTasksWidget.take(TaskWidgetProvider.MAX_ROWS)))
                 .putString("pending_habits", Gson().toJson(pendingHabits.take(5)))
                 .putString("last_update",    today)
                 .putInt("day_earned_int",    earned.toInt())

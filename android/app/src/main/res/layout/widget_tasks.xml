@@ -21,7 +21,7 @@
             android:layout_weight="1"
             android:text="📋 Task"
             android:textColor="#FFCA28"
-            android:textSize="15sp"
+            android:textSize="17sp"
             android:textStyle="bold"/>
 
         <ImageButton
@@ -41,66 +41,139 @@
         android:text="📅 Oggi"
         android:textColor="#FFCA28"
         android:textSize="11sp"
-        android:layout_marginBottom="8dp"/>
+        android:layout_marginBottom="6dp"/>
 
-    <!-- Riga 0 -->
-    <LinearLayout android:id="@+id/task_row_0" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
-        <ImageView android:id="@+id/task_dot_0" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
-        <TextView android:id="@+id/task_0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-        <TextView android:id="@+id/task_meta_0" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
-    </LinearLayout>
-
-    <!-- Riga 1 -->
-    <LinearLayout android:id="@+id/task_row_1" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
-        <ImageView android:id="@+id/task_dot_1" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
-        <TextView android:id="@+id/task_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-        <TextView android:id="@+id/task_meta_1" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
-    </LinearLayout>
-
-    <!-- Riga 2 -->
-    <LinearLayout android:id="@+id/task_row_2" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
-        <ImageView android:id="@+id/task_dot_2" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
-        <TextView android:id="@+id/task_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-        <TextView android:id="@+id/task_meta_2" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
-    </LinearLayout>
-
-    <!-- Riga 3 -->
-    <LinearLayout android:id="@+id/task_row_3" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
-        <ImageView android:id="@+id/task_dot_3" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
-        <TextView android:id="@+id/task_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-        <TextView android:id="@+id/task_meta_3" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
-    </LinearLayout>
-
-    <!-- Riga 4 -->
-    <LinearLayout android:id="@+id/task_row_4" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
-        <ImageView android:id="@+id/task_dot_4" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
-        <TextView android:id="@+id/task_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
-        <TextView android:id="@+id/task_meta_4" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/widget_empty"
+    <!-- Lista task — scorrevole così non si perdono righe oltre lo spazio visibile -->
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Nessuna task attiva 🎉"
-        android:textColor="#888888"
-        android:textSize="12sp"
-        android:visibility="gone"/>
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout android:id="@+id/task_row_0" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_0" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_0" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_1" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_1" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_1" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_2" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_2" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_3" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_3" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_3" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_4" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_4" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_4" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_5" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_5" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_5" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_6" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_6" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_6" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_7" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_7" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_7" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_8" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_8" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_8" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_8" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_9" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_9" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_9" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_9" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_10" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_10" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_10" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_10" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/task_row_11" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:paddingVertical="7dp">
+                <ImageView android:id="@+id/task_dot_11" android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/circle_ring" android:layout_marginEnd="10dp"/>
+                <TextView android:id="@+id/task_11" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                    android:textColor="#FFFFFF" android:textSize="15sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:id="@+id/task_meta_11" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="#777777" android:textSize="10sp" android:layout_marginStart="8dp"/>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Nessuna task attiva 🎉"
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:visibility="gone"/>
+
+        </LinearLayout>
+    </ScrollView>
 
     <TextView
         android:id="@+id/widget_updated"

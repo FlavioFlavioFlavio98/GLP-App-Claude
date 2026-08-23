@@ -376,8 +376,8 @@ class MainActivity : BridgeActivity() {
 
                 // Salva in SharedPreferences — tutto Int per evitare ClassCastException
                 getSharedPreferences("glp_widget", Context.MODE_PRIVATE).edit()
-                    .putString("active_tasks", Gson().toJson(activeTasks.take(5)))
-                    .putString("completed_tasks_widget", Gson().toJson(completedTasksWidget.take(5)))
+                    .putString("active_tasks", Gson().toJson(activeTasks.take(TaskWidgetProvider.MAX_ROWS)))
+                    .putString("completed_tasks_widget", Gson().toJson(completedTasksWidget.take(TaskWidgetProvider.MAX_ROWS)))
                     .putInt("day_earned_int", earned.toInt())
                     .putInt("day_spent_int", spent.toInt())
                     .putInt("day_net_int", (earned - spent).toInt())

@@ -11,4 +11,5 @@
     <string name="widget_day_description">Statistiche giornaliere GLP</string>
     <string name="widget_habits_description">Abitudini del giorno</string>
     <string name="widget_willpower_description">Registra un momento di willpower velocemente</string>
+    <string name="widget_protein_description">Aggiungi un alimento e traccia le proteine velocemente</string>
 </resources>

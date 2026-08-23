@@ -136,6 +136,26 @@
             android:launchMode="singleInstance"
             android:windowSoftInputMode="stateVisible|adjustResize"/>
 
+        <!-- Widget 1x1 proteine -->
+        <receiver android:name=".ProteinWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/protein_widget_info"/>
+        </receiver>
+
+        <!-- Activity dialog aggiungi proteine (aperta dal widget 1x1 proteine) -->
+        <activity
+            android:name=".AddProteinActivity"
+            android:theme="@style/WorkoutDialogTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"/>
+
         <!-- Service per azioni abitudini dal widget -->
         <service android:name=".HabitActionService" android:exported="false"/>
 

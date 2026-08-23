@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../lib/store'
+import { PRIORITY_COLORS, PRIORITY_LABELS } from '../lib/taskColors'
 
 function formatDate(isoStr) {
   if (!isoStr) return '—'
@@ -17,8 +18,6 @@ function tomorrow() {
   return `${y}-${m}-${day}`
 }
 
-const PRIORITY_COLORS = { high: '#e53935', medium: '#ff7043', low: '#42a5f5' }
-const PRIORITY_LABELS = { high: 'ALTA', medium: 'MEDIA', low: 'BASSA' }
 
 export default function TaskHistoryModal() {
   const { state, actions } = useApp()

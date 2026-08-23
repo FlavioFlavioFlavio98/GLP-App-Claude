@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../lib/store'
+import { PRIORITY_COLORS } from '../lib/taskColors'
 
 function tomorrow() {
   const d = new Date()
@@ -206,9 +207,9 @@ export default function TaskModal() {
           <div style={labelStyle}>PRIORITÀ *</div>
           <div style={{ display: 'flex', gap: 8 }}>
             {[
-              ['high', '● Alta', '#e53935'],
-              ['medium', '● Media', '#ff7043'],
-              ['low', '● Bassa', '#42a5f5'],
+              ['high', '● Alta', PRIORITY_COLORS.high],
+              ['medium', '● Media', PRIORITY_COLORS.medium],
+              ['low', '● Bassa', PRIORITY_COLORS.low],
             ].map(([v, l, c]) => (
               <button
                 key={v}

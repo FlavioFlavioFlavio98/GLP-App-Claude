@@ -144,15 +144,12 @@ class TaskWidgetProvider : AppWidgetProvider() {
                 rows.forEachIndexed { index, (task, isCompleted) ->
                     val taskId = task["id"]?.toString() ?: ""
                     val name = task["title"] as? String ?: "Task"
-                    val deadline = task["deadline"] as? String ?: ""
                     val reward = when (val r = task["reward"]) {
                         is Double -> r.toInt()
                         is Long -> r.toInt()
                         is Int -> r
                         else -> 0
                     }
-                    val priority = task["priority"] as? String ?: "medium"
-
                     views.setTextViewText(NAME_IDS[index], name)
                     views.setInt(
                         NAME_IDS[index], "setPaintFlags",
@@ -160,19 +157,18 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     )
                     views.setTextColor(NAME_IDS[index], if (isCompleted) android.graphics.Color.parseColor("#666666") else android.graphics.Color.WHITE)
 
-                    val meta = when {
-                        isCompleted -> "+${reward}pt ✓"
-                        deadline.isNotEmpty() && deadline < selectedDate -> "+${reward}pt · scad. $deadline"
-                        else -> "+${reward}pt"
-                    }
+                    // Niente data nel meta: il widget è già filtrato per la data
+                    // selezionata sopra, quindi è ridondante ripeterla per ogni riga.
+                    val meta = if (isCompleted) "+${reward}pt ✓" else "+${reward}pt"
                     views.setTextViewText(META_IDS[index], meta)
 
-                    // Completata → cerchio pieno verde (spuntato); attiva → solo
-                    // contorno colorato per priorità, stile checkbox non ancora toccato.
+                    // La priorità la comunica l'ordine (alta in cima), non serve un
+                    // indicatore colorato vistoso — checkbox neutro stile Google Tasks,
+                    // pieno verde solo quando la task è completata.
                     views.setImageViewResource(DOT_IDS[index], if (isCompleted) R.drawable.circle_dot else R.drawable.circle_ring)
                     views.setInt(
                         DOT_IDS[index], "setColorFilter",
-                        if (isCompleted) android.graphics.Color.parseColor("#4CAF50") else TaskWidgetUtils.priorityColor(priority)
+                        if (isCompleted) android.graphics.Color.parseColor("#4CAF50") else android.graphics.Color.parseColor("#888888")
                     )
 
                     views.setViewVisibility(ROW_IDS[index], View.VISIBLE)

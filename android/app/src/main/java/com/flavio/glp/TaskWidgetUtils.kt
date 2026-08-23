@@ -5,9 +5,17 @@ package com.flavio.glp
 // prima era triplicata in modo leggermente diverso in ognuno dei tre punti.
 object TaskWidgetUtils {
 
+    private fun priorityRank(priority: String?): Int = when (priority) {
+        "high" -> 0
+        "low"  -> 2
+        else   -> 1 // medium
+    }
+
     // Task attive per la data selezionata. Se la data selezionata è oggi, include
     // anche le task scadute (deadline < oggi, mai completate) così non si perdono
     // di vista — su una data futura invece mostra solo quel giorno esatto.
+    // Ordinate per priorità (alta in cima, bassa in fondo) — non serve mostrare
+    // un indicatore vistoso della priorità se l'ordine la comunica già da solo.
     fun activeTasksForDate(tasks: List<Map<String, Any>>, targetDate: String, today: String): List<Map<String, Any>> {
         return tasks
             .filter { task ->
@@ -16,7 +24,10 @@ object TaskWidgetUtils {
                 if (status != "active" || deadline.isEmpty()) return@filter false
                 if (targetDate == today) deadline <= targetDate else deadline == targetDate
             }
-            .sortedBy { it["deadline"] as? String ?: "9999" }
+            .sortedWith(compareBy(
+                { priorityRank(it["priority"] as? String) },
+                { it["deadline"] as? String ?: "9999" }
+            ))
     }
 
     // Task completate quel giorno — mostrate sotto le attive, sbarrate.
@@ -28,12 +39,5 @@ object TaskWidgetUtils {
                 status == "completed" && completedAt.startsWith(targetDate)
             }
             .sortedByDescending { it["completedAt"] as? String ?: "" }
-    }
-
-    // Colori priorità stile Todoist: bassa=blu, media=arancione, alta=rossa.
-    fun priorityColor(priority: String?): Int = when (priority) {
-        "high" -> android.graphics.Color.parseColor("#EB5757")
-        "low"  -> android.graphics.Color.parseColor("#4A90D9")
-        else   -> android.graphics.Color.parseColor("#F2994A") // medium
     }
 }

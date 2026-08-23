@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
+import { PRIORITY_COLORS, PRIORITY_LABELS } from '../lib/taskColors'
 
 function getDeadlineColor(deadline) {
   const today = new Date(); today.setHours(0,0,0,0)
@@ -22,9 +23,6 @@ function formatDeadline(deadline) {
   const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic']
   return `${d.getDate()} ${months[d.getMonth()]}`
 }
-
-const PRIORITY_LABELS = { high: 'ALTA', medium: 'MEDIA', low: 'BASSA' }
-const PRIORITY_COLORS = { high: '#e53935', medium: '#ff7043', low: '#42a5f5' }
 
 export default function TaskSection({ minimalMode }) {
   const { state, actions } = useApp()

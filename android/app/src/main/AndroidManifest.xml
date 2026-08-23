@@ -67,6 +67,16 @@
             android:launchMode="singleInstance"
             android:windowSoftInputMode="stateAlwaysVisible|adjustResize"/>
 
+        <!-- Activity aggiunta rapida task (solo titolo) dal widget grande -->
+        <activity
+            android:name=".QuickAddTaskActivity"
+            android:theme="@style/WorkoutDialogTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"/>
+
         <!-- Activity seleziona data per widget task -->
         <activity
             android:name=".SelectDateActivity"

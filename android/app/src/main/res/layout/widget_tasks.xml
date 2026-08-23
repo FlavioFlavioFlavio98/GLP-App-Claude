@@ -24,6 +24,18 @@
             android:textSize="17sp"
             android:textStyle="bold"/>
 
+        <TextView
+            android:id="@+id/widget_quick_add"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:text="+"
+            android:textColor="#121212"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/chip_selected"
+            android:layout_marginEnd="8dp"/>
+
         <ImageButton
             android:id="@+id/widget_refresh"
             android:layout_width="24dp"

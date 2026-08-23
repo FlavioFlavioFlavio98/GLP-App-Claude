@@ -90,6 +90,16 @@ class TaskWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_title, openAppPendingIntent)
 
+            // Tap "+" → aggiunta rapida stile Google Tasks (solo titolo, nessun altro dettaglio)
+            val quickAddIntent = Intent(context, QuickAddTaskActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            val quickAddPi = PendingIntent.getActivity(
+                context, appWidgetId + 2000, quickAddIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_quick_add, quickAddPi)
+
             // Tap data → apre SelectDateActivity
             val selectDateIntent = Intent(context, SelectDateActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -150,6 +160,15 @@ class TaskWidgetProvider : AppWidgetProvider() {
                         is Int -> r
                         else -> 0
                     }
+                    val penalty = when (val p = task["penalty"]) {
+                        is Double -> p.toInt()
+                        is Long -> p.toInt()
+                        is Int -> p
+                        else -> 0
+                    }
+                    val priority = task["priority"] as? String ?: "medium"
+                    val taskDeadline = task["deadline"] as? String ?: today
+
                     views.setTextViewText(NAME_IDS[index], name)
                     views.setInt(
                         NAME_IDS[index], "setPaintFlags",
@@ -173,11 +192,30 @@ class TaskWidgetProvider : AppWidgetProvider() {
 
                     views.setViewVisibility(ROW_IDS[index], View.VISIBLE)
 
+                    // Tap sul nome (o sui punti) → apre la task in modifica, con
+                    // tutti i dettagli pre-compilati. Tap sul cerchietto → completa,
+                    // con dialog di conferma (mai un'azione distruttiva a un tap solo).
+                    val editIntent = Intent(context, AddTaskActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        putExtra("edit_task_id", taskId)
+                        putExtra("edit_title", name)
+                        putExtra("edit_priority", priority)
+                        putExtra("edit_reward", reward)
+                        putExtra("edit_penalty", penalty)
+                        putExtra("edit_deadline", taskDeadline)
+                    }
+                    val editPi = PendingIntent.getActivity(
+                        context, appWidgetId * 100 + index, editIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    views.setOnClickPendingIntent(NAME_IDS[index], editPi)
+                    views.setOnClickPendingIntent(META_IDS[index], editPi)
+
                     if (isCompleted) {
-                        // Task già completata: tap non fa nulla di distruttivo, solo apre l'app
-                        views.setOnClickPendingIntent(ROW_IDS[index], openAppPendingIntent)
+                        // Task già completata: il cerchietto è già "fatto", tap apre solo l'app
+                        views.setOnClickPendingIntent(DOT_IDS[index], openAppPendingIntent)
                     } else {
-                        // Tap su task attiva → apre CompleteTaskActivity (conferma completamento)
+                        // Tap sul cerchietto → apre CompleteTaskActivity (conferma completamento)
                         val completeIntent = Intent(context, CompleteTaskActivity::class.java).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             putExtra("task_id", taskId)
@@ -190,7 +228,7 @@ class TaskWidgetProvider : AppWidgetProvider() {
                             completeIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
-                        views.setOnClickPendingIntent(ROW_IDS[index], completePi)
+                        views.setOnClickPendingIntent(DOT_IDS[index], completePi)
                     }
                 }
                 for (i in rows.size until MAX_ROWS) {

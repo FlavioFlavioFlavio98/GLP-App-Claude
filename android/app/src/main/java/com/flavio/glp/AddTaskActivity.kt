@@ -33,6 +33,10 @@ class AddTaskActivity : Activity() {
     private var selectedPenalty: Int? = null
     private var selectedPriority = "medium"
     private var isAlreadyDone = false
+    // Se valorizzato, il dialog è in modalità modifica di una task esistente
+    // (aperto dal tap sul nome nel widget) invece che creazione — stesso layout,
+    // cambia solo cosa fa il bottone "salva" e i valori pre-selezionati.
+    private var editTaskId: String? = null
 
     // Chip TextViews — inizializzati in setupViews
     private lateinit var deadlineOggi: TextView
@@ -60,7 +64,9 @@ class AddTaskActivity : Activity() {
         // Forza tastiera sempre visibile a livello di finestra
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
         setContentView(R.layout.dialog_add_task)
+        editTaskId = intent.getStringExtra("edit_task_id")
         setupViews()
+        if (editTaskId != null) applyEditExtras()
         // Focus + tastiera con delay per garantire che la view sia attached
         val input = findViewById<EditText>(R.id.task_name_input)
         input.requestFocus()
@@ -161,8 +167,54 @@ class AddTaskActivity : Activity() {
         findViewById<View>(R.id.btn_annulla).setOnClickListener { finish() }
         btnCrea.setOnClickListener {
             val name = findViewById<EditText>(R.id.task_name_input).text.toString().trim()
-            if (name.isNotEmpty()) saveTask(name)
-            else Toast.makeText(this, "Inserisci un nome per la task", Toast.LENGTH_SHORT).show()
+            if (name.isEmpty()) {
+                Toast.makeText(this, "Inserisci un nome per la task", Toast.LENGTH_SHORT).show()
+            } else {
+                val id = editTaskId
+                if (id != null) updateTask(id, name) else saveTask(name)
+            }
+        }
+    }
+
+    // ─── Modalità modifica ───
+
+    private fun applyEditExtras() {
+        val title = intent.getStringExtra("edit_title") ?: ""
+        val priority = intent.getStringExtra("edit_priority") ?: "medium"
+        val reward = intent.getIntExtra("edit_reward", 0)
+        val penalty = intent.getIntExtra("edit_penalty", 0)
+        val deadline = intent.getStringExtra("edit_deadline") ?: sdf.format(Date())
+
+        findViewById<EditText>(R.id.task_name_input).setText(title)
+        findViewById<TextView>(R.id.dialog_title).text = "Modifica Task"
+        findViewById<TextView>(R.id.btn_crea).text = "Salva modifiche"
+        findViewById<View>(R.id.chip_gia_fatta).visibility = View.GONE
+
+        selectedPriority = priority
+        selectPriority(priority)
+
+        // I chip reward/penalità hanno solo alcuni valori fissi (1/2/3/5 e
+        // 0/1/2/3): se il valore salvato non corrisponde a nessuno (es. 0 per
+        // reward, impostabile solo lasciando il chip vuoto) restano tutti
+        // deselezionati, che rappresenta correttamente "nessuno scelto".
+        if (reward in listOf(1, 2, 3, 5)) { selectedReward = reward; selectReward(reward) }
+        if (penalty in 0..3) { selectedPenalty = penalty; selectPenalty(penalty) }
+
+        selectedDeadline = deadline
+        val today = sdf.format(Date())
+        val tomorrow = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }.time)
+        when (deadline) {
+            today -> selectDeadline("oggi")
+            tomorrow -> selectDeadline("domani")
+            else -> {
+                selectDeadline("cal")
+                try {
+                    val parsed = sdf.parse(deadline)!!
+                    val deadlineLbl = findViewById<TextView>(R.id.deadline_label)
+                    deadlineLbl.text = displaySdf.format(parsed)
+                    deadlineLbl.visibility = View.VISIBLE
+                } catch (e: Exception) { /* data non parsabile, ignora */ }
+            }
         }
     }
 
@@ -273,6 +325,52 @@ class AddTaskActivity : Activity() {
             Toast.makeText(this, "Errore connessione: ${e.message}", Toast.LENGTH_LONG).show()
             finish()
         }
+    }
+
+    private fun updateTask(taskId: String, name: String) {
+        if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
+            com.google.firebase.FirebaseApp.initializeApp(this)
+        }
+        val reward = selectedReward ?: 0
+        val penalty = selectedPenalty ?: 0
+
+        val db = FirebaseFirestore.getInstance()
+        val userRef = db.collection("users").document("flavio")
+        userRef.get().addOnSuccessListener { doc ->
+            @Suppress("UNCHECKED_CAST")
+            val existing = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
+            val updated = existing.map { t ->
+                if (t["id"]?.toString() == taskId) {
+                    t.toMutableMap().apply {
+                        put("title", name)
+                        put("deadline", selectedDeadline)
+                        put("reward", reward.toDouble())
+                        put("penalty", penalty.toDouble())
+                        put("priority", selectedPriority)
+                    }
+                } else t
+            }
+            userRef.update("tasks", updated)
+                .addOnSuccessListener {
+                    refreshTaskWidgets()
+                    vibrate()
+                    Toast.makeText(this, "Task aggiornata", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
+                    finish()
+                }
+        }.addOnFailureListener { e ->
+            Toast.makeText(this, "Errore connessione: ${e.message}", Toast.LENGTH_LONG).show()
+            finish()
+        }
+    }
+
+    private fun refreshTaskWidgets() {
+        val manager = AppWidgetManager.getInstance(this)
+        val ids = manager.getAppWidgetIds(ComponentName(this, TaskWidgetProvider::class.java))
+        ids.forEach { TaskWidgetProvider.updateWidget(this, manager, it) }
     }
 
     private fun addTaskToWidgetPrefs(task: Map<String, Any>) {

@@ -397,6 +397,46 @@ Rispondi SOLO con JSON valido, senza backtick e senza altro testo:
   }
 )
 
+// ── estimateFoodProtein ───────────────────────────────────────────────────────
+// Dato uno o più nomi di alimenti, stima quanti grammi di proteine ci sono in
+// 100g di quell'alimento crudo — usato per popolare in automatico il database
+// proteine (tab Nutrizione) quando si aggiunge un alimento mai visto prima.
+// Valore modificabile a mano dall'utente in caso di stima imprecisa.
+exports.estimateFoodProtein = onCall(
+  { region: REGION, secrets: [geminiKey], invoker: 'public' },
+  async (request) => {
+    if (!request.auth || request.auth.token.email !== ALLOWED_EMAIL)
+      throw new HttpsError('permission-denied', 'Non autorizzato')
+    const foods = (request.data?.foods || []).map(f => (f || '').trim()).filter(Boolean).slice(0, 20)
+    if (foods.length === 0) throw new HttpsError('invalid-argument', 'foods obbligatorio')
+
+    const genAI = new GoogleGenerativeAI(geminiKey.value())
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const foodList = foods.map((f, i) => `${i + 1}. ${f}`).join('\n')
+
+    const prompt = `Per ciascuno di questi alimenti, indica quanti grammi di proteine ci sono in 100g dell'alimento crudo/non cotto (valori nutrizionali standard, i più comunemente usati):
+${foodList}
+
+Rispondi SOLO con JSON valido, senza backtick e senza altro testo, un numero (anche decimale) per alimento, nello stesso ordine:
+{ "results": [{ "name": "nome esatto come dato in input", "proteinPer100g": 0 }] }`
+
+    const result = await model.generateContent(prompt)
+    const text = result.response.text()
+    const clean = text.replace(/```json\n?|```\n?/g, '').trim()
+    let parsed
+    try { parsed = JSON.parse(clean) } catch { parsed = { results: [] } }
+
+    const results = foods.map((name, i) => {
+      const match = (parsed.results || []).find(r => r.name?.toLowerCase().trim() === name.toLowerCase().trim()) || parsed.results?.[i]
+      const val = parseFloat(match?.proteinPer100g)
+      return { name, proteinPer100g: isNaN(val) ? 0 : Math.round(val * 10) / 10 }
+    })
+
+    return { results }
+  }
+)
+
 // ── updatePsychProfile ────────────────────────────────────────────────────────
 exports.updatePsychProfile = onCall(
   { region: REGION, secrets: [geminiKey], invoker: 'public' },

@@ -16,6 +16,7 @@ import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFOR
 import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
 import { getDayRecapRate } from './dayRecapStats'
+import { SEED_FOODS } from './nutritionStats'
 import { computeSocialPts } from './mindStats'
 
 const AppContext = createContext(null)
@@ -1150,6 +1151,120 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`dayRecapLog.${dateStr}`]: deleteField() })
       actions.showToast('Riepilogo eliminato', '🗑️')
+    },
+
+    // ─── Nutrizione/Proteine ── database alimenti (proteinFoods) con proteine
+    // per 100g stimate via AI la prima volta, log giornaliero (proteinLog)
+    // separato — non tocca lo score, è solo tracciamento nutrizionale.
+    getProteinData() {
+      const gd = state.allUsersData?.flavio
+      return {
+        foods: gd?.proteinFoods || [],
+        log: gd?.proteinLog || {},
+        weightLog: gd?.weightLog || {},
+      }
+    },
+
+    // Chiamata una sola volta, al primo utilizzo della tab: se il database
+    // alimenti è ancora vuoto, lo popola con i 9 alimenti di partenza stimando
+    // le proteine per 100g via AI in una singola chiamata.
+    async ensureDefaultProteinFoods() {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (gd?.proteinFoods?.length > 0) return
+
+      const functions = getFunctions(app, 'europe-west1')
+      const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 60000 })
+      const result = await fn({ foods: SEED_FOODS.map(f => f.name) })
+      const estimates = result.data?.results || []
+
+      const foods = SEED_FOODS.map((seed, i) => ({
+        id: `food_${Date.now().toString(36)}_${i}`,
+        name: seed.name,
+        emoji: seed.emoji,
+        proteinPer100g: estimates[i]?.proteinPer100g || 0,
+      }))
+
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { proteinFoods: foods })
+    },
+
+    // Aggiunge un alimento nuovo stimando le proteine per 100g via AI —
+    // usato sia dal picker (quando cerchi un alimento non ancora presente) sia
+    // dalla gestione manuale degli alimenti.
+    async addProteinFoodAI(name) {
+      if (state.authUserId !== 'flavio') return null
+      const trimmed = (name || '').trim().slice(0, 60)
+      if (!trimmed) { actions.showToast('Nome alimento mancante', '⚠️'); return null }
+
+      const functions = getFunctions(app, 'europe-west1')
+      const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 30000 })
+      const result = await fn({ foods: [trimmed] })
+      const proteinPer100g = result.data?.results?.[0]?.proteinPer100g || 0
+
+      const food = {
+        id: `food_${Date.now().toString(36)}`,
+        name: trimmed,
+        emoji: '🍽️',
+        proteinPer100g,
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { proteinFoods: arrayUnion(food) })
+      actions.showToast(`${trimmed}: ${proteinPer100g}g proteine/100g`, '🤖')
+      return food
+    },
+
+    // Modifica manuale (nome/emoji/proteine per 100g) — serve a correggere
+    // stime AI imprecise, richiesto esplicitamente dall'utente.
+    async updateProteinFood(foodId, updates) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      const foods = gd?.proteinFoods || []
+      const newFoods = foods.map(f => f.id === foodId ? { ...f, ...updates } : f)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { proteinFoods: newFoods })
+      actions.showToast('Alimento modificato ✏️', '✏️')
+    },
+
+    async deleteProteinFood(foodId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      const foods = (gd?.proteinFoods || []).filter(f => f.id !== foodId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { proteinFoods: foods })
+      actions.showToast('Alimento eliminato', '🗑️')
+    },
+
+    async addProteinEntry(food, grams, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const numGrams = parseFloat(grams) || 0
+      if (numGrams <= 0) { actions.showToast('Grammi non validi', '⚠️'); return }
+      const proteinGrams = Math.round(numGrams * (food.proteinPer100g / 100) * 10) / 10
+      const logDate = dateStr || toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        foodId: food.id,
+        name: food.name,
+        emoji: food.emoji,
+        grams: numGrams,
+        proteinGrams,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`proteinLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      actions.showToast(`+${proteinGrams}g proteine`, food.emoji || '🍽️')
+    },
+
+    async deleteProteinEntry(dateStr, entryId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.proteinLog?.[dateStr] || [])
+      const newLog = dayLog.filter(e => e.id !== entryId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`proteinLog.${dateStr}`]: newLog })
+      actions.showToast('Voce eliminata', '↩️')
     },
 
     // ─── Barefoot ── stesso pattern di Mobility, tab Body invece che Workout.

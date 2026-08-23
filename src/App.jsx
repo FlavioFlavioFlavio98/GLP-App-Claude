@@ -25,6 +25,7 @@ const TaskTab = lazy(() => import('./tabs/TaskTab'))
 const WorkoutTab = lazy(() => import('./components/WorkoutTab'))
 const BodyTab = lazy(() => import('./components/BodyTab'))
 const MenteTab = lazy(() => import('./components/MenteTab'))
+const NutritionTab = lazy(() => import('./components/NutritionTab'))
 const StatsTabContent = lazy(() => import('./components/StatsTabContent'))
 
 // ── Gruppi di modali: caricati on-demand al primo accesso, raggruppati per contesto d'uso ──
@@ -35,6 +36,7 @@ const JournalMoodModals = lazy(() => import('./modalGroups/JournalMoodModals'))
 const FitnessModals = lazy(() => import('./modalGroups/FitnessModals'))
 const BodyModals = lazy(() => import('./modalGroups/BodyModals'))
 const MenteModals = lazy(() => import('./modalGroups/MenteModals'))
+const NutritionModals = lazy(() => import('./modalGroups/NutritionModals'))
 const TaskModals = lazy(() => import('./modalGroups/TaskModals'))
 
 // Pagine fullscreen indipendenti (già gated da stato booleano proprio, lazy dirette)
@@ -51,6 +53,7 @@ const JOURNAL_MOOD_MODALS = ['eveningReview', 'mood', 'insights', 'weeklyRecap',
 const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility', 'study']
 const BODY_MODALS = ['barefoot', 'hang']
 const MENTE_MODALS = ['willpowerEntry', 'willpowerStats']
+const NUTRITION_MODALS = ['proteinEntry', 'proteinFoodsManage']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory']
 
 function TabLoadingFallback() {
@@ -367,7 +370,7 @@ export default function App() {
       {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout/Benessere/
           Mente: l'economia generale di task/abitudini non è rilevante lì, dove
           ogni tab mostra già le proprie statistiche specifiche ── */}
-      {!['workout', 'body', 'mente'].includes(currentTab) && (
+      {!['workout', 'body', 'mente', 'nutrizione'].includes(currentTab) && (
         <DailySummaryPanel
           authUserId={authUserId}
           globalData={globalData}
@@ -442,6 +445,13 @@ export default function App() {
           </Suspense>
         )}
 
+        {/* ───────── TAB: NUTRIZIONE ───────── */}
+        {currentTab === 'nutrizione' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <NutritionTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
+          </Suspense>
+        )}
+
         {/* ───────── TAB: STATISTICHE ───────── */}
         {currentTab === 'stats' && (
           <Suspense fallback={<TabLoadingFallback />}>
@@ -483,6 +493,9 @@ export default function App() {
       )}
       {MENTE_MODALS.includes(modal) && (
         <Suspense fallback={null}><MenteModals authUserId={authUserId} /></Suspense>
+      )}
+      {NUTRITION_MODALS.includes(modal) && (
+        <Suspense fallback={null}><NutritionModals authUserId={authUserId} /></Suspense>
       )}
       {TASK_MODALS.includes(modal) && (
         <Suspense fallback={null}><TaskModals authUserId={authUserId} /></Suspense>

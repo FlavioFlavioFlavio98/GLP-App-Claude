@@ -181,13 +181,18 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     val meta = if (isCompleted) "+${reward}pt ✓" else "+${reward}pt"
                     views.setTextViewText(META_IDS[index], meta)
 
-                    // La priorità la comunica l'ordine (alta in cima), non serve un
-                    // indicatore colorato vistoso — checkbox neutro stile Google Tasks,
+                    // Cerchietto colorato in base alla priorità (stesso schema colori
+                    // di taskColors.js sul web: alta/media/bassa = rosso/arancio/blu),
                     // pieno verde solo quando la task è completata.
+                    val priorityColor = when (priority) {
+                        "high" -> "#EB5757"
+                        "low"  -> "#4A90D9"
+                        else   -> "#F2994A" // medium
+                    }
                     views.setImageViewResource(DOT_IDS[index], if (isCompleted) R.drawable.circle_dot else R.drawable.circle_ring)
                     views.setInt(
                         DOT_IDS[index], "setColorFilter",
-                        if (isCompleted) android.graphics.Color.parseColor("#4CAF50") else android.graphics.Color.parseColor("#888888")
+                        if (isCompleted) android.graphics.Color.parseColor("#4CAF50") else android.graphics.Color.parseColor(priorityColor)
                     )
 
                     views.setViewVisibility(ROW_IDS[index], View.VISIBLE)
@@ -221,6 +226,7 @@ class TaskWidgetProvider : AppWidgetProvider() {
                             putExtra("task_id", taskId)
                             putExtra("task_title", name)
                             putExtra("task_reward", reward.toDouble())
+                            putExtra("task_priority", priority)
                         }
                         val completePi = PendingIntent.getActivity(
                             context,

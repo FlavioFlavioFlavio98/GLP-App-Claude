@@ -27,8 +27,10 @@ class AddTaskActivity : Activity() {
     private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val displaySdf = SimpleDateFormat("d MMMM yyyy", Locale.ITALIAN)
     private var selectedDeadline = sdf.format(Date())
-    private var selectedReward = 2
-    private var selectedPenalty = 1
+    // null = non ancora scelto dall'utente — reward/penalità sono facoltativi,
+    // se non selezionati la task si crea comunque con valore 0.
+    private var selectedReward: Int? = null
+    private var selectedPenalty: Int? = null
     private var selectedPriority = "medium"
     private var isAlreadyDone = false
 
@@ -208,13 +210,17 @@ class AddTaskActivity : Activity() {
         val db = FirebaseFirestore.getInstance()
         val userRef = db.collection("users").document("flavio")
         val today = sdf.format(Date())
+        // Facoltativi: se l'utente non ha toccato i chip reward/penalità, la task
+        // si crea comunque con valore 0 invece di forzare un default.
+        val reward = selectedReward ?: 0
+        val penalty = selectedPenalty ?: 0
 
         val task: HashMap<String, Any> = if (isAlreadyDone) {
             hashMapOf(
                 "id" to "task_${System.currentTimeMillis()}",
                 "title" to name,
                 "deadline" to selectedDeadline,
-                "reward" to selectedReward.toDouble(),
+                "reward" to reward.toDouble(),
                 "penalty" to 0.0,
                 "priority" to selectedPriority,
                 "status" to "completed",
@@ -228,8 +234,8 @@ class AddTaskActivity : Activity() {
                 "id" to "task_${System.currentTimeMillis()}",
                 "title" to name,
                 "deadline" to selectedDeadline,
-                "reward" to selectedReward.toDouble(),
-                "penalty" to selectedPenalty.toDouble(),
+                "reward" to reward.toDouble(),
+                "penalty" to penalty.toDouble(),
                 "priority" to selectedPriority,
                 "status" to "active",
                 "rewardApplied" to false,
@@ -247,15 +253,15 @@ class AddTaskActivity : Activity() {
             val existing = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
             val updates = hashMapOf<String, Any>("tasks" to existing + task)
             if (isAlreadyDone) {
-                updates["score"] = com.google.firebase.firestore.FieldValue.increment(selectedReward.toLong())
+                updates["score"] = com.google.firebase.firestore.FieldValue.increment(reward.toLong())
             }
             userRef.update(updates)
                 .addOnSuccessListener {
                     if (isAlreadyDone && selectedDeadline == today) {
-                        DayWidgetProvider.applyDelta(this, earnedDelta = selectedReward, taskEarnedDelta = selectedReward)
+                        DayWidgetProvider.applyDelta(this, earnedDelta = reward, taskEarnedDelta = reward)
                     }
                     vibrate()
-                    val msg = if (isAlreadyDone) "Task già fatta registrata! +${selectedReward}pt" else "Task creata!"
+                    val msg = if (isAlreadyDone) "Task già fatta registrata! +${reward}pt" else "Task creata!"
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                     finish()
                 }

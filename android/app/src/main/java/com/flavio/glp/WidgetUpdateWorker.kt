@@ -38,10 +38,12 @@ class WidgetUpdateWorker(
             val todayLog  = dailyLogs[today] as? Map<String, Any> ?: emptyMap()
             val score     = (doc.getDouble("score") ?: 0.0).toFloat()
 
-            // ── Task attive oggi ──────────────────────────────────────────────
-            val activeTasks = tasks
-                .filter { it["status"] == "active" && it["deadline"] == today }
-                .sortedBy { it["deadline"] as? String ?: "9999" }
+            // ── Task attive per la data selezionata nel widget (oggi = include
+            // anche le scadute), più le completate quel giorno per lo stesso ──
+            val prefsRead = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
+            val selectedDate = prefsRead.getString("selected_date", null) ?: today
+            val activeTasks = TaskWidgetUtils.activeTasksForDate(tasks, selectedDate, today)
+            val completedTasksWidget = TaskWidgetUtils.completedTasksForDate(tasks, selectedDate)
 
             // ── Liste completati/falliti ──────────────────────────────────────
             val doneList   = (todayLog["habits"]       as? List<*>)?.map { it.toString() } ?: emptyList()
@@ -123,6 +125,7 @@ class WidgetUpdateWorker(
             val prefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
             prefs.edit()
                 .putString("active_tasks",   Gson().toJson(activeTasks.take(5)))
+                .putString("completed_tasks_widget", Gson().toJson(completedTasksWidget.take(5)))
                 .putString("pending_habits", Gson().toJson(pendingHabits.take(5)))
                 .putString("last_update",    today)
                 .putInt("day_earned_int",    earned.toInt())

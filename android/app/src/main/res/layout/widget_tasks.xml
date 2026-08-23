@@ -43,45 +43,55 @@
         android:textSize="11sp"
         android:layout_marginBottom="8dp"/>
 
-    <TextView android:id="@+id/task_0"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        android:visibility="gone"
-        android:layout_marginBottom="6dp"/>
+    <!-- Riga 0 -->
+    <LinearLayout android:id="@+id/task_row_0" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
+        <ImageView android:id="@+id/task_dot_0" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
+        <TextView android:id="@+id/task_0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+        <TextView android:id="@+id/task_meta_0" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
+    </LinearLayout>
 
-    <TextView android:id="@+id/task_1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        android:visibility="gone"
-        android:layout_marginBottom="6dp"/>
+    <!-- Riga 1 -->
+    <LinearLayout android:id="@+id/task_row_1" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
+        <ImageView android:id="@+id/task_dot_1" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
+        <TextView android:id="@+id/task_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+        <TextView android:id="@+id/task_meta_1" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
+    </LinearLayout>
 
-    <TextView android:id="@+id/task_2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        android:visibility="gone"
-        android:layout_marginBottom="6dp"/>
+    <!-- Riga 2 -->
+    <LinearLayout android:id="@+id/task_row_2" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
+        <ImageView android:id="@+id/task_dot_2" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
+        <TextView android:id="@+id/task_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+        <TextView android:id="@+id/task_meta_2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
+    </LinearLayout>
 
-    <TextView android:id="@+id/task_3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        android:visibility="gone"
-        android:layout_marginBottom="6dp"/>
+    <!-- Riga 3 -->
+    <LinearLayout android:id="@+id/task_row_3" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
+        <ImageView android:id="@+id/task_dot_3" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
+        <TextView android:id="@+id/task_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+        <TextView android:id="@+id/task_meta_3" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
+    </LinearLayout>
 
-    <TextView android:id="@+id/task_4"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        android:visibility="gone"
-        android:layout_marginBottom="6dp"/>
+    <!-- Riga 4 -->
+    <LinearLayout android:id="@+id/task_row_4" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone" android:layout_marginBottom="6dp">
+        <ImageView android:id="@+id/task_dot_4" android:layout_width="8dp" android:layout_height="8dp" android:src="@drawable/circle_dot" android:layout_marginEnd="8dp"/>
+        <TextView android:id="@+id/task_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:textColor="#FFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+        <TextView android:id="@+id/task_meta_4" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#888888" android:textSize="11sp" android:layout_marginStart="6dp"/>
+    </LinearLayout>
 
     <TextView
         android:id="@+id/widget_empty"

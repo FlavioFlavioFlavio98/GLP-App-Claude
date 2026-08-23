@@ -228,10 +228,12 @@ class MainActivity : BridgeActivity() {
                     android.util.Log.d("GLPWidget", "  todayLog[$key] = $value (${value?.javaClass?.simpleName})")
                 }
 
-                // Task attive di oggi
-                val activeTasks = tasks
-                    .filter { it["status"] == "active" && it["deadline"] == today }
-                    .sortedBy { it["deadline"] as? String ?: "9999" }
+                // Task attive per la data selezionata nel widget (oggi = include
+                // anche le scadute), più le completate quel giorno
+                val widgetPrefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
+                val selectedDate = widgetPrefs.getString("selected_date", null) ?: today
+                val activeTasks = TaskWidgetUtils.activeTasksForDate(tasks, selectedDate, today)
+                val completedTasksWidget = TaskWidgetUtils.completedTasksForDate(tasks, selectedDate)
 
                 // Converti tutti gli ID in String per confronto robusto (Firestore li salva come Long)
                 val doneList = (todayLog["habits"] as? List<*>)?.map { it.toString() } ?: emptyList()
@@ -375,6 +377,7 @@ class MainActivity : BridgeActivity() {
                 // Salva in SharedPreferences — tutto Int per evitare ClassCastException
                 getSharedPreferences("glp_widget", Context.MODE_PRIVATE).edit()
                     .putString("active_tasks", Gson().toJson(activeTasks.take(5)))
+                    .putString("completed_tasks_widget", Gson().toJson(completedTasksWidget.take(5)))
                     .putInt("day_earned_int", earned.toInt())
                     .putInt("day_spent_int", spent.toInt())
                     .putInt("day_net_int", (earned - spent).toInt())

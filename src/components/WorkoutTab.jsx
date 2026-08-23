@@ -14,6 +14,7 @@ import WorkoutDaySummary from './WorkoutDaySummary'
 import WorkoutMobilityStats from './WorkoutMobilityStats'
 import WorkoutStudyStats from './WorkoutStudyStats'
 import ActivityRateEditor from './ActivityRateEditor'
+import ExerciseIcon from './ExerciseIcon'
 import { toDateString } from '../lib/habitLogic'
 import { getUnseenExpiredSession, markSessionSeen, endWorkoutSession, computeSessionSummary, getMobilityRate, setMobilityRate, getStudyRate, setStudyRate, sortExercisesForQuickAdd } from '../lib/workoutStats'
 
@@ -199,7 +200,7 @@ export default function WorkoutTab({ actions, authUserId, isReadOnly, globalData
                     borderRadius: 12, cursor: 'pointer', textAlign: 'left',
                   }}
                 >
-                  <span style={{ fontSize: '1.4em', flexShrink: 0 }}>{ex.emoji}</span>
+                  <ExerciseIcon exercise={ex} size={34} style={{ borderRadius: 8 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: '0.88em', color: 'var(--text)' }}>{ex.name}</div>
                     <div style={{ fontSize: '0.65em', color: 'var(--theme-color)', fontWeight: 600 }}>

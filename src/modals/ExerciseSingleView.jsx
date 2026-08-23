@@ -3,6 +3,7 @@ import { useApp } from '../lib/store'
 import { Chart } from '../lib/chartSetup'
 import { toDateString } from '../lib/habitLogic'
 import { computeAllStats, getDaysSinceLastRecord, getEffortEmoji } from '../lib/workoutStats'
+import ExerciseIcon from '../components/ExerciseIcon'
 
 // ─── Milestones ───────────────────────────────────────────────────────────────
 
@@ -164,8 +165,9 @@ export default function ExerciseSingleView() {
         <button className="btn-icon" onClick={() => actions.closeModal()}>
           <span className="material-icons-round" style={{ fontSize: 28 }}>arrow_back</span>
         </button>
-        <h1 style={{ margin: 0, fontSize: '1.1em', color: 'var(--theme-color)', flex: 1 }}>
-          {exercise.emoji} {exercise.name}
+        <h1 style={{ margin: 0, fontSize: '1.1em', color: 'var(--theme-color)', flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ExerciseIcon exercise={exercise} size={24} />
+          {exercise.name}
         </h1>
         <button
           className="btn-icon"

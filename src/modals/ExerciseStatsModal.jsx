@@ -4,6 +4,7 @@ import { _getPPR } from '../lib/store'
 import { Chart } from '../lib/chartSetup'
 import { toDateString } from '../lib/habitLogic'
 import { MUSCLE_GROUPS, getDefaultMuscles } from '../lib/muscleMapping'
+import ExerciseIcon from '../components/ExerciseIcon'
 import { getEffortEmoji } from '../lib/workoutStats'
 
 const MONTH_NAMES = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic']
@@ -481,7 +482,7 @@ function ManageExercisesTab({ exercises, showAddForm, setShowAddForm, editEx, se
         {exercises.map(ex => (
           <div key={ex.id}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, opacity: ex.active === false ? 0.5 : 1 }}>
-              <span style={{ fontSize: '1.5em', flexShrink: 0 }}>{ex.emoji}</span>
+              <ExerciseIcon exercise={ex} size={36} style={{ borderRadius: 8 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: '0.92em' }}>{ex.name}</div>
                 <div style={{ fontSize: '0.72em', color: 'var(--theme-color)', fontWeight: 600, marginTop: 2 }}>

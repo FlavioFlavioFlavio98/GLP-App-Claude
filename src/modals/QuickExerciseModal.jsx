@@ -3,6 +3,7 @@ import { useApp } from '../lib/store'
 import { toDateString } from '../lib/habitLogic'
 import { MUSCLE_GROUPS } from '../lib/muscleMapping'
 import { groupExercisesByMuscle, sortExercisesForQuickAdd, getAverageRepsPerSession, getEffortMultiplier, DEFAULT_EFFORT } from '../lib/workoutStats'
+import ExerciseIcon from '../components/ExerciseIcon'
 
 const EFFORT_LEVELS = [
   { level: 1, label: 'Leggero', sub: 'riscaldamento', emoji: '🟢' },
@@ -142,10 +143,15 @@ export default function QuickExerciseModal() {
               <span className="material-icons-round" style={{ fontSize: 22 }}>arrow_back</span>
             </button>
           ) : <div style={{ width: 30 }} />}
-          <div style={{ flex: 1, textAlign: 'center', fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textAlign: 'center', fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>
             {step === 'muscle' && 'Che muscolo alleni?'}
             {step === 'exercise' && (MUSCLE_GROUPS[muscleKey]?.label || ALTRO_GROUP.label)}
-            {step === 'reps' && (exercise ? `${exercise.emoji} ${exercise.name}` : '')}
+            {step === 'reps' && exercise && (
+              <>
+                <ExerciseIcon exercise={exercise} size={18} />
+                {exercise.name}
+              </>
+            )}
           </div>
           <div style={{ width: 30 }} />
         </div>
@@ -190,7 +196,7 @@ export default function QuickExerciseModal() {
                   color: 'var(--text)',
                 }}
               >
-                <span style={{ fontSize: '1.4em' }}>{ex.emoji}</span>
+                <ExerciseIcon exercise={ex} size={32} style={{ borderRadius: 8 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: '0.9em' }}>{ex.name}</div>
                   <div style={{ fontSize: '0.65em', color: 'var(--theme-color)' }}>{parseFloat(ex.pointsPerRep)} pt/rep</div>

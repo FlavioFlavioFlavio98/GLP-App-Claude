@@ -69,6 +69,8 @@ class MainActivity : BridgeActivity() {
                 setupHealthConnect()
                 // Ri-programma gli allarmi usando le impostazioni salvate localmente
                 NotificationScheduler.scheduleAll(this)
+                // Assicura che il token FCM sia salvato per i push silenziosi di sync widget
+                WidgetSyncMessagingService.registerTokenIfNeeded()
             }
         }
 

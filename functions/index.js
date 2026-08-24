@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
+const { onDocumentWritten } = require('firebase-functions/v2/firestore')
 const { defineSecret } = require('firebase-functions/params')
 const admin = require('firebase-admin')
 const Anthropic = require('@anthropic-ai/sdk')
@@ -662,6 +663,42 @@ Rispondi SOLO con l'insight, niente altro.`,
         totalTokens: inputTokens + outputTokens,
         costUSD: parseFloat(costUSD.toFixed(6))
       }
+    }
+  }
+)
+
+// ── syncWidgetsOnUserDataChange ─────────────────────────────────────────────
+// Trigger Firestore: a ogni scrittura su users/flavio (task completata,
+// abitudine spuntata, serie loggata — da telefono, watch o web) manda un push
+// FCM "silenzioso" (solo dati, nessuna notifica visibile) ai device registrati
+// per svegliare il widget home-screen del telefono e farlo aggiornare subito,
+// invece di aspettare il refresh periodico ogni 15 minuti di WorkManager.
+exports.syncWidgetsOnUserDataChange = onDocumentWritten(
+  { document: 'users/flavio', region: REGION },
+  async (event) => {
+    const tokensSnap = await admin.firestore()
+      .collection('users').doc('flavio').collection('fcmTokens').get()
+    if (tokensSnap.empty) return
+
+    const tokens = tokensSnap.docs.map(d => d.id)
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens,
+      data: { type: 'widget_sync' },
+      android: { priority: 'high' },
+    })
+
+    // Pulizia token scaduti/disinstallati (stesso pattern usato in passato per
+    // il web push, ora per i token nativi Android)
+    const toDelete = []
+    response.responses.forEach((r, i) => {
+      if (!r.success && (r.error?.code === 'messaging/registration-token-not-registered')) {
+        toDelete.push(tokens[i])
+      }
+    })
+    if (toDelete.length > 0) {
+      await Promise.all(toDelete.map(t =>
+        admin.firestore().collection('users').doc('flavio').collection('fcmTokens').doc(t).delete()
+      ))
     }
   }
 )

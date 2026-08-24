@@ -65,6 +65,7 @@ dependencies {
     implementation 'com.google.firebase:firebase-firestore-ktx:25.0.0'
     implementation 'com.google.firebase:firebase-auth-ktx:23.0.0'
     implementation 'com.google.firebase:firebase-core:21.1.1'
+    implementation 'com.google.firebase:firebase-messaging-ktx:23.1.0'
 
     // WorkManager per aggiornamenti periodici
     implementation 'androidx.work:work-runtime-ktx:2.9.0'

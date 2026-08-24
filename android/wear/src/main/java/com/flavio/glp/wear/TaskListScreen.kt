@@ -39,61 +39,65 @@ fun TaskListScreen(
     val listState = rememberScalingLazyListState()
     var confirmTask by remember { mutableStateOf<WearTask?>(null) }
 
-    Scaffold(
-        timeText = { TimeText() },
-        positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
-    ) {
-        ScalingLazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
+    // Tutto dentro un unico Box esterno (invece di due composable "fratelli"
+    // allo stesso livello) — con due nodi separati lo stato dell'overlay di
+    // conferma non arrivava mai a schermo dentro lo slot pagina di HorizontalPager.
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            timeText = { TimeText() },
+            positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
         ) {
-            item {
-                ListHeader { Text("✅ Task") }
-            }
-            if (tasks.isEmpty() && !loading) {
-                item { Text("Nessuna task attiva 🎉") }
-            }
-            items(tasks) { task ->
-                Chip(
-                    onClick = { confirmTask = task },
-                    label = { Text(task.title, maxLines = 1) },
-                    secondaryLabel = { Text("+${task.reward}pt") },
-                    colors = ChipDefaults.chipColors(backgroundColor = priorityColor(task.priority).copy(alpha = 0.25f)),
-                    modifier = Modifier.padding(vertical = 2.dp),
-                )
-            }
-        }
-    }
-
-    // Overlay di conferma fatto a mano (niente componente Dialog di Wear
-    // Compose Material — non disponibile in questa versione della libreria):
-    // un semplice box a schermo intero sopra la lista.
-    val taskToConfirm = confirmTask
-    if (taskToConfirm != null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.85f)),
-        ) {
-            ScalingLazyColumn(modifier = Modifier.fillMaxSize()) {
-                item { Text("Completata?") }
-                item { Text(taskToConfirm.title, style = MaterialTheme.typography.caption1) }
+            ScalingLazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+            ) {
                 item {
+                    ListHeader { Text("✅ Task") }
+                }
+                if (tasks.isEmpty() && !loading) {
+                    item { Text("Nessuna task attiva 🎉") }
+                }
+                items(tasks) { task ->
                     Chip(
-                        onClick = {
-                            onComplete(taskToConfirm)
-                            confirmTask = null
-                        },
-                        label = { Text("Sì, completata!") },
-                        colors = ChipDefaults.primaryChipColors(),
+                        onClick = { confirmTask = task },
+                        label = { Text(task.title, maxLines = 1) },
+                        secondaryLabel = { Text("+${task.reward}pt") },
+                        colors = ChipDefaults.chipColors(backgroundColor = priorityColor(task.priority).copy(alpha = 0.25f)),
+                        modifier = Modifier.padding(vertical = 2.dp),
                     )
                 }
-                item {
-                    Chip(
-                        onClick = { confirmTask = null },
-                        label = { Text("Annulla") },
-                        colors = ChipDefaults.secondaryChipColors(),
-                    )
+            }
+        }
+
+        // Overlay di conferma fatto a mano (niente componente Dialog di Wear
+        // Compose Material — non disponibile in questa versione della libreria).
+        val taskToConfirm = confirmTask
+        if (taskToConfirm != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.85f)),
+            ) {
+                ScalingLazyColumn(modifier = Modifier.fillMaxSize()) {
+                    item { Text("Completata?") }
+                    item { Text(taskToConfirm.title, style = MaterialTheme.typography.caption1) }
+                    item {
+                        Chip(
+                            onClick = {
+                                onComplete(taskToConfirm)
+                                confirmTask = null
+                            },
+                            label = { Text("Sì, completata!") },
+                            colors = ChipDefaults.primaryChipColors(),
+                        )
+                    }
+                    item {
+                        Chip(
+                            onClick = { confirmTask = null },
+                            label = { Text("Annulla") },
+                            colors = ChipDefaults.secondaryChipColors(),
+                        )
+                    }
                 }
             }
         }

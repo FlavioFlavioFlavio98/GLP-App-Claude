@@ -130,6 +130,7 @@ private fun MainPager() {
     var tasks by remember { mutableStateOf<List<WearTask>>(emptyList()) }
     var tasksLoading by remember { mutableStateOf(true) }
     var exercises by remember { mutableStateOf<List<WearExercise>>(emptyList()) }
+    var recentExerciseIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var exercisesLoading by remember { mutableStateOf(true) }
     var lastLoggedName by remember { mutableStateOf<String?>(null) }
 
@@ -160,7 +161,7 @@ private fun MainPager() {
     fun refreshExercises() {
         exercisesLoading = true
         GlpRepository.loadExercises(
-            onResult = { exercises = it; exercisesLoading = false },
+            onResult = { all, recentIds -> exercises = all; recentExerciseIds = recentIds; exercisesLoading = false },
             onError = { exercisesLoading = false },
         )
     }
@@ -209,12 +210,15 @@ private fun MainPager() {
                 )
                 3 -> WorkoutScreen(
                     exercises = exercises,
+                    recentIds = recentExerciseIds,
                     loading = exercisesLoading,
                     lastLoggedName = lastLoggedName,
-                    onLogSet = { exercise ->
+                    onLogSet = { exercise, reps, effort ->
                         GlpRepository.logQuickSet(
                             exercise = exercise,
-                            onDone = { lastLoggedName = exercise.name; refreshScore() },
+                            reps = reps,
+                            effort = effort,
+                            onDone = { lastLoggedName = exercise.name; refreshScore(); refreshExercises() },
                             onError = {},
                         )
                     },

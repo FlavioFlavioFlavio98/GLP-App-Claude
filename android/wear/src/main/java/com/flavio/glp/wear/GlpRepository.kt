@@ -99,7 +99,10 @@ object GlpRepository {
         }.addOnFailureListener(onError)
     }
 
-    fun loadExercises(onResult: (List<WearExercise>) -> Unit, onError: (Exception) -> Unit) {
+    // Esercizi (ordine alfabetico) + id degli ultimi 3 usati oggi (più recente
+    // prima) — quasi sempre gli stessi di sempre, per suggerirli come
+    // scorciatoia accanto al "+" nella schermata Workout.
+    fun loadExercises(onResult: (List<WearExercise>, List<String>) -> Unit, onError: (Exception) -> Unit) {
         userRef().get()
             .addOnSuccessListener { doc ->
                 @Suppress("UNCHECKED_CAST")
@@ -115,7 +118,16 @@ object GlpRepository {
                         )
                     }
                     .sortedBy { it.name }
-                onResult(exercises)
+
+                @Suppress("UNCHECKED_CAST")
+                val todayLog = (doc.get("exerciseLog") as? Map<String, Any>)?.get(today()) as? List<Map<String, Any>> ?: emptyList()
+                val recentIds = todayLog
+                    .sortedByDescending { it["time"] as? String ?: "" }
+                    .mapNotNull { it["exerciseId"] as? String }
+                    .distinct()
+                    .take(3)
+
+                onResult(exercises, recentIds)
             }
             .addOnFailureListener(onError)
     }
@@ -193,18 +205,17 @@ object GlpRepository {
         }.addOnFailureListener(onError)
     }
 
-    // Log rapido dal watch: sempre 10 reps a sforzo "leggero" (1x) — stesso
-    // criterio di default della web app, pensato per un tap solo dal polso,
-    // non per sostituire il log dettagliato dal telefono.
-    fun logQuickSet(exercise: WearExercise, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
-        val reps = 10
-        val pts = (reps * exercise.pointsPerRep * 100).toLong() / 100.0
+    // Log dal watch con reps/sforzo scelti dall'utente — stessa formula punti
+    // della web app (vedi EFFORT_MULTIPLIERS in workoutStats.js).
+    fun logQuickSet(exercise: WearExercise, reps: Int, effort: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
+        val multiplier = when (effort) { 2 -> 1.2; 3 -> 1.5; else -> 1.0 }
+        val pts = (reps * exercise.pointsPerRep * multiplier * 100).toLong() / 100.0
         val logEntry = hashMapOf(
             "id" to System.currentTimeMillis().toString(),
             "exerciseId" to exercise.id,
             "reps" to reps,
             "pts" to pts,
-            "effort" to 1,
+            "effort" to effort,
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
         )
         userRef().update("exerciseLog.${today()}", FieldValue.arrayUnion(logEntry))

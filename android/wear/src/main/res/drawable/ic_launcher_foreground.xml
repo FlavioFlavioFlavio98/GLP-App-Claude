@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportHeight="108"
+    android:viewportWidth="108">
+
+    <!-- Badge circolare dorato -->
+    <path android:pathData="M54,24 A30,30 0 1 1 53.99,24 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="30"
+                android:startY="24"
+                android:endX="78"
+                android:endY="84"
+                android:type="linear">
+                <item android:color="#FFD54F" android:offset="0.0"/>
+                <item android:color="#FFA726" android:offset="1.0"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Doppio chevron verso l'alto: "sali di livello" -->
+    <path
+        android:pathData="M54,54 L68,70 L62,70 L54,62 L46,70 L40,70 Z"
+        android:fillColor="#14141C"
+        android:fillAlpha="0.55"/>
+    <path
+        android:pathData="M54,34 L74,54 L67,54 L54,41 L41,54 L34,54 Z"
+        android:fillColor="#14141C"/>
+
+</vector>

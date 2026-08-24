@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "925252547674",
+    "project_id": "gamification-life-project",
+    "storage_bucket": "gamification-life-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:925252547674:android:3e8db76b389375de515463",
+        "android_client_info": {
+          "package_name": "com.flavio.glp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "925252547674-3klpiu86g78jglf9td41k4r6at357u8h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.flavio.glp",
+            "certificate_hash": "f059a38792917368cc962ff3e7ad36703e8f31e7"
+          }
+        },
+        {
+          "client_id": "925252547674-db1u97mup8gekoo6tsgclhfokc4qk0e7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD89jMCRfvF0WsxRr5e6Psc53J0nXvDxBM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "925252547674-db1u97mup8gekoo6tsgclhfokc4qk0e7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

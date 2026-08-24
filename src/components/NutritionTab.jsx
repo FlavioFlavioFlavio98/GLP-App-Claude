@@ -10,9 +10,12 @@ function fmtTime(t) {
 }
 
 export default function NutritionTab({ actions, authUserId, isReadOnly, globalData }) {
+  const { state } = useApp()
   const { foods, log } = actions.getProteinData()
   const weightLog = globalData?.weightLog || {}
   const todayStr = toDateString(new Date())
+  const viewDate = state.viewDate || todayStr
+  const isToday = viewDate === todayStr
 
   // Popola gli alimenti di partenza al primo utilizzo — no-op se già presenti
   useEffect(() => {
@@ -24,10 +27,10 @@ export default function NutritionTab({ actions, authUserId, isReadOnly, globalDa
     return <div className="empty-state">Sezione non disponibile</div>
   }
 
-  const weightKg = getCurrentWeight(weightLog, todayStr)
+  const weightKg = getCurrentWeight(weightLog, viewDate)
   const goal = getProteinGoal(weightKg)
-  const total = getDayProteinTotal(log, todayStr)
-  const dayEntries = [...(log[todayStr] || [])].reverse()
+  const total = getDayProteinTotal(log, viewDate)
+  const dayEntries = [...(log[viewDate] || [])].reverse()
   const progress = goal ? Math.max(0, Math.min(100, Math.round((total / goal) * 100))) : 0
   const reached = goal !== null && total >= goal
 
@@ -39,7 +42,7 @@ export default function NutritionTab({ actions, authUserId, isReadOnly, globalDa
         borderRadius: 14, padding: '16px', marginBottom: 12,
       }}>
         <div style={{ fontSize: '0.68em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 10 }}>
-          🥩 Proteine di oggi
+          🥩 Proteine {isToday ? 'di oggi' : 'del giorno'}
         </div>
 
         {!weightKg ? (
@@ -103,7 +106,7 @@ export default function NutritionTab({ actions, authUserId, isReadOnly, globalDa
           borderRadius: 14, padding: '14px 16px',
         }}>
           <div style={{ fontSize: '0.68em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 10 }}>
-            Registrato oggi
+            Registrato {isToday ? 'oggi' : 'quel giorno'}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {dayEntries.map(e => (
@@ -126,7 +129,7 @@ export default function NutritionTab({ actions, authUserId, isReadOnly, globalDa
                   style={{ padding: 2 }}
                   onClick={async () => {
                     if (!window.confirm(`Eliminare "${e.name}"?`)) return
-                    await actions.deleteProteinEntry(todayStr, e.id)
+                    await actions.deleteProteinEntry(viewDate, e.id)
                   }}
                 >
                   <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>

@@ -30964,8 +30964,18 @@ This typically indicates that your device does not have a healthy Internet conne
   var statusEl = document.getElementById("status");
   var passwordInput = document.getElementById("password");
   var titleInput = document.getElementById("title");
+  var descriptionInput = document.getElementById("description");
+  var deadlineInput = document.getElementById("deadline");
   var priorityInput = document.getElementById("priority");
   var rewardInput = document.getElementById("reward");
+  var penaltyInput = document.getElementById("penalty");
+  function tomorrow() {
+    const d = /* @__PURE__ */ new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  deadlineInput.value = tomorrow();
+  deadlineInput.min = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   function setStatus(msg) {
     statusEl.textContent = msg;
   }
@@ -31000,9 +31010,10 @@ This typically indicates that your device does not have a healthy Internet conne
       setStatus("Scrivi cosa devi fare");
       return;
     }
+    const deadline = deadlineInput.value || tomorrow();
     const priority = priorityInput.value;
     const reward = parseInt(rewardInput.value) || 0;
-    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const penalty = parseInt(penaltyInput.value) || 0;
     setStatus("Salvataggio...");
     try {
       const ref = doc(db, "users", "flavio");
@@ -31011,10 +31022,10 @@ This typically indicates that your device does not have a healthy Internet conne
       const newTask = {
         id: `task_${Date.now().toString(36)}`,
         title,
-        description: "",
-        deadline: today,
+        description: descriptionInput.value.trim(),
+        deadline,
         reward,
-        penalty: 0,
+        penalty,
         priority,
         status: "active",
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -31026,7 +31037,10 @@ This typically indicates that your device does not have a healthy Internet conne
       await updateDoc(ref, { tasks: [...tasks, newTask] });
       setStatus("\u2705 Aggiunta!");
       titleInput.value = "";
-      rewardInput.value = "1";
+      descriptionInput.value = "";
+      deadlineInput.value = tomorrow();
+      rewardInput.value = "5";
+      penaltyInput.value = "3";
       setTimeout(() => window.close(), 700);
     } catch (e2) {
       setStatus("Errore: " + e2.message);

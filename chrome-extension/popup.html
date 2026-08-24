@@ -41,13 +41,18 @@
 
   <div id="taskView">
     <input id="title" type="text" placeholder="Cosa devi fare?" autocomplete="off">
+    <input id="description" type="text" placeholder="Descrizione (opzionale)" autocomplete="off">
+    <input id="deadline" type="date">
     <div class="row">
       <select id="priority">
         <option value="high">Alta</option>
         <option value="medium" selected>Media</option>
         <option value="low">Bassa</option>
       </select>
-      <input id="reward" type="number" placeholder="Punti" value="1" min="0">
+    </div>
+    <div class="row">
+      <input id="reward" type="number" placeholder="Ricompensa pt" value="5" min="0">
+      <input id="penalty" type="number" placeholder="Penalità pt" value="3" min="0">
     </div>
     <button id="saveBtn">Aggiungi</button>
   </div>

@@ -1,5 +1,37 @@
 import { useApp } from '../lib/store'
 import { useCountUp } from '../hooks/useCountUp'
+import { APP_VERSION } from '../version'
+
+const MONTHS_IT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic']
+
+function formatBuildTime(raw) {
+  if (!raw) return null
+  // Formato atteso: "2026-08-24 15:42 UTC"
+  const m = raw.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!m) return raw
+  return `${parseInt(m[3])} ${MONTHS_IT[parseInt(m[2]) - 1]} ${m[1]}, ${m[4]}:${m[5]}`
+}
+
+// Visibile su ogni tab (a differenza del BuildInfo dentro DailySummaryPanel,
+// nascosto su Workout/Benessere/Mente/Nutrizione) — per sapere sempre, con
+// un'occhiata, se si sta usando l'ultima versione pubblicata.
+function VersionBadge() {
+  const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()
+  const buildTime = isNative
+    ? (typeof window !== 'undefined' ? window.__ANDROID_BUILD_TIME__ : null)
+    : (typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : null)
+  const formatted = formatBuildTime(buildTime)
+
+  return (
+    <div style={{
+      fontSize: '0.6em', color: 'var(--text-sec)', opacity: 0.5,
+      fontFamily: 'monospace', textAlign: 'center', padding: '2px 0 0',
+      userSelect: 'text',
+    }}>
+      v{APP_VERSION}{formatted ? ` · ${formatted}` : ''}
+    </div>
+  )
+}
 
 export default function Header({ isReadOnly }) {
   const { state, actions } = useApp()
@@ -13,6 +45,7 @@ export default function Header({ isReadOnly }) {
   const avatar = authData?.profile?.avatar || (authUserId === 'flavio' ? '🔥' : '⭐')
 
   return (
+    <>
     <div className="identity-bar">
       <div className="offline-badge">OFFLINE</div>
       <div className="user-info">
@@ -47,5 +80,7 @@ export default function Header({ isReadOnly }) {
         </button>
       </div>
     </div>
+    <VersionBadge />
+    </>
   )
 }

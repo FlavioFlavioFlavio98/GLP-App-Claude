@@ -31,8 +31,19 @@ const taskView = document.getElementById('taskView')
 const statusEl = document.getElementById('status')
 const passwordInput = document.getElementById('password')
 const titleInput = document.getElementById('title')
+const descriptionInput = document.getElementById('description')
+const deadlineInput = document.getElementById('deadline')
 const priorityInput = document.getElementById('priority')
 const rewardInput = document.getElementById('reward')
+const penaltyInput = document.getElementById('penalty')
+
+function tomorrow() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+deadlineInput.value = tomorrow()
+deadlineInput.min = new Date().toISOString().slice(0, 10)
 
 function setStatus(msg) { statusEl.textContent = msg }
 
@@ -66,9 +77,10 @@ passwordInput.addEventListener('keydown', e => {
 document.getElementById('saveBtn').addEventListener('click', async () => {
   const title = titleInput.value.trim()
   if (!title) { setStatus('Scrivi cosa devi fare'); return }
+  const deadline = deadlineInput.value || tomorrow()
   const priority = priorityInput.value
   const reward = parseInt(rewardInput.value) || 0
-  const today = new Date().toISOString().slice(0, 10)
+  const penalty = parseInt(penaltyInput.value) || 0
 
   setStatus('Salvataggio...')
   try {
@@ -78,10 +90,10 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     const newTask = {
       id: `task_${Date.now().toString(36)}`,
       title,
-      description: '',
-      deadline: today,
+      description: descriptionInput.value.trim(),
+      deadline,
       reward,
-      penalty: 0,
+      penalty,
       priority,
       status: 'active',
       createdAt: new Date().toISOString(),
@@ -93,7 +105,10 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     await updateDoc(ref, { tasks: [...tasks, newTask] })
     setStatus('✅ Aggiunta!')
     titleInput.value = ''
-    rewardInput.value = '1'
+    descriptionInput.value = ''
+    deadlineInput.value = tomorrow()
+    rewardInput.value = '5'
+    penaltyInput.value = '3'
     setTimeout(() => window.close(), 700)
   } catch (e) {
     setStatus('Errore: ' + e.message)

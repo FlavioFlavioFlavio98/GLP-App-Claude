@@ -13,6 +13,11 @@ import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 
+// Login email/password (non Google Sign-In): il picker di sistema per
+// aggiungere un account Google su Wear OS richiede un telefono associato
+// ("Add from phone") anche per un'app che fa il proprio OAuth — su un
+// emulatore standalone senza telefono associato resta bloccato lì. Password
+// inserita via RemoteInput (tastiera/voce del sistema, vedi MainActivity).
 @Composable
 fun LoginScreen(loading: Boolean, error: String?, onSignInClick: () -> Unit) {
     Column(
@@ -26,10 +31,16 @@ fun LoginScreen(loading: Boolean, error: String?, onSignInClick: () -> Unit) {
         Text(
             text = "GLP",
             style = MaterialTheme.typography.title3,
-            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+        )
+        Text(
+            text = "flavio.rossi94@gmail.com",
+            style = MaterialTheme.typography.caption2,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(bottom = 12.dp),
         )
         Button(onClick = onSignInClick, enabled = !loading) {
-            Text(if (loading) "..." else "Accedi")
+            Text(if (loading) "..." else "Password")
         }
         if (error != null) {
             Text(

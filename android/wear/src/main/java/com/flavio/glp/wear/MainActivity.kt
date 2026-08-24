@@ -25,12 +25,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.MaterialTheme
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
+import androidx.wear.input.RemoteInputIntentHelper
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+
+// Unico account ammesso dalle regole Firestore (vedi firestore.rules) — fisso
+// qui così sul watch basta digitare/dettare la password, non anche l'email.
+private const val FIXED_EMAIL = "flavio.rossi94@gmail.com"
+private const val PASSWORD_INPUT_KEY = "password_input"
 
 class MainActivity : ComponentActivity() {
 
@@ -41,46 +44,47 @@ class MainActivity : ComponentActivity() {
             FirebaseApp.initializeApp(this)
         }
 
-        // "default_web_client_id" viene generato dal plugin google-services a
-        // partire dallo stesso google-services.json del telefono — stesso
-        // progetto Firebase, stesso client OAuth, nessuna config aggiuntiva.
-        val webClientId = getString(resources.getIdentifier("default_web_client_id", "string", packageName))
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(webClientId)
-            .requestEmail()
-            .build()
-        val googleClient = GoogleSignIn.getClient(this, gso)
-
         setContent {
             var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
             var authLoading by remember { mutableStateOf(false) }
             var authError by remember { mutableStateOf<String?>(null) }
 
-            val signInLauncher = rememberLauncherForActivityResult(
+            fun signIn(password: String) {
+                FirebaseAuth.getInstance().signInWithEmailAndPassword(FIXED_EMAIL, password)
+                    .addOnSuccessListener {
+                        authLoading = false
+                        user = FirebaseAuth.getInstance().currentUser
+                    }
+                    .addOnFailureListener { err ->
+                        if (err is FirebaseAuthInvalidUserException) {
+                            // Primo utilizzo: nessun account ancora — lo crea con la
+                            // password appena inserita (stesso account riusabile ogni volta dopo).
+                            FirebaseAuth.getInstance().createUserWithEmailAndPassword(FIXED_EMAIL, password)
+                                .addOnSuccessListener {
+                                    authLoading = false
+                                    user = FirebaseAuth.getInstance().currentUser
+                                }
+                                .addOnFailureListener {
+                                    authLoading = false
+                                    authError = it.message ?: "Errore creazione account"
+                                }
+                        } else {
+                            authLoading = false
+                            authError = "Password errata"
+                        }
+                    }
+            }
+
+            val passwordLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartActivityForResult()
             ) { result ->
-                val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-                try {
-                    val account = task.getResult(ApiException::class.java)
-                    val idToken = account?.idToken
-                    if (idToken == null) {
-                        authLoading = false
-                        authError = "Login fallito"
-                    } else {
-                        val credential = GoogleAuthProvider.getCredential(idToken, null)
-                        FirebaseAuth.getInstance().signInWithCredential(credential)
-                            .addOnSuccessListener {
-                                authLoading = false
-                                user = FirebaseAuth.getInstance().currentUser
-                            }
-                            .addOnFailureListener {
-                                authLoading = false
-                                authError = "Accesso negato"
-                            }
-                    }
-                } catch (e: Exception) {
+                val data = result.data
+                val password = data?.let { android.app.RemoteInput.getResultsFromIntent(it) }
+                    ?.getCharSequence(PASSWORD_INPUT_KEY)?.toString()
+                if (password.isNullOrBlank()) {
                     authLoading = false
-                    authError = "Login annullato"
+                } else {
+                    signIn(password)
                 }
             }
 
@@ -92,7 +96,14 @@ class MainActivity : ComponentActivity() {
                         onSignInClick = {
                             authLoading = true
                             authError = null
-                            signInLauncher.launch(googleClient.signInIntent)
+                            val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+                            val remoteInputs = listOf(
+                                android.app.RemoteInput.Builder(PASSWORD_INPUT_KEY)
+                                    .setLabel("Password")
+                                    .build()
+                            )
+                            RemoteInputIntentHelper.putRemoteInputsExtra(intent, remoteInputs)
+                            passwordLauncher.launch(intent)
                         },
                     )
                 } else {

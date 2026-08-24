@@ -38,6 +38,7 @@ dependencies {
     implementation 'androidx.wear.compose:compose-foundation:1.4.1'
 
     implementation 'com.google.android.gms:play-services-auth:21.3.0'
+    implementation 'androidx.wear:wear-input:1.2.0'
     implementation 'com.google.firebase:firebase-firestore-ktx:25.0.0'
     implementation 'com.google.firebase:firebase-auth-ktx:23.0.0'
 }

@@ -1,12 +1,15 @@
 package com.flavio.glp
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.widget.*
 import android.view.*
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -199,7 +202,23 @@ class AddWorkoutActivity : Activity() {
 
         setContentView(root)
 
-        // Carica esercizi
+        // Cache locale (scritta da MainActivity/WidgetUpdateWorker/FCM sync) —
+        // mostra subito le chip in ordine alfabetico invece di uno schermo
+        // vuoto in attesa della rete; il caricamento da Firestore qui sotto le
+        // ri-ordina poi per uso recente e conferma i dati più aggiornati.
+        val prefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
+        val cachedJson = prefs.getString("cached_exercises", null)
+        if (cachedJson != null) {
+            try {
+                val type = object : TypeToken<List<Map<String, Any>>>() {}.type
+                val cached: List<Map<String, Any>> = Gson().fromJson(cachedJson, type) ?: emptyList()
+                if (cached.isNotEmpty()) {
+                    renderExercises(cached.sortedBy { it["name"] as? String ?: "" })
+                }
+            } catch (e: Exception) { /* ignora, arriverà comunque da rete */ }
+        }
+
+        // Carica esercizi da Firestore (fresco, con ordinamento per uso recente)
         FirebaseFirestore.getInstance()
             .collection("users").document("flavio")
             .get()
@@ -207,8 +226,10 @@ class AddWorkoutActivity : Activity() {
                 @Suppress("UNCHECKED_CAST")
                 val rawExercises = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
                 if (rawExercises.isEmpty()) {
-                    Toast.makeText(this, "Nessun esercizio configurato", Toast.LENGTH_SHORT).show()
-                    finish()
+                    if (exercises.isEmpty()) {
+                        Toast.makeText(this, "Nessun esercizio configurato", Toast.LENGTH_SHORT).show()
+                        finish()
+                    }
                     return@addOnSuccessListener
                 }
 
@@ -224,39 +245,54 @@ class AddWorkoutActivity : Activity() {
                     val t = s["time"] as? String ?: ""
                     if (t > (lastTimeById[exId] ?: "")) lastTimeById[exId] = t
                 }
-                exercises = rawExercises
+                val sorted = rawExercises
                     .map { ex -> ex to (lastTimeById[ex["id"] as? String]) }
                     .sortedWith(compareByDescending<Pair<Map<String, Any>, String?>> { it.second != null }
                         .thenByDescending { it.second ?: "" }
                         .thenBy { (it.first["name"] as? String) ?: "" })
                     .map { it.first }
 
-                exercises.forEachIndexed { index, ex ->
-                    val emoji = ex["emoji"] as? String ?: "💪"
-                    val name = ex["name"] as? String ?: "Esercizio"
-                    val chip = TextView(this).apply {
-                        text = "$emoji $name"
-                        textSize = 12f
-                        gravity = Gravity.CENTER
-                        setPadding(dp(14), dp(9), dp(14), dp(9))
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                        ).apply { marginEnd = dp(8) }
-                        setOnClickListener {
-                            selectedIndex = index
-                            updateSelection()
-                        }
-                    }
-                    chipGroup.addView(chip)
+                // Mantiene selezionato lo stesso esercizio se l'utente aveva già
+                // toccato una chip mentre si vedeva ancora la lista dalla cache.
+                val selectedId = exercises.getOrNull(selectedIndex)?.get("id")
+                renderExercises(sorted)
+                if (selectedId != null) {
+                    val newIndex = exercises.indexOfFirst { it["id"] == selectedId }
+                    if (newIndex >= 0) { selectedIndex = newIndex; updateSelection() }
                 }
-
-                updateSelection()
             }
             .addOnFailureListener {
-                Toast.makeText(this, "Errore caricamento esercizi", Toast.LENGTH_SHORT).show()
-                finish()
+                if (exercises.isEmpty()) {
+                    Toast.makeText(this, "Errore caricamento esercizi", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
             }
+    }
+
+    private fun renderExercises(list: List<Map<String, Any>>) {
+        exercises = list
+        chipGroup.removeAllViews()
+        exercises.forEachIndexed { index, ex ->
+            val emoji = ex["emoji"] as? String ?: "💪"
+            val name = ex["name"] as? String ?: "Esercizio"
+            val chip = TextView(this).apply {
+                text = "$emoji $name"
+                textSize = 12f
+                gravity = Gravity.CENTER
+                setPadding(dp(14), dp(9), dp(14), dp(9))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = dp(8) }
+                setOnClickListener {
+                    selectedIndex = index
+                    updateSelection()
+                }
+            }
+            chipGroup.addView(chip)
+        }
+        if (selectedIndex >= exercises.size) selectedIndex = 0
+        updateSelection()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

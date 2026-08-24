@@ -1,12 +1,15 @@
 package com.flavio.glp
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.widget.*
 import android.view.*
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -162,7 +165,19 @@ class AddProteinActivity : Activity() {
 
         setContentView(root)
 
-        // Carica alimenti
+        // Cache locale (scritta da MainActivity/WidgetUpdateWorker/FCM sync) —
+        // mostra subito le chip invece di uno schermo vuoto in attesa della rete.
+        val prefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
+        val cachedJson = prefs.getString("cached_foods", null)
+        if (cachedJson != null) {
+            try {
+                val type = object : TypeToken<List<Map<String, Any>>>() {}.type
+                val cached: List<Map<String, Any>> = Gson().fromJson(cachedJson, type) ?: emptyList()
+                if (cached.isNotEmpty()) renderFoods(cached.sortedBy { it["name"] as? String ?: "" })
+            } catch (e: Exception) { /* ignora, arriverà comunque da rete */ }
+        }
+
+        // Carica alimenti da Firestore (fresco)
         FirebaseFirestore.getInstance()
             .collection("users").document("flavio")
             .get()
@@ -170,39 +185,52 @@ class AddProteinActivity : Activity() {
                 @Suppress("UNCHECKED_CAST")
                 val rawFoods = doc.get("proteinFoods") as? List<Map<String, Any>> ?: emptyList()
                 if (rawFoods.isEmpty()) {
-                    Toast.makeText(this, "Nessun alimento configurato — aprilo prima dall'app", Toast.LENGTH_LONG).show()
-                    finish()
+                    if (foods.isEmpty()) {
+                        Toast.makeText(this, "Nessun alimento configurato — aprilo prima dall'app", Toast.LENGTH_LONG).show()
+                        finish()
+                    }
                     return@addOnSuccessListener
                 }
 
-                foods = rawFoods.sortedBy { (it["name"] as? String) ?: "" }
-
-                foods.forEachIndexed { index, f ->
-                    val emoji = f["emoji"] as? String ?: "🍽️"
-                    val name = f["name"] as? String ?: "Alimento"
-                    val chip = TextView(this).apply {
-                        text = "$emoji $name"
-                        textSize = 12f
-                        gravity = Gravity.CENTER
-                        setPadding(dp(14), dp(9), dp(14), dp(9))
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                        ).apply { marginEnd = dp(8) }
-                        setOnClickListener {
-                            selectedIndex = index
-                            updateSelection()
-                        }
-                    }
-                    chipGroup.addView(chip)
+                val selectedId = foods.getOrNull(selectedIndex)?.get("id")
+                renderFoods(rawFoods.sortedBy { (it["name"] as? String) ?: "" })
+                if (selectedId != null) {
+                    val newIndex = foods.indexOfFirst { it["id"] == selectedId }
+                    if (newIndex >= 0) { selectedIndex = newIndex; updateSelection() }
                 }
-
-                updateSelection()
             }
             .addOnFailureListener {
-                Toast.makeText(this, "Errore caricamento alimenti", Toast.LENGTH_SHORT).show()
-                finish()
+                if (foods.isEmpty()) {
+                    Toast.makeText(this, "Errore caricamento alimenti", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
             }
+    }
+
+    private fun renderFoods(list: List<Map<String, Any>>) {
+        foods = list
+        chipGroup.removeAllViews()
+        foods.forEachIndexed { index, f ->
+            val emoji = f["emoji"] as? String ?: "🍽️"
+            val name = f["name"] as? String ?: "Alimento"
+            val chip = TextView(this).apply {
+                text = "$emoji $name"
+                textSize = 12f
+                gravity = Gravity.CENTER
+                setPadding(dp(14), dp(9), dp(14), dp(9))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = dp(8) }
+                setOnClickListener {
+                    selectedIndex = index
+                    updateSelection()
+                }
+            }
+            chipGroup.addView(chip)
+        }
+        if (selectedIndex >= foods.size) selectedIndex = 0
+        updateSelection()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

@@ -376,6 +376,11 @@ class MainActivity : BridgeActivity() {
                     archived == null && !doneList.contains(id) && !failedList.contains(id)
                 }
 
+                @Suppress("UNCHECKED_CAST")
+                val cachedExercises = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
+                @Suppress("UNCHECKED_CAST")
+                val cachedFoods = doc.get("proteinFoods") as? List<Map<String, Any>> ?: emptyList()
+
                 // Salva in SharedPreferences — tutto Int per evitare ClassCastException
                 getSharedPreferences("glp_widget", Context.MODE_PRIVATE).edit()
                     .putString("active_tasks", Gson().toJson(activeTasks.take(TaskWidgetProvider.MAX_ROWS)))
@@ -396,6 +401,12 @@ class MainActivity : BridgeActivity() {
                     // Counter per le notifiche locali
                     .putInt("notification_habits_pending", pendingHabits.size)
                     .putInt("notification_tasks_today", activeTasks.size)
+                    // Cache locale di esercizi/alimenti per i dialog di aggiunta rapida
+                    // (AddWorkoutActivity, AddProteinActivity): mostrano subito questa
+                    // lista invece di aspettare una lettura di rete ad ogni apertura,
+                    // poi la aggiornano in background — vedi loro rispettivi onCreate.
+                    .putString("cached_exercises", Gson().toJson(cachedExercises))
+                    .putString("cached_foods", Gson().toJson(cachedFoods))
                     .apply()
 
                 // Fetch separata per letture urgenti (sub-collection)

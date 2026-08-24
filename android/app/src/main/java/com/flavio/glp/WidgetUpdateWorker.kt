@@ -121,6 +121,11 @@ class WidgetUpdateWorker(
                 habit["archivedAt"] == null && !doneList.contains(id) && !failedList.contains(id)
             }
 
+            @Suppress("UNCHECKED_CAST")
+            val cachedExercises = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val cachedFoods = doc.get("proteinFoods") as? List<Map<String, Any>> ?: emptyList()
+
             // ── Salva in SharedPreferences ────────────────────────────────────
             val prefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
             prefs.edit()
@@ -140,6 +145,10 @@ class WidgetUpdateWorker(
                 .putInt("habits_total",      activeHabits.size)
                 .putInt("streak",            streak)
                 .putInt("total_score_int",   score.toInt())
+                // Cache locale per i dialog di aggiunta rapida (AddWorkoutActivity,
+                // AddProteinActivity) — vedi commento nello stesso punto in MainActivity.
+                .putString("cached_exercises", Gson().toJson(cachedExercises))
+                .putString("cached_foods",     Gson().toJson(cachedFoods))
                 .apply()
 
             // ── Aggiorna tutti i widget ───────────────────────────────────────

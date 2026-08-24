@@ -26,6 +26,13 @@ data class WearExercise(
     val pointsPerRep: Double,
 )
 
+data class WearHabit(
+    val id: String,
+    val name: String,
+    val emoji: String,
+    val done: Boolean,
+)
+
 fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
 private fun asDouble(v: Any?): Double = when (v) {
@@ -111,6 +118,79 @@ object GlpRepository {
                 onResult(exercises)
             }
             .addOnFailureListener(onError)
+    }
+
+    fun loadScore(onResult: (Double) -> Unit, onError: (Exception) -> Unit) {
+        userRef().get()
+            .addOnSuccessListener { doc -> onResult(doc.getDouble("score") ?: 0.0) }
+            .addOnFailureListener(onError)
+    }
+
+    // Versione semplificata di isHabitVisible/setHabitStatus della web app —
+    // niente frequenze multi-giorno, livelli "min/max" o abitudini singole a
+    // data fissa: solo le abitudini normali di oggi con toggle fatto/non fatto,
+    // sufficiente per farsi un'idea reale sul watch senza portare tutta la
+    // logica di scheduling in Kotlin.
+    fun loadHabits(onResult: (List<WearHabit>) -> Unit, onError: (Exception) -> Unit) {
+        userRef().get()
+            .addOnSuccessListener { doc ->
+                @Suppress("UNCHECKED_CAST")
+                val rawHabits = doc.get("habits") as? List<Map<String, Any>> ?: emptyList()
+                @Suppress("UNCHECKED_CAST")
+                val todayEntry = (doc.get("dailyLogs") as? Map<String, Any>)?.get(today()) as? Map<String, Any>
+                @Suppress("UNCHECKED_CAST")
+                val doneIds = (todayEntry?.get("habits") as? List<String>) ?: emptyList()
+
+                val habits = rawHabits
+                    .filter { it["archivedAt"] == null && it["type"] != "single" }
+                    .map {
+                        val id = it["id"] as? String ?: (it["name"] as? String ?: "").replace(Regex("[^a-zA-Z0-9]"), "")
+                        WearHabit(
+                            id = id,
+                            name = it["name"] as? String ?: "Abitudine",
+                            emoji = it["emoji"] as? String ?: "⭐",
+                            done = doneIds.contains(id),
+                        )
+                    }
+                onResult(habits)
+            }
+            .addOnFailureListener(onError)
+    }
+
+    fun toggleHabit(habitId: String, currentlyDone: Boolean, onDone: () -> Unit, onError: (Exception) -> Unit) {
+        val ref = userRef()
+        ref.get().addOnSuccessListener { doc ->
+            @Suppress("UNCHECKED_CAST")
+            val habitsArr = (doc.get("habits") as? List<Map<String, Any>> ?: emptyList()).toMutableList()
+            val todayStr = today()
+            @Suppress("UNCHECKED_CAST")
+            val dailyLogs = (doc.get("dailyLogs") as? Map<String, Any>) ?: emptyMap()
+            @Suppress("UNCHECKED_CAST")
+            val todayEntryRaw = dailyLogs[todayStr] as? Map<String, Any>
+            @Suppress("UNCHECKED_CAST")
+            val doneIds = ((todayEntryRaw?.get("habits") as? List<String>) ?: emptyList()).toMutableList()
+            @Suppress("UNCHECKED_CAST")
+            val habitLevels = ((todayEntryRaw?.get("habitLevels") as? Map<String, Any>) ?: emptyMap()).toMutableMap()
+
+            if (currentlyDone) {
+                doneIds.remove(habitId)
+                habitLevels.remove(habitId)
+            } else {
+                doneIds.add(habitId)
+                habitLevels[habitId] = "max"
+                val idx = habitsArr.indexOfFirst {
+                    (it["id"] as? String ?: (it["name"] as? String ?: "").replace(Regex("[^a-zA-Z0-9]"), "")) == habitId
+                }
+                if (idx >= 0) habitsArr[idx] = habitsArr[idx].toMutableMap().apply { put("lastDone", todayStr) }
+            }
+
+            ref.update(
+                "dailyLogs.$todayStr.habits", doneIds,
+                "dailyLogs.$todayStr.habitLevels", habitLevels,
+                "habits", habitsArr,
+            ).addOnSuccessListener { onDone() }
+                .addOnFailureListener(onError)
+        }.addOnFailureListener(onError)
     }
 
     // Log rapido dal watch: sempre 10 reps a sforzo "leggero" (1x) — stesso

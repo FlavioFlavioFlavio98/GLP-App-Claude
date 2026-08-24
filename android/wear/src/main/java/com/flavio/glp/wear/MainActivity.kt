@@ -28,11 +28,13 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.input.RemoteInputIntentHelper
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseAuthInvalidUserException
 
-// Unico account ammesso dalle regole Firestore (vedi firestore.rules) — fisso
-// qui così sul watch basta digitare/dettare la password, non anche l'email.
-private const val FIXED_EMAIL = "flavio.rossi94@gmail.com"
+// Account dedicato all'app watch (vedi firestore.rules) — separato dall'email
+// di login principale (flavio.rossi94@gmail.com, usata via Google Sign-In su
+// telefono/web) per evitare la collisione "un account per email" di Firebase
+// Auth quando si crea un credential email/password per un'email già legata
+// a un provider Google. Stessi dati (users/flavio), solo credenziale diversa.
+private const val FIXED_EMAIL = "flavio.rossi95@gmail.com"
 private const val PASSWORD_INPUT_KEY = "password_input"
 
 class MainActivity : ComponentActivity() {
@@ -50,28 +52,29 @@ class MainActivity : ComponentActivity() {
             var authError by remember { mutableStateOf<String?>(null) }
 
             fun signIn(password: String) {
+                // Non distinguiamo il tipo di eccezione (utente inesistente vs
+                // password sbagliata): con la protezione anti-enumerazione di
+                // Firebase Auth entrambi i casi arrivano come lo stesso errore
+                // generico, quindi proviamo sempre a creare l'account su
+                // qualunque fallimento del login — se l'account esiste già con
+                // un'altra password, createUser fallirà a sua volta con un
+                // errore chiaro ("email-already-in-use").
                 FirebaseAuth.getInstance().signInWithEmailAndPassword(FIXED_EMAIL, password)
                     .addOnSuccessListener {
                         authLoading = false
                         user = FirebaseAuth.getInstance().currentUser
                     }
-                    .addOnFailureListener { err ->
-                        if (err is FirebaseAuthInvalidUserException) {
-                            // Primo utilizzo: nessun account ancora — lo crea con la
-                            // password appena inserita (stesso account riusabile ogni volta dopo).
-                            FirebaseAuth.getInstance().createUserWithEmailAndPassword(FIXED_EMAIL, password)
-                                .addOnSuccessListener {
-                                    authLoading = false
-                                    user = FirebaseAuth.getInstance().currentUser
-                                }
-                                .addOnFailureListener {
-                                    authLoading = false
-                                    authError = it.message ?: "Errore creazione account"
-                                }
-                        } else {
-                            authLoading = false
-                            authError = "Password errata"
-                        }
+                    .addOnFailureListener {
+                        FirebaseAuth.getInstance().createUserWithEmailAndPassword(FIXED_EMAIL, password)
+                            .addOnSuccessListener {
+                                authLoading = false
+                                user = FirebaseAuth.getInstance().currentUser
+                            }
+                            .addOnFailureListener { err2 ->
+                                authLoading = false
+                                authError = if (err2.message?.contains("already in use") == true)
+                                    "Password errata" else (err2.message ?: "Errore login")
+                            }
                     }
             }
 
@@ -114,13 +117,37 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Ordine pagine: Oggi (riepilogo) → Abitudini (il loop più usato quotidiano,
+// per esplicita richiesta) → Task → Workout.
+private const val PAGE_COUNT = 4
+
 @Composable
 private fun MainPager() {
+    var score by remember { mutableStateOf(0.0) }
+    var scoreLoading by remember { mutableStateOf(true) }
+    var habits by remember { mutableStateOf<List<WearHabit>>(emptyList()) }
+    var habitsLoading by remember { mutableStateOf(true) }
     var tasks by remember { mutableStateOf<List<WearTask>>(emptyList()) }
     var tasksLoading by remember { mutableStateOf(true) }
     var exercises by remember { mutableStateOf<List<WearExercise>>(emptyList()) }
     var exercisesLoading by remember { mutableStateOf(true) }
     var lastLoggedName by remember { mutableStateOf<String?>(null) }
+
+    fun refreshScore() {
+        scoreLoading = true
+        GlpRepository.loadScore(
+            onResult = { score = it; scoreLoading = false },
+            onError = { scoreLoading = false },
+        )
+    }
+
+    fun refreshHabits() {
+        habitsLoading = true
+        GlpRepository.loadHabits(
+            onResult = { habits = it; habitsLoading = false },
+            onError = { habitsLoading = false },
+        )
+    }
 
     fun refreshTasks() {
         tasksLoading = true
@@ -139,16 +166,34 @@ private fun MainPager() {
     }
 
     LaunchedEffect(Unit) {
+        refreshScore()
+        refreshHabits()
         refreshTasks()
         refreshExercises()
     }
 
-    val pagerState = rememberPagerState(pageCount = { 2 })
+    val pagerState = rememberPagerState(initialPage = 1, pageCount = { PAGE_COUNT })
 
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> TaskListScreen(
+                0 -> TodayScreen(score = score, loading = scoreLoading)
+                1 -> HabitsScreen(
+                    habits = habits,
+                    loading = habitsLoading,
+                    onToggle = { habit ->
+                        // Ottimistico: si spunta subito, poi ri-sincronizza in caso di errore
+                        val wasDone = habit.done
+                        habits = habits.map { if (it.id == habit.id) it.copy(done = !wasDone) else it }
+                        GlpRepository.toggleHabit(
+                            habitId = habit.id,
+                            currentlyDone = wasDone,
+                            onDone = { refreshScore() },
+                            onError = { refreshHabits() },
+                        )
+                    },
+                )
+                2 -> TaskListScreen(
                     tasks = tasks,
                     loading = tasksLoading,
                     onComplete = { task ->
@@ -157,19 +202,19 @@ private fun MainPager() {
                         GlpRepository.completeTask(
                             taskId = task.id,
                             reward = task.reward,
-                            onDone = {},
+                            onDone = { refreshScore() },
                             onError = { refreshTasks() },
                         )
                     },
                 )
-                1 -> WorkoutScreen(
+                3 -> WorkoutScreen(
                     exercises = exercises,
                     loading = exercisesLoading,
                     lastLoggedName = lastLoggedName,
                     onLogSet = { exercise ->
                         GlpRepository.logQuickSet(
                             exercise = exercise,
-                            onDone = { lastLoggedName = exercise.name },
+                            onDone = { lastLoggedName = exercise.name; refreshScore() },
                             onError = {},
                         )
                     },
@@ -177,13 +222,13 @@ private fun MainPager() {
             }
         }
 
-        // Puntini di navigazione tra le due pagine
+        // Puntini di navigazione tra le pagine
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 2.dp),
         ) {
-            repeat(2) { i ->
+            repeat(PAGE_COUNT) { i ->
                 Box(
                     modifier = Modifier
                         .padding(2.dp)

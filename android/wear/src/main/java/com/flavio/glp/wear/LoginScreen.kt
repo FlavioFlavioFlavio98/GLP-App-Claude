@@ -34,7 +34,7 @@ fun LoginScreen(loading: Boolean, error: String?, onSignInClick: () -> Unit) {
             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
         )
         Text(
-            text = "flavio.rossi94@gmail.com",
+            text = "flavio.rossi95@gmail.com",
             style = MaterialTheme.typography.caption2,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 12.dp),

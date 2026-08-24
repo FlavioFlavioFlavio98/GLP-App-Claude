@@ -2,10 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Solo Flavio può accedere
+    // Solo Flavio può accedere — la seconda email è l'account dedicato
+    // all'app Wear OS (watch), separato dal login Google principale per
+    // evitare collisioni con Firebase Auth "un account per email".
     function isAllowedUser() {
       return request.auth != null &&
-             request.auth.token.email == 'flavio.rossi94@gmail.com';
+             (request.auth.token.email == 'flavio.rossi94@gmail.com' ||
+              request.auth.token.email == 'flavio.rossi95@gmail.com');
     }
 
     // Documenti utente

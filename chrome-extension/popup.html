@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>GLP — Task rapida</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    width: 280px; margin: 0; padding: 14px;
+    background: #141414; color: #eee;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  h1 { font-size: 13px; margin: 0 0 12px; color: #ffca28; font-weight: 700; }
+  input, select {
+    width: 100%; padding: 9px 10px; margin-bottom: 8px;
+    background: #242424; border: 1px solid #3a3a3a; border-radius: 8px;
+    color: #eee; font-size: 13px;
+  }
+  input:focus, select:focus { outline: none; border-color: #ffca28; }
+  button {
+    width: 100%; padding: 10px; margin-top: 2px;
+    background: #ffca28; color: #111; border: none; border-radius: 8px;
+    font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  button:active { opacity: 0.85; }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; }
+  #status { font-size: 11px; color: #888; margin-top: 8px; text-align: center; min-height: 14px; }
+  #loginView, #taskView { display: none; }
+  .hint { font-size: 10px; color: #666; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+  <h1>📋 GLP — Task rapida</h1>
+
+  <div id="loginView">
+    <div class="hint">Accesso una tantum con l'account dedicato (lo stesso del watch)</div>
+    <input id="password" type="password" placeholder="Password" autocomplete="off">
+    <button id="loginBtn">Accedi</button>
+  </div>
+
+  <div id="taskView">
+    <input id="title" type="text" placeholder="Cosa devi fare?" autocomplete="off">
+    <div class="row">
+      <select id="priority">
+        <option value="high">Alta</option>
+        <option value="medium" selected>Media</option>
+        <option value="low">Bassa</option>
+      </select>
+      <input id="reward" type="number" placeholder="Punti" value="1" min="0">
+    </div>
+    <button id="saveBtn">Aggiungi</button>
+  </div>
+
+  <div id="status"></div>
+
+  <script src="popup.bundle.js"></script>
+</body>
+</html>

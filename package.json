@@ -14,7 +14,8 @@
     "cap:sync": "powershell -ExecutionPolicy Bypass -File fix-android.ps1",
     "emulators": "firebase emulators:start --only auth,firestore,storage --import=./.emulator-data --export-on-exit",
     "seed:emulator": "node scripts/seed-emulator.mjs",
-    "dev:emulator": "vite --mode emulator"
+    "dev:emulator": "vite --mode emulator",
+    "build:extension": "esbuild chrome-extension/src/popup.js --bundle --outfile=chrome-extension/popup.bundle.js --format=iife --platform=browser"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.3.0",

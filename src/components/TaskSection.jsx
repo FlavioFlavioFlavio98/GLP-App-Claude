@@ -34,22 +34,37 @@ export default function TaskSection({ minimalMode }) {
   if (authUserId !== 'flavio' || isReadOnly) return null
 
   const todayStr = toDateString(new Date())
+  const viewDate = state.viewDate || todayStr
+  const isToday = viewDate === todayStr
   const allTasks = globalData?.tasks || []
   const PRIO = { high: 0, medium: 1, low: 2 }
 
-  const activeTasks = allTasks
+  // Su OGGI: task di oggi + quelle ancora attive ma scadute + tutte le
+  // scadute + completate oggi — la vista "non perdere nulla" di default.
+  // Su un altro giorno (passato o futuro): solo le task programmate per
+  // quella data esatta, qualunque sia il loro stato — è la vista "cosa era/
+  // sarà previsto per quel giorno", non un riepilogo generale.
+  const dayTasks = isToday
+    ? allTasks.filter(t =>
+        (t.status === 'active' && t.deadline <= todayStr) ||
+        t.status === 'expired' ||
+        (t.status === 'completed' && typeof t.completedAt === 'string' && t.completedAt.startsWith(todayStr))
+      )
+    : allTasks.filter(t => t.deadline === viewDate)
+
+  const activeTasks = dayTasks
     .filter(t => t.status === 'active')
     .sort((a, b) => {
       if (a.deadline !== b.deadline) return a.deadline.localeCompare(b.deadline)
       return (PRIO[a.priority] || 1) - (PRIO[b.priority] || 1)
     })
 
-  const expiredTasks = allTasks
+  const expiredTasks = dayTasks
     .filter(t => t.status === 'expired')
     .sort((a, b) => (b.expiredAt || '').localeCompare(a.expiredAt || ''))
 
-  const completedToday = allTasks
-    .filter(t => t.status === 'completed' && typeof t.completedAt === 'string' && t.completedAt.startsWith(todayStr))
+  const completedToday = dayTasks
+    .filter(t => t.status === 'completed')
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''))
 
   const totalCount = activeTasks.length + completedToday.length
@@ -67,9 +82,10 @@ export default function TaskSection({ minimalMode }) {
     localStorage.setItem('glp_tasks_show_expired', String(next))
   }
 
+  const dayLabel = isToday ? '' : ` · ${viewDate.split('-').reverse().slice(0, 2).join('/')}`
   const counterLabel = expiredTasks.length > 0
-    ? `📋 Task (${activeTasks.length}/${totalCount}) · ${expiredTasks.length} scad.`
-    : `📋 Task (${activeTasks.length}/${totalCount})`
+    ? `📋 Task (${activeTasks.length}/${totalCount}) · ${expiredTasks.length} scad.${dayLabel}`
+    : `📋 Task (${activeTasks.length}/${totalCount})${dayLabel}`
 
   return (
     <div style={{ marginTop: 28, marginBottom: 8 }}>
@@ -91,7 +107,7 @@ export default function TaskSection({ minimalMode }) {
       {expanded && (
         !hasActive ? (
           <div className="empty-state" style={{ fontSize: '0.82em' }}>
-            Nessuna task attiva — aggiungine una con +
+            {isToday ? 'Nessuna task attiva — aggiungine una con +' : 'Nessuna task programmata per questo giorno'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

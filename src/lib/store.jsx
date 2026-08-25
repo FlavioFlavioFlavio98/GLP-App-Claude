@@ -1765,6 +1765,14 @@ export function AppProvider({ children }) {
         if (merged.status === 'active' && merged.deadline < todayStr) {
           return { ...merged, status: 'expired', expiredAt: new Date().toISOString(), penaltyApplied: true }
         }
+        // Il contrario: se una task scaduta viene rimandata a oggi o dopo,
+        // torna attiva e la penalità già applicata viene annullata — expiredAt
+        // + penaltyApplied sono ciò che il calcolo del punteggio usa davvero
+        // per sottrarre i punti, quindi vanno azzerati insieme allo status,
+        // altrimenti la penalità resterebbe applicata in modo invisibile.
+        if (merged.status === 'expired' && merged.deadline >= todayStr) {
+          return { ...merged, status: 'active', expiredAt: null, penaltyApplied: false }
+        }
         return merged
       })
       await updateDoc(doc(db, 'users', authUserId), { tasks })

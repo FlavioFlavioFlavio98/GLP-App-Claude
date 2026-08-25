@@ -364,6 +364,15 @@ class AddTaskActivity : Activity() {
                             put("penaltyApplied", true)
                             put("expiredAt", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(Date()))
                         }
+                        // Il contrario: si rimanda una task scaduta a oggi o
+                        // dopo → torna attiva, penalità già applicata annullata
+                        // (expiredAt/penaltyApplied sono ciò che il calcolo
+                        // punteggio usa davvero, non lo status da solo).
+                        if ((this["status"] as? String) == "expired" && selectedDeadline >= today) {
+                            put("status", "active")
+                            put("penaltyApplied", false)
+                            remove("expiredAt")
+                        }
                     }
                 } else t
             }

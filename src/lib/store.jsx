@@ -1693,9 +1693,15 @@ export function AppProvider({ children }) {
     },
 
     // ─── Tasks ────────────────────────────────────────────────────────────────
+    // Se si crea una task con scadenza già passata, la si segna scaduta subito
+    // invece di lasciarla "active" fino al prossimo giro notturno di
+    // expireTasks — altrimenti resterebbe con lo stato sbagliato (e senza lo
+    // stile "scaduta" nel widget) per ore, finché non scatta la mezzanotte.
     async addTask(taskData) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state
+      const todayStr = toDateString(new Date())
+      const isPast = taskData.deadline < todayStr
       const newTask = {
         id: `task_${Date.now().toString(36)}`,
         title: taskData.title,
@@ -1704,16 +1710,16 @@ export function AppProvider({ children }) {
         reward: taskData.reward,
         penalty: taskData.penalty,
         priority: taskData.priority || 'medium',
-        status: 'active',
+        status: isPast ? 'expired' : 'active',
         createdAt: new Date().toISOString(),
         completedAt: null,
-        expiredAt: null,
+        expiredAt: isPast ? new Date().toISOString() : null,
         rewardApplied: false,
-        penaltyApplied: false,
+        penaltyApplied: isPast,
       }
       const tasks = [...(globalData.tasks || []), newTask]
       await updateDoc(doc(db, 'users', authUserId), { tasks })
-      actions.showToast('Task creata!', '📋')
+      actions.showToast(isPast ? 'Task creata già scaduta ⚠️' : 'Task creata!', '📋')
     },
 
     async addCompletedTask({ title, description, completedDate, reward, priority }) {
@@ -1750,9 +1756,17 @@ export function AppProvider({ children }) {
     async editTask(taskData) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state
-      const tasks = (globalData.tasks || []).map(t =>
-        t.id === taskData.id ? { ...t, ...taskData } : t
-      )
+      const todayStr = toDateString(new Date())
+      const tasks = (globalData.tasks || []).map(t => {
+        if (t.id !== taskData.id) return t
+        const merged = { ...t, ...taskData }
+        // Se la modifica sposta la scadenza nel passato su una task ancora
+        // attiva, la marca scaduta subito (stesso motivo di addTask sopra).
+        if (merged.status === 'active' && merged.deadline < todayStr) {
+          return { ...merged, status: 'expired', expiredAt: new Date().toISOString(), penaltyApplied: true }
+        }
+        return merged
+      })
       await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.showToast('Task aggiornata!', '✏️')
     },

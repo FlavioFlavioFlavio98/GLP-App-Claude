@@ -282,18 +282,27 @@ class AddTaskActivity : Activity() {
                 "createdAt" to com.google.firebase.Timestamp.now()
             )
         } else {
-            hashMapOf(
+            // Scadenza già passata → segnata scaduta subito invece di restare
+            // "active" fino al prossimo giro notturno di expireTasks (stesso
+            // motivo della versione web in store.jsx addTask/editTask).
+            val isPast = selectedDeadline < today
+            val map = hashMapOf<String, Any>(
                 "id" to "task_${System.currentTimeMillis()}",
                 "title" to name,
                 "deadline" to selectedDeadline,
                 "reward" to reward.toDouble(),
                 "penalty" to penalty.toDouble(),
                 "priority" to selectedPriority,
-                "status" to "active",
+                "status" to if (isPast) "expired" else "active",
                 "rewardApplied" to false,
-                "penaltyApplied" to false,
+                "penaltyApplied" to isPast,
                 "createdAt" to com.google.firebase.Timestamp.now()
             )
+            if (isPast) {
+                map["expiredAt"] = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+                    .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(Date())
+            }
+            map
         }
 
         if (!isAlreadyDone && selectedDeadline == today) {
@@ -336,6 +345,7 @@ class AddTaskActivity : Activity() {
 
         val db = FirebaseFirestore.getInstance()
         val userRef = db.collection("users").document("flavio")
+        val today = sdf.format(Date())
         userRef.get().addOnSuccessListener { doc ->
             @Suppress("UNCHECKED_CAST")
             val existing = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
@@ -347,6 +357,13 @@ class AddTaskActivity : Activity() {
                         put("reward", reward.toDouble())
                         put("penalty", penalty.toDouble())
                         put("priority", selectedPriority)
+                        // Se si sposta la scadenza nel passato su una task
+                        // ancora attiva, la segna scaduta subito.
+                        if ((this["status"] as? String) == "active" && selectedDeadline < today) {
+                            put("status", "expired")
+                            put("penaltyApplied", true)
+                            put("expiredAt", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(Date()))
+                        }
                     }
                 } else t
             }

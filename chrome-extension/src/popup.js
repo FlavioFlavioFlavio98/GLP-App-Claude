@@ -107,8 +107,8 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     titleInput.value = ''
     descriptionInput.value = ''
     deadlineInput.value = tomorrow()
-    rewardInput.value = '5'
-    penaltyInput.value = '3'
+    rewardInput.value = '0'
+    penaltyInput.value = '0'
     setTimeout(() => window.close(), 700)
   } catch (e) {
     setStatus('Errore: ' + e.message)

@@ -17,7 +17,7 @@ object TaskWidgetUtils {
     // Ordinate per priorità (alta in cima, bassa in fondo) — non serve mostrare
     // un indicatore vistoso della priorità se l'ordine la comunica già da solo.
     fun activeTasksForDate(tasks: List<Map<String, Any>>, targetDate: String, today: String): List<Map<String, Any>> {
-        return tasks
+        val active = tasks
             .filter { task ->
                 val status = task["status"] as? String ?: ""
                 val deadline = task["deadline"] as? String ?: ""
@@ -28,6 +28,19 @@ object TaskWidgetUtils {
                 { priorityRank(it["priority"] as? String) },
                 { it["deadline"] as? String ?: "9999" }
             ))
+
+        if (targetDate != today) return active
+
+        // Task scadute (penalità già applicata a mezzanotte da expireTasks) ma
+        // mai completate — vanno mostrate comunque, altrimenti spariscono dal
+        // widget senza che l'utente se ne accorga (stesso motivo per cui la
+        // web app ha sempre visibile la sezione "SCADUTE"). In cima, sono le
+        // più urgenti.
+        val expired = tasks
+            .filter { (it["status"] as? String) == "expired" }
+            .sortedByDescending { it["expiredAt"] as? String ?: "" }
+
+        return expired + active
     }
 
     // Task completate quel giorno — mostrate sotto le attive, sbarrate.

@@ -24,11 +24,12 @@ function VersionBadge() {
 
   return (
     <div style={{
-      fontSize: '0.6em', color: 'var(--text-sec)', opacity: 0.5,
-      fontFamily: 'monospace', textAlign: 'center', padding: '2px 0 0',
-      userSelect: 'text',
+      flex: 1, minWidth: 0,
+      fontSize: '0.58em', lineHeight: 1.25, color: 'var(--text-sec)', opacity: 0.6,
+      fontFamily: 'monospace', textAlign: 'center',
+      userSelect: 'text', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
     }}>
-      v{APP_VERSION}{formatted ? ` · ${formatted}` : ''}
+      v{APP_VERSION}{formatted ? <><br />{formatted}</> : null}
     </div>
   )
 }
@@ -45,7 +46,6 @@ export default function Header({ isReadOnly }) {
   const avatar = authData?.profile?.avatar || (authUserId === 'flavio' ? '🔥' : '⭐')
 
   return (
-    <>
     <div className="identity-bar">
       <div className="offline-badge">OFFLINE</div>
       <div className="user-info">
@@ -69,6 +69,7 @@ export default function Header({ isReadOnly }) {
           </span>
         </div>
       </div>
+      <VersionBadge />
       <div className="header-actions">
         {!isReadOnly && (
           <button className="icon-btn" onClick={() => actions.openModal('insights')} title="Insight">
@@ -80,7 +81,5 @@ export default function Header({ isReadOnly }) {
         </button>
       </div>
     </div>
-    <VersionBadge />
-    </>
   )
 }

@@ -168,31 +168,50 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     }
                     val priority = task["priority"] as? String ?: "medium"
                     val taskDeadline = task["deadline"] as? String ?: today
+                    // Task scadute (penalità già applicata a mezzanotte, mai
+                    // completate) restano visibili nel widget invece di
+                    // sparire — vedi TaskWidgetUtils.activeTasksForDate.
+                    val isExpired = !isCompleted && (task["status"] as? String) == "expired"
 
                     views.setTextViewText(NAME_IDS[index], name)
                     views.setInt(
                         NAME_IDS[index], "setPaintFlags",
                         if (isCompleted) Paint.STRIKE_THRU_TEXT_FLAG or Paint.ANTI_ALIAS_FLAG else Paint.ANTI_ALIAS_FLAG
                     )
-                    views.setTextColor(NAME_IDS[index], if (isCompleted) android.graphics.Color.parseColor("#666666") else android.graphics.Color.WHITE)
+                    views.setTextColor(
+                        NAME_IDS[index],
+                        when {
+                            isCompleted -> android.graphics.Color.parseColor("#666666")
+                            isExpired -> android.graphics.Color.parseColor("#EB5757")
+                            else -> android.graphics.Color.WHITE
+                        }
+                    )
 
                     // Niente data nel meta: il widget è già filtrato per la data
                     // selezionata sopra, quindi è ridondante ripeterla per ogni riga.
-                    val meta = if (isCompleted) "+${reward}pt ✓" else "+${reward}pt"
+                    val meta = when {
+                        isCompleted -> "+${reward}pt ✓"
+                        isExpired -> "SCADUTA -${penalty}pt"
+                        else -> "+${reward}pt"
+                    }
                     views.setTextViewText(META_IDS[index], meta)
 
                     // Cerchietto colorato in base alla priorità (stesso schema colori
                     // di taskColors.js sul web: alta/media/bassa = rosso/arancio/blu),
-                    // pieno verde solo quando la task è completata.
+                    // pieno verde quando completata, pieno rosso quando scaduta.
                     val priorityColor = when (priority) {
                         "high" -> "#EB5757"
                         "low"  -> "#4A90D9"
                         else   -> "#F2994A" // medium
                     }
-                    views.setImageViewResource(DOT_IDS[index], if (isCompleted) R.drawable.circle_dot else R.drawable.circle_ring)
+                    views.setImageViewResource(DOT_IDS[index], if (isCompleted || isExpired) R.drawable.circle_dot else R.drawable.circle_ring)
                     views.setInt(
                         DOT_IDS[index], "setColorFilter",
-                        if (isCompleted) android.graphics.Color.parseColor("#4CAF50") else android.graphics.Color.parseColor(priorityColor)
+                        when {
+                            isCompleted -> android.graphics.Color.parseColor("#4CAF50")
+                            isExpired -> android.graphics.Color.parseColor("#EB5757")
+                            else -> android.graphics.Color.parseColor(priorityColor)
+                        }
                     )
 
                     views.setViewVisibility(ROW_IDS[index], View.VISIBLE)
@@ -221,6 +240,8 @@ class TaskWidgetProvider : AppWidgetProvider() {
                         views.setOnClickPendingIntent(DOT_IDS[index], openAppPendingIntent)
                     } else {
                         // Tap sul cerchietto → apre CompleteTaskActivity (conferma completamento)
+                        // — funziona anche per le scadute: si può ancora completarla in ritardo
+                        // e prendere la ricompensa, la penalità resta comunque applicata.
                         val completeIntent = Intent(context, CompleteTaskActivity::class.java).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             putExtra("task_id", taskId)

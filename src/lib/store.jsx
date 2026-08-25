@@ -1153,6 +1153,16 @@ export function AppProvider({ children }) {
       actions.showToast('Riepilogo eliminato', '🗑️')
     },
 
+    // Modifica manuale del riepilogo già generato (categorie/voci) — l'AI a
+    // volte non è perfetta, l'utente deve poter correggere senza rigenerare
+    // tutto da capo perdendo le modifiche precedenti.
+    async updateDayRecap(dateStr, categories) {
+      if (state.authUserId !== 'flavio') return
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`dayRecapLog.${dateStr}.categories`]: categories })
+      actions.showToast('Riepilogo modificato ✏️', '✏️')
+    },
+
     // ─── Nutrizione/Proteine ── database alimenti (proteinFoods) con proteine
     // per 100g stimate via AI la prima volta, log giornaliero (proteinLog)
     // separato — non tocca lo score, è solo tracciamento nutrizionale.

@@ -334,9 +334,13 @@ exports.geminiChat = onCall(
 
 // ── generateDayRecap ────────────────────────────────────────────────────────
 // Trascrizione vocale libera (tipicamente lunga, non strutturata) → riepilogo
-// a categorie fisse con elenco puntato, per il ricordo di fine giornata
-// (tab Mente). Categorie sempre le stesse così il riepilogo si legge allo
-// stesso modo ogni giorno — solo quelle con contenuto reale vengono incluse.
+// a categorie con elenco puntato, per il ricordo di fine giornata (tab
+// Mente). Le 6 categorie sotto sono un punto di partenza suggerito, non un
+// paletto rigido: se qualcosa non ci rientra bene, il modello crea una nuova
+// categoria appropriata invece di ometterla o forzarla in una sbagliata —
+// niente va perso. Il modello restituisce label+emoji per ogni categoria
+// (comprese quelle nuove), quindi qui non serve più filtrare/mappare contro
+// un elenco fisso.
 const DAY_RECAP_CATEGORIES = [
   { key: 'allenamento',  label: 'Allenamento',       emoji: '💪' },
   { key: 'alimentazione',label: 'Alimentazione',     emoji: '🍽️' },
@@ -358,7 +362,7 @@ exports.generateDayRecap = onCall(
     const genAI = new GoogleGenerativeAI(geminiKey.value())
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
 
-    const categoryList = DAY_RECAP_CATEGORIES.map(c => `- ${c.key}: ${c.label}`).join('\n')
+    const categoryList = DAY_RECAP_CATEGORIES.map(c => `- ${c.key}: ${c.label} ${c.emoji}`).join('\n')
 
     const prompt = `Sei un assistente che organizza la trascrizione di una nota vocale in cui una persona racconta cosa ha fatto durante la giornata, per aiutarla a ricordarsi a fine giornata di cosa può essere fiera.
 
@@ -367,15 +371,19 @@ TRASCRIZIONE:
 ${transcript}
 """
 
-Estrai SOLO le azioni/eventi positivi o rilevanti realmente menzionati (non inventare nulla, non aggiungere consigli o giudizi) e organizzali in queste categorie fisse:
+Estrai TUTTE le azioni/eventi positivi o rilevanti realmente menzionati (non inventare nulla, non aggiungere consigli o giudizi) — non deve andare perso nulla di rilevante.
+
+Usa queste categorie di partenza quando il contenuto ci rientra bene:
 ${categoryList}
 
-Per ogni categoria con contenuto reale, scrivi una lista di frasi brevi (max 10 parole ciascuna, stile elenco puntato, in seconda/prima persona naturale, es. "Allenamento gambe 45 minuti"). Ometti completamente le categorie senza contenuto — non inventare voci per riempirle.
+Se qualcosa non rientra bene in nessuna di queste, NON ometterlo e NON forzarlo in una categoria sbagliata: crea invece una nuova categoria su misura, con una label breve e un'emoji adatta. Ometti solo le categorie (di partenza o nuove) che risultano completamente senza contenuto — non inventare voci per riempirle.
 
-Rispondi SOLO con JSON valido, senza backtick e senza altro testo:
+Per ogni categoria con contenuto reale, scrivi una lista di frasi brevi (max 10 parole ciascuna, stile elenco puntato, in seconda/prima persona naturale, es. "Allenamento gambe 45 minuti").
+
+Rispondi SOLO con JSON valido, senza backtick e senza altro testo. Includi sempre "label" ed "emoji" per ogni categoria, comprese quelle dell'elenco di partenza:
 {
   "categories": [
-    { "key": "allenamento", "items": ["voce 1", "voce 2"] }
+    { "key": "allenamento", "label": "Allenamento", "emoji": "💪", "items": ["voce 1", "voce 2"] }
   ]
 }`
 
@@ -385,14 +393,18 @@ Rispondi SOLO con JSON valido, senza backtick e senza altro testo:
     let parsed
     try { parsed = JSON.parse(clean) } catch { parsed = { categories: [] } }
 
-    const byKey = {}
-    ;(parsed.categories || []).forEach(c => {
-      if (Array.isArray(c.items) && c.items.length > 0) byKey[c.key] = c.items
-    })
-
-    const categories = DAY_RECAP_CATEGORIES
-      .filter(c => byKey[c.key])
-      .map(c => ({ key: c.key, label: c.label, emoji: c.emoji, items: byKey[c.key] }))
+    const defaultByKey = Object.fromEntries(DAY_RECAP_CATEGORIES.map(c => [c.key, c]))
+    const categories = (parsed.categories || [])
+      .filter(c => Array.isArray(c.items) && c.items.length > 0)
+      .map(c => {
+        const fallback = defaultByKey[c.key]
+        return {
+          key: c.key || (c.label || 'altro').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          label: c.label || fallback?.label || 'Altro',
+          emoji: c.emoji || fallback?.emoji || '✨',
+          items: c.items,
+        }
+      })
 
     return { categories }
   }

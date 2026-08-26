@@ -72,6 +72,11 @@ export default function Header({ isReadOnly }) {
       <VersionBadge />
       <div className="header-actions">
         {!isReadOnly && (
+          <button className="icon-btn" onClick={() => actions.openModal('globalSearch')} title="Cerca">
+            <span className="material-icons-round" style={{ fontSize: 20 }}>search</span>
+          </button>
+        )}
+        {!isReadOnly && (
           <button className="icon-btn" onClick={() => actions.openModal('insights')} title="Insight">
             <span style={{ fontSize: 18 }}>💡</span>
           </button>

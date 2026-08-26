@@ -38,6 +38,7 @@ const BodyModals = lazy(() => import('./modalGroups/BodyModals'))
 const MenteModals = lazy(() => import('./modalGroups/MenteModals'))
 const NutritionModals = lazy(() => import('./modalGroups/NutritionModals'))
 const TaskModals = lazy(() => import('./modalGroups/TaskModals'))
+const GlobalSearchModals = lazy(() => import('./modalGroups/GlobalSearchModals'))
 
 // Pagine fullscreen indipendenti (già gated da stato booleano proprio, lazy dirette)
 const ReadingsPage = lazy(() => import('./modals/ReadingsPage'))
@@ -55,6 +56,7 @@ const BODY_MODALS = ['barefoot', 'hang']
 const MENTE_MODALS = ['willpowerEntry', 'willpowerStats']
 const NUTRITION_MODALS = ['proteinEntry', 'proteinFoodsManage']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory', 'recurringTasks']
+const GLOBAL_SEARCH_MODALS = ['globalSearch']
 
 function TabLoadingFallback() {
   return (
@@ -496,6 +498,9 @@ export default function App() {
       )}
       {NUTRITION_MODALS.includes(modal) && (
         <Suspense fallback={null}><NutritionModals authUserId={authUserId} /></Suspense>
+      )}
+      {GLOBAL_SEARCH_MODALS.includes(modal) && (
+        <Suspense fallback={null}><GlobalSearchModals authUserId={authUserId} /></Suspense>
       )}
       {TASK_MODALS.includes(modal) && (
         <Suspense fallback={null}><TaskModals authUserId={authUserId} /></Suspense>

@@ -438,7 +438,19 @@ Rispondi SOLO con JSON valido, senza backtick e senza altro testo, un numero (an
     const text = result.response.text()
     const clean = text.replace(/```json\n?|```\n?/g, '').trim()
     let parsed
-    try { parsed = JSON.parse(clean) } catch { parsed = { results: [] } }
+    try {
+      parsed = JSON.parse(clean)
+    } catch {
+      // A volte il modello aggiunge testo attorno al JSON nonostante le
+      // istruzioni — estrae l'oggetto {...} anche in mezzo ad altro testo,
+      // invece di arrendersi subito a un risultato vuoto (che dava sempre
+      // 0g/100g senza che l'utente capisse perché).
+      const match = clean.match(/\{[\s\S]*\}/)
+      try { parsed = match ? JSON.parse(match[0]) : { results: [] } } catch { parsed = { results: [] } }
+    }
+    if (!Array.isArray(parsed.results) || parsed.results.length === 0) {
+      console.error('[estimateFoodProtein] Risposta AI non interpretabile:', text)
+    }
 
     const results = foods.map((name, i) => {
       const match = (parsed.results || []).find(r => r.name?.toLowerCase().trim() === name.toLowerCase().trim()) || parsed.results?.[i]

@@ -25,7 +25,9 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
-        buildConfigField "String", "BUILD_TIME", "\"${new Date().format('yyyy-MM-dd HH:mm')} UTC\""
+        // Fuso orario di Flavio (Bulgaria/Sofia) invece di UTC — vedi stesso
+        // cambio in vite.config.js per il badge versione web.
+        buildConfigField "String", "BUILD_TIME", "\"${new Date().format('yyyy-MM-dd HH:mm', TimeZone.getTimeZone('Europe/Sofia'))}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

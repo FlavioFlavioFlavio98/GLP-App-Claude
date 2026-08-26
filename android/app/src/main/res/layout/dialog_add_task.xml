@@ -49,6 +49,58 @@
             android:background="@drawable/chip_unselected"
             android:layout_marginBottom="12dp"/>
 
+        <!-- Chip "ricorrente" -->
+        <TextView
+            android:id="@+id/chip_recurring"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:text="☐  🔁 Task ricorrente"
+            android:textSize="13sp"
+            android:textColor="#C7C7D1"
+            android:gravity="center_vertical"
+            android:paddingStart="14dp"
+            android:background="@drawable/chip_unselected"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Intervallo giorni (visibile solo se ricorrente attivo) -->
+        <LinearLayout
+            android:id="@+id/recurring_interval_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ogni"
+                android:textColor="#C7C7D1"
+                android:textSize="13sp"
+                android:layout_marginEnd="8dp"/>
+
+            <EditText
+                android:id="@+id/recurring_interval_input"
+                android:layout_width="60dp"
+                android:layout_height="40dp"
+                android:text="7"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:inputType="number"
+                android:background="#1A1A28"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="giorni"
+                android:textColor="#C7C7D1"
+                android:textSize="13sp"/>
+
+        </LinearLayout>
+
         <!-- ─── SCADENZA ─── -->
         <TextView
             android:id="@+id/deadline_section_label"

@@ -17,7 +17,7 @@ import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
 import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
-import { buildRecurringInstance, hasPendingInstance } from './recurringTasksLogic'
+import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
 import { computeSocialPts } from './mindStats'
 
 const AppContext = createContext(null)
@@ -1780,9 +1780,22 @@ export function AppProvider({ children }) {
       actions.showToast('Task aggiornata!', '✏️')
     },
 
+    // Nome del template ricorrente collegato a una task, o null se non lo è —
+    // usato per mostrare "ogni N giorni" prima di completare e il messaggio
+    // giusto dopo.
+    _getRecurringTemplate(task) {
+      if (!task.recurringId) return null
+      const { globalData } = state
+      return (globalData.recurringTasks || []).find(r => r.id === task.recurringId) || null
+    },
+
     async confirmCompleteTask(task) {
       if (isReadOnly()) return
-      if (!window.confirm(`Completare "${task.title}"? +${task.reward}pt`)) return
+      const template = actions._getRecurringTemplate(task)
+      const confirmMsg = template
+        ? `Completare "${task.title}"? +${task.reward}pt\n\n🔁 Ricorrente: si ripresenterà tra ${template.intervalDays} giorn${template.intervalDays === 1 ? 'o' : 'i'}.`
+        : `Completare "${task.title}"? +${task.reward}pt`
+      if (!window.confirm(confirmMsg)) return
       const { authUserId, globalData } = state
       const rewardNum = parseInt(task.reward) || 0
       console.log('completing task, reward:', task.reward, '→ rewardNum:', rewardNum)
@@ -1795,7 +1808,13 @@ export function AppProvider({ children }) {
       tasks = actions._spawnNextRecurringInstance(task, tasks)
       await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.vibrate('light')
-      actions.showToast(`Task completata! +${task.reward}pt 🎉`, '✅')
+      if (template && template.active !== false) {
+        const nextDate = addDays(toDateString(new Date()), template.intervalDays)
+        const [, m, d] = nextDate.split('-')
+        actions.showToast(`🔁 Ricorrente completata! Ricreata per il ${parseInt(d)}/${parseInt(m)}`, '🔁')
+      } else {
+        actions.showToast(`Task completata! +${task.reward}pt 🎉`, '✅')
+      }
       if (task.reward >= 10) {
         import('canvas-confetti').then(m => m.default({
           particleCount: 80, spread: 70, origin: { y: 0.7 },
@@ -1810,14 +1829,19 @@ export function AppProvider({ children }) {
 
     async uncompleteTask(task) {
       if (isReadOnly()) return
-      if (!window.confirm(`Annullare il completamento? -${task.reward}pt verranno sottratti`)) return
+      if (!window.confirm(`Completata per errore? Ripristina "${task.title}" tra le task attive`)) return
       const { authUserId, globalData } = state
-      const rewardNum = parseInt(task.reward) || 0
-      const tasks = (globalData.tasks || []).map(t =>
+      let tasks = (globalData.tasks || []).map(t =>
         t.id === task.id
-          ? { ...t, status: 'active', completedAt: null, rewardApplied: false }
+          ? { ...t, status: 'active', completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false }
           : t
       )
+      // Se era una task ricorrente, rimuove la prossima istanza generata al
+      // completamento — altrimenti riattivandola ne resterebbero due pendenti
+      // per la stessa regola.
+      if (task.recurringId) {
+        tasks = tasks.filter(t => !(t.recurringId === task.recurringId && t.id !== task.id && t.status === 'active'))
+      }
       await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.showToast('Completamento annullato', '↩️')
     },
@@ -1984,6 +2008,7 @@ export function AppProvider({ children }) {
     async dismissExpiredTask(task) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state
+      const template = actions._getRecurringTemplate(task)
       const now = new Date().toISOString()
       let tasks = (globalData.tasks || []).map(t =>
         t.id === task.id
@@ -1993,7 +2018,13 @@ export function AppProvider({ children }) {
       tasks = actions._spawnNextRecurringInstance(task, tasks)
       await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.vibrate('light')
-      actions.showToast('Task chiusa (completamento tardivo)', '✅')
+      if (template && template.active !== false) {
+        const nextDate = addDays(toDateString(new Date()), template.intervalDays)
+        const [, m, d] = nextDate.split('-')
+        actions.showToast(`🔁 Ricorrente completata! Ricreata per il ${parseInt(d)}/${parseInt(m)}`, '🔁')
+      } else {
+        actions.showToast('Task chiusa (completamento tardivo)', '✅')
+      }
     },
 
     // ─── Task ricorrenti ──────────────────────────────────────────────────────

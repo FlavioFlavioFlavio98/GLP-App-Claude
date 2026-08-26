@@ -33,6 +33,10 @@ class AddTaskActivity : Activity() {
     private var selectedPenalty: Int? = null
     private var selectedPriority = "medium"
     private var isAlreadyDone = false
+    // Ricorrente: solo in creazione (non in modifica) — vedi RecurringTasksModal
+    // sul web per la stessa logica (regola separata + prima istanza generata
+    // subito, scadenza di default oggi).
+    private var isRecurring = false
     // Se valorizzato, il dialog è in modalità modifica di una task esistente
     // (aperto dal tap sul nome nel widget) invece che creazione — stesso layout,
     // cambia solo cosa fa il bottone "salva" e i valori pre-selezionati.
@@ -56,6 +60,9 @@ class AddTaskActivity : Activity() {
     private lateinit var penalty2: TextView
     private lateinit var penalty3: TextView
     private lateinit var penaltySection: android.widget.LinearLayout
+    private lateinit var chipRecurring: TextView
+    private lateinit var recurringIntervalSection: android.widget.LinearLayout
+    private lateinit var recurringIntervalInput: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,15 +101,52 @@ class AddTaskActivity : Activity() {
         penalty2 = findViewById(R.id.penalty_2)
         penalty3 = findViewById(R.id.penalty_3)
         penaltySection = findViewById(R.id.penalty_section)
+        chipRecurring = findViewById(R.id.chip_recurring)
+        recurringIntervalSection = findViewById(R.id.recurring_interval_section)
+        recurringIntervalInput = findViewById(R.id.recurring_interval_input)
         val deadlineLbl = findViewById<TextView>(R.id.deadline_label)
         val btnCrea = findViewById<TextView>(R.id.btn_crea)
 
         deadlineLbl.visibility = View.GONE
 
+        // La ricorrenza si imposta solo alla creazione, non in modifica
+        if (editTaskId != null) {
+            chipRecurring.visibility = View.GONE
+            recurringIntervalSection.visibility = View.GONE
+        }
+
+        // ─── Chip ricorrente ───
+        chipRecurring.setOnClickListener {
+            isRecurring = !isRecurring
+            if (isRecurring) {
+                // Ricorrente e "già fatta" non hanno senso insieme
+                isAlreadyDone = false
+                chipGiaFatta.text = "☐  Segna come già fatta"
+                setChip(chipGiaFatta, false)
+                penaltySection.visibility = View.VISIBLE
+                deadlineDomani.visibility = View.VISIBLE
+                deadlineSectionLabel.text = "SCADENZA"
+                chipRecurring.text = "✅  🔁 Task ricorrente"
+                setChip(chipRecurring, true)
+                recurringIntervalSection.visibility = View.VISIBLE
+                btnCrea.text = "Crea ricorrente"
+            } else {
+                chipRecurring.text = "☐  🔁 Task ricorrente"
+                setChip(chipRecurring, false)
+                recurringIntervalSection.visibility = View.GONE
+                btnCrea.text = "Crea"
+            }
+        }
+
         // ─── Chip già fatta ───
         chipGiaFatta.setOnClickListener {
             isAlreadyDone = !isAlreadyDone
             if (isAlreadyDone) {
+                // "Già fatta" e ricorrente non hanno senso insieme
+                isRecurring = false
+                chipRecurring.text = "☐  🔁 Task ricorrente"
+                setChip(chipRecurring, false)
+                recurringIntervalSection.visibility = View.GONE
                 // selezione "oggi" come data di completamento di default
                 selectedDeadline = sdf.format(Date())
                 selectDeadline("oggi")
@@ -305,6 +349,11 @@ class AddTaskActivity : Activity() {
             map
         }
 
+        if (isRecurring) {
+            saveRecurringTask(name, reward, penalty)
+            return
+        }
+
         if (!isAlreadyDone && selectedDeadline == today) {
             addTaskToWidgetPrefs(task)
         }
@@ -330,6 +379,66 @@ class AddTaskActivity : Activity() {
                     Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
                     finish()
                 }
+        }.addOnFailureListener { e ->
+            Toast.makeText(this, "Errore connessione: ${e.message}", Toast.LENGTH_LONG).show()
+            finish()
+        }
+    }
+
+    // Crea la regola ricorrente (recurringTasks) + la prima istanza (tasks) —
+    // stessa struttura di addRecurringTask in store.jsx sul web.
+    private fun saveRecurringTask(name: String, reward: Int, penalty: Int) {
+        val db = FirebaseFirestore.getInstance()
+        val userRef = db.collection("users").document("flavio")
+        val intervalDays = recurringIntervalInput.text.toString().toIntOrNull()?.coerceAtLeast(1) ?: 7
+        val recurringId = "rec_${System.currentTimeMillis()}"
+
+        val template = hashMapOf<String, Any>(
+            "id" to recurringId,
+            "title" to name,
+            "priority" to selectedPriority,
+            "reward" to reward.toDouble(),
+            "penalty" to penalty.toDouble(),
+            "intervalDays" to intervalDays.toDouble(),
+            "active" to true,
+            "createdAt" to com.google.firebase.Timestamp.now(),
+        )
+        val firstInstance = hashMapOf<String, Any>(
+            "id" to "task_${System.currentTimeMillis()}",
+            "title" to name,
+            "deadline" to selectedDeadline,
+            "reward" to reward.toDouble(),
+            "penalty" to penalty.toDouble(),
+            "priority" to selectedPriority,
+            "status" to "active",
+            "rewardApplied" to false,
+            "penaltyApplied" to false,
+            "createdAt" to com.google.firebase.Timestamp.now(),
+            "recurringId" to recurringId,
+        )
+
+        if (selectedDeadline == sdf.format(Date())) {
+            addTaskToWidgetPrefs(firstInstance)
+        }
+
+        userRef.get().addOnSuccessListener { doc ->
+            @Suppress("UNCHECKED_CAST")
+            val existingTasks = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val existingRecurring = doc.get("recurringTasks") as? List<Map<String, Any>> ?: emptyList()
+            userRef.update(
+                mapOf(
+                    "tasks" to existingTasks + firstInstance,
+                    "recurringTasks" to existingRecurring + template,
+                )
+            ).addOnSuccessListener {
+                vibrate()
+                Toast.makeText(this, "🔁 Task ricorrente creata!", Toast.LENGTH_SHORT).show()
+                finish()
+            }.addOnFailureListener { e ->
+                Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
+                finish()
+            }
         }.addOnFailureListener { e ->
             Toast.makeText(this, "Errore connessione: ${e.message}", Toast.LENGTH_LONG).show()
             finish()

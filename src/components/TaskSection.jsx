@@ -38,6 +38,7 @@ export default function TaskSection({ minimalMode }) {
   const isToday = viewDate === todayStr
   const allTasks = globalData?.tasks || []
   const PRIO = { high: 0, medium: 1, low: 2 }
+  const recurringByTaskId = Object.fromEntries((globalData?.recurringTasks || []).map(r => [r.id, r]))
 
   // Su OGGI: task di oggi + quelle ancora attive ma scadute + tutte le
   // scadute + completate oggi — la vista "non perdere nulla" di default.
@@ -119,6 +120,7 @@ export default function TaskSection({ minimalMode }) {
                 key={task.id}
                 task={task}
                 variant="active"
+                recurring={recurringByTaskId[task.recurringId]}
                 onComplete={() => actions.confirmCompleteTask(task)}
                 onEdit={() => actions.openModal('taskEdit', { task })}
                 onDelete={() => actions.deleteTask(task.id)}
@@ -142,19 +144,25 @@ export default function TaskSection({ minimalMode }) {
                     {showExpired ? 'expand_less' : 'expand_more'}
                   </span>
                 </div>
-                {showExpired && expiredTasks.map(task => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    variant="expired"
-                    onComplete={() => {
-                      if (window.confirm(`Chiudi "${task.title}" come completata?\n(Nessun punto aggiuntivo — la penalità di ${task.penalty}pt è già stata applicata.)`)) {
-                        actions.dismissExpiredTask(task)
-                      }
-                    }}
-                    onDelete={() => actions.deleteTask(task.id)}
-                  />
-                ))}
+                {showExpired && expiredTasks.map(task => {
+                  const rec = recurringByTaskId[task.recurringId]
+                  return (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
+                      variant="expired"
+                      recurring={rec}
+                      onComplete={() => {
+                        const recNote = rec ? `\n\n🔁 Ricorrente: si ripresenterà tra ${rec.intervalDays} giorn${rec.intervalDays === 1 ? 'o' : 'i'}.` : ''
+                        if (window.confirm(`Chiudi "${task.title}" come completata?\n(Nessun punto aggiuntivo — la penalità di ${task.penalty}pt è già stata applicata.)${recNote}`)) {
+                          actions.dismissExpiredTask(task)
+                        }
+                      }}
+                      onEdit={() => actions.openModal('taskEdit', { task })}
+                      onDelete={() => actions.deleteTask(task.id)}
+                    />
+                  )
+                })}
               </>
             )}
 
@@ -163,7 +171,8 @@ export default function TaskSection({ minimalMode }) {
                 key={task.id}
                 task={task}
                 variant="completed"
-                onComplete={null}
+                recurring={recurringByTaskId[task.recurringId]}
+                onComplete={() => actions.uncompleteTask(task)}
                 onEdit={null}
               />
             ))}
@@ -174,7 +183,7 @@ export default function TaskSection({ minimalMode }) {
   )
 }
 
-function TaskItem({ task, variant, onComplete, onEdit, onDelete }) {
+function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
   const isCompleted = variant === 'completed'
   const isExpired   = variant === 'expired'
   const isActive    = variant === 'active'
@@ -255,6 +264,12 @@ function TaskItem({ task, variant, onComplete, onEdit, onDelete }) {
               background: 'rgba(229,57,53,0.15)', borderRadius: 4, padding: '1px 6px',
             }}>⚠️ SCADUTA</span>
           )}
+          {recurring && (
+            <span
+              title={recurring.intervalDays === 1 ? 'Ricorrente: ogni giorno' : `Ricorrente: ogni ${recurring.intervalDays} giorni`}
+              style={{ fontSize: '0.85em', flexShrink: 0 }}
+            >🔁</span>
+          )}
         </div>
 
         {task.description && (
@@ -268,6 +283,11 @@ function TaskItem({ task, variant, onComplete, onEdit, onDelete }) {
             <>
               <span style={{ fontSize: '0.7em', color: accentColor, fontWeight: 600 }}>📅 {deadline}</span>
               <span style={{ fontSize: '0.68em', color: '#555' }}>+{task.reward}pt / -{task.penalty}pt</span>
+              {recurring && (
+                <span style={{ fontSize: '0.68em', color: '#888' }}>
+                  · {recurring.intervalDays === 1 ? 'ogni giorno' : `ogni ${recurring.intervalDays}gg`}
+                </span>
+              )}
             </>
           )}
           {isExpired && (
@@ -338,12 +358,20 @@ function TaskItem({ task, variant, onComplete, onEdit, onDelete }) {
             title="Segna come completata (nessun punto)"
           >✓</button>
           {menuOpen ? (
-            <button
-              onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
-              onPointerDown={e => e.stopPropagation()}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
-              title="Elimina"
-            >🗑️</button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit() }}
+                onPointerDown={e => e.stopPropagation()}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                title="Modifica (es. sposta a un'altra data)"
+              >✏️</button>
+              <button
+                onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
+                onPointerDown={e => e.stopPropagation()}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                title="Elimina"
+              >🗑️</button>
+            </div>
           ) : (
             <button
               onClick={e => { e.stopPropagation(); setMenuOpen(true) }}
@@ -359,13 +387,18 @@ function TaskItem({ task, variant, onComplete, onEdit, onDelete }) {
       )}
 
       {isCompleted && (
-        <div style={{
-          width: 36, height: 36, borderRadius: '50%',
-          border: '2px solid rgba(76,175,80,0.4)',
-          background: 'rgba(76,175,80,0.1)', color: '#4caf50',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, fontSize: '1em',
-        }}>✓</div>
+        <button
+          onClick={e => { e.stopPropagation(); onComplete?.() }}
+          onPointerDown={e => e.stopPropagation()}
+          style={{
+            width: 36, height: 36, borderRadius: '50%',
+            border: '2px solid rgba(76,175,80,0.4)',
+            background: 'rgba(76,175,80,0.1)', color: '#4caf50',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0, fontSize: '1em', cursor: onComplete ? 'pointer' : 'default',
+          }}
+          title="Completata per errore? Tocca per annullare"
+        >✓</button>
       )}
     </div>
   )

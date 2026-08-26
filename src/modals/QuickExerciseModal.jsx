@@ -43,6 +43,28 @@ export default function QuickExerciseModal() {
     [grouped]
   )
 
+  // Quante volte è stato loggato ogni esercizio, su tutta la storia — serve a
+  // scegliere l'icona più rappresentativa per ogni gruppo muscolare (quella
+  // dell'esercizio che si fa più spesso, invece di un'emoji generica uguale
+  // per tutti quelli con lo stesso muscolo).
+  const usageCounts = useMemo(() => {
+    const counts = {}
+    Object.values(exerciseLog).forEach(dayLog => {
+      (dayLog || []).forEach(set => {
+        counts[set.exerciseId] = (counts[set.exerciseId] || 0) + 1
+      })
+    })
+    return counts
+  }, [exerciseLog])
+
+  function topExerciseFor(key) {
+    const list = grouped[key] || []
+    if (list.length === 0) return null
+    return list.reduce((best, ex) =>
+      (usageCounts[ex.id] || 0) > (usageCounts[best.id] || 0) ? ex : best
+    , list[0])
+  }
+
   // Reset del flusso ogni volta che il modal si apre
   useEffect(() => {
     if (modal === 'quickExercise') {
@@ -162,6 +184,7 @@ export default function QuickExerciseModal() {
             {muscleKeys.map(key => {
               const info = key === 'altro' ? ALTRO_GROUP : MUSCLE_GROUPS[key]
               const count = grouped[key].length
+              const topEx = topExerciseFor(key)
               return (
                 <button
                   key={key}
@@ -173,7 +196,11 @@ export default function QuickExerciseModal() {
                     color: 'var(--text)',
                   }}
                 >
-                  <span style={{ fontSize: '1.8em' }}>{info?.emoji || '🏋️'}</span>
+                  {topEx ? (
+                    <ExerciseIcon exercise={topEx} size={40} style={{ borderRadius: 10 }} />
+                  ) : (
+                    <span style={{ fontSize: '1.8em' }}>{info?.emoji || '🏋️'}</span>
+                  )}
                   <span style={{ fontSize: '0.85em', fontWeight: 700 }}>{info?.label || key}</span>
                   <span style={{ fontSize: '0.65em', color: '#666' }}>{count} eserciz{count === 1 ? 'io' : 'i'}</span>
                 </button>

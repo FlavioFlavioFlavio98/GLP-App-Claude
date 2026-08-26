@@ -54,7 +54,7 @@ const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'wei
 const BODY_MODALS = ['barefoot', 'hang']
 const MENTE_MODALS = ['willpowerEntry', 'willpowerStats']
 const NUTRITION_MODALS = ['proteinEntry', 'proteinFoodsManage']
-const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory']
+const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory', 'recurringTasks']
 
 function TabLoadingFallback() {
   return (

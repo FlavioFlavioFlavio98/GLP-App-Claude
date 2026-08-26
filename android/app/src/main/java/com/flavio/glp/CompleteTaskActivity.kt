@@ -51,7 +51,8 @@ class CompleteTaskActivity : Activity() {
         userRef.get().addOnSuccessListener { doc ->
             @Suppress("UNCHECKED_CAST")
             val tasks = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
-            val updated = tasks.map { task ->
+            val original = tasks.find { it["id"]?.toString() == taskId }
+            var updated = tasks.map { task ->
                 if (task["id"]?.toString() == taskId) {
                     task.toMutableMap().apply {
                         put("status", "completed")
@@ -60,6 +61,41 @@ class CompleteTaskActivity : Activity() {
                     }
                 } else task
             }
+
+            // Task ricorrente: genera subito la prossima istanza, scadenza =
+            // data di completamento reale + N giorni (stessa logica di
+            // store.jsx _spawnNextRecurringInstance sul web — non un
+            // calendario fisso, riparte da quando la completi davvero).
+            val recurringId = original?.get("recurringId") as? String
+            if (recurringId != null) {
+                @Suppress("UNCHECKED_CAST")
+                val recurringTasks = doc.get("recurringTasks") as? List<Map<String, Any>> ?: emptyList()
+                val template = recurringTasks.find { it["id"]?.toString() == recurringId }
+                val templateActive = template?.get("active") != false
+                val alreadyPending = updated.any { it["recurringId"] == recurringId && (it["status"] as? String) != "completed" }
+                if (template != null && templateActive && !alreadyPending) {
+                    fun asDouble(v: Any?): Double = when (v) { is Double -> v; is Long -> v.toDouble(); is Int -> v.toDouble(); else -> 0.0 }
+                    val intervalDays = asDouble(template["intervalDays"]).toInt().coerceAtLeast(1)
+                    val dayFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    val nextDeadline = dayFormat.format(java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, intervalDays) }.time)
+                    val nextInstance = hashMapOf<String, Any>(
+                        "id" to "task_${System.currentTimeMillis()}",
+                        "title" to (template["title"] as? String ?: title),
+                        "description" to "",
+                        "deadline" to nextDeadline,
+                        "reward" to asDouble(template["reward"]),
+                        "penalty" to asDouble(template["penalty"]),
+                        "priority" to (template["priority"] as? String ?: "medium"),
+                        "status" to "active",
+                        "rewardApplied" to false,
+                        "penaltyApplied" to false,
+                        "createdAt" to com.google.firebase.Timestamp.now(),
+                        "recurringId" to recurringId,
+                    )
+                    updated = updated + nextInstance
+                }
+            }
+
             val currentScore = doc.getDouble("score") ?: 0.0
             userRef.update(
                 "tasks", updated,

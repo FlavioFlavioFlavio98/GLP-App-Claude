@@ -17,6 +17,7 @@ import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
 import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
+import { buildRecurringInstance, hasPendingInstance } from './recurringTasksLogic'
 import { computeSocialPts } from './mindStats'
 
 const AppContext = createContext(null)
@@ -1786,11 +1787,12 @@ export function AppProvider({ children }) {
       const rewardNum = parseInt(task.reward) || 0
       console.log('completing task, reward:', task.reward, '→ rewardNum:', rewardNum)
       const now = new Date().toISOString()
-      const tasks = (globalData.tasks || []).map(t =>
+      let tasks = (globalData.tasks || []).map(t =>
         t.id === task.id
           ? { ...t, status: 'completed', completedAt: now, rewardApplied: true }
           : t
       )
+      tasks = actions._spawnNextRecurringInstance(task, tasks)
       await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.vibrate('light')
       actions.showToast(`Task completata! +${task.reward}pt 🎉`, '✅')
@@ -1983,14 +1985,97 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state
       const now = new Date().toISOString()
-      const tasks = (globalData.tasks || []).map(t =>
+      let tasks = (globalData.tasks || []).map(t =>
         t.id === task.id
           ? { ...t, status: 'completed', completedAt: now, rewardApplied: false }
           : t
       )
+      tasks = actions._spawnNextRecurringInstance(task, tasks)
       await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.vibrate('light')
       actions.showToast('Task chiusa (completamento tardivo)', '✅')
+    },
+
+    // ─── Task ricorrenti ──────────────────────────────────────────────────────
+    // Helper interno (non chiamato direttamente dalla UI): se la task appena
+    // completata proviene da una regola ricorrente attiva, aggiunge la
+    // prossima istanza all'array già in costruzione, scadenza = oggi + N
+    // giorni. Ritorna l'array (eventualmente) esteso, da usare nello stesso
+    // updateDoc del completamento — un solo giro di rete, atomico quanto
+    // basta per questo caso d'uso.
+    _spawnNextRecurringInstance(task, tasksSoFar) {
+      if (!task.recurringId) return tasksSoFar
+      const { globalData } = state
+      const template = (globalData.recurringTasks || []).find(r => r.id === task.recurringId)
+      if (!template || template.active === false) return tasksSoFar
+      if (hasPendingInstance(tasksSoFar, template.id)) return tasksSoFar
+      const todayStr = toDateString(new Date())
+      const next = buildRecurringInstance(template, todayStr)
+      return [...tasksSoFar, next]
+    },
+
+    async addRecurringTask({ title, priority, reward, penalty, intervalDays, startDate }) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const todayStr = toDateString(new Date())
+      const template = {
+        id: `rec_${Date.now().toString(36)}`,
+        title: title.trim(),
+        priority: priority || 'medium',
+        reward: parseInt(reward) || 0,
+        penalty: parseInt(penalty) || 0,
+        intervalDays: Math.max(1, parseInt(intervalDays) || 1),
+        active: true,
+        createdAt: new Date().toISOString(),
+      }
+      const firstInstance = {
+        id: `task_${Date.now().toString(36)}`,
+        title: template.title,
+        description: '',
+        deadline: startDate || todayStr,
+        reward: template.reward,
+        penalty: template.penalty,
+        priority: template.priority,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        expiredAt: null,
+        rewardApplied: false,
+        penaltyApplied: false,
+        recurringId: template.id,
+      }
+      const recurringTasks = [...(globalData.recurringTasks || []), template]
+      const tasks = [...(globalData.tasks || []), firstInstance]
+      await updateDoc(doc(db, 'users', authUserId), { recurringTasks, tasks })
+      actions.showToast('Task ricorrente creata!', '🔁')
+    },
+
+    async updateRecurringTask(id, updates) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const recurringTasks = (globalData.recurringTasks || []).map(r =>
+        r.id === id ? { ...r, ...updates } : r
+      )
+      await updateDoc(doc(db, 'users', authUserId), { recurringTasks })
+      actions.showToast('Ricorrenza aggiornata', '✏️')
+    },
+
+    async toggleRecurringTaskActive(id, active) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const recurringTasks = (globalData.recurringTasks || []).map(r =>
+        r.id === id ? { ...r, active } : r
+      )
+      await updateDoc(doc(db, 'users', authUserId), { recurringTasks })
+      actions.showToast(active ? 'Ricorrenza riattivata' : 'Ricorrenza in pausa', active ? '▶️' : '⏸️')
+    },
+
+    async deleteRecurringTask(id) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const recurringTasks = (globalData.recurringTasks || []).filter(r => r.id !== id)
+      await updateDoc(doc(db, 'users', authUserId), { recurringTasks })
+      actions.showToast('Ricorrenza eliminata', '🗑️')
     },
 
     async reopenTask(task, newDeadline) {

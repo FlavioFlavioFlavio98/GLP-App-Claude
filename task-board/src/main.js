@@ -69,11 +69,6 @@ setInterval(updateClock, 30_000)
 let latestTasks = []
 let latestRecurring = []
 
-function getRecurringTemplate(task) {
-  if (!task.recurringId) return null
-  return latestRecurring.find(r => r.id === task.recurringId) || null
-}
-
 // Aggiunge, se applicabile, la prossima istanza della task ricorrente
 // nello stesso array/scrittura del completamento — stessa logica di
 // store.jsx _spawnNextRecurringInstance, per restare coerente con
@@ -87,16 +82,13 @@ function spawnNextRecurringInstance(task, tasksSoFar) {
   return [...tasksSoFar, next]
 }
 
+// Niente window.confirm(): nella finestra flottante (Document
+// Picture-in-Picture) le dialog native del browser sono bloccate dallo
+// spec — il tap sembrava non fare nulla. Tocco istantaneo, come il widget
+// Android; l'undo (ritocca la spunta) resta la rete di sicurezza per i tap
+// accidentali.
 async function completeTask(task) {
-  const template = getRecurringTemplate(task)
   const isLate = task.status === 'expired'
-  const confirmMsg = isLate
-    ? `Chiudere "${task.title}" (completamento tardivo, nessun punto)?`
-    : template
-      ? `Completare "${task.title}"? +${task.reward}pt\n\n🔁 Ricorrente: si ripresenterà tra ${template.intervalDays} giorn${template.intervalDays === 1 ? 'o' : 'i'}.`
-      : `Completare "${task.title}"? +${task.reward}pt`
-  if (!window.confirm(confirmMsg)) return
-
   const now = new Date().toISOString()
   let tasks = latestTasks.map(t =>
     t.id === task.id
@@ -108,7 +100,6 @@ async function completeTask(task) {
 }
 
 async function uncompleteTask(task) {
-  if (!window.confirm(`Completata per errore? Ripristina "${task.title}" tra le task attive`)) return
   let tasks = latestTasks.map(t =>
     t.id === task.id
       ? { ...t, status: 'active', completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false }

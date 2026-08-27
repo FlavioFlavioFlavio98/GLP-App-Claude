@@ -31063,10 +31063,6 @@ This typically indicates that your device does not have a healthy Internet conne
   setInterval(updateClock, 3e4);
   var latestTasks = [];
   var latestRecurring = [];
-  function getRecurringTemplate(task) {
-    if (!task.recurringId) return null;
-    return latestRecurring.find((r2) => r2.id === task.recurringId) || null;
-  }
   function spawnNextRecurringInstance(task, tasksSoFar) {
     if (!task.recurringId) return tasksSoFar;
     const template = latestRecurring.find((r2) => r2.id === task.recurringId);
@@ -31076,12 +31072,7 @@ This typically indicates that your device does not have a healthy Internet conne
     return [...tasksSoFar, next];
   }
   async function completeTask(task) {
-    const template = getRecurringTemplate(task);
     const isLate = task.status === "expired";
-    const confirmMsg = isLate ? `Chiudere "${task.title}" (completamento tardivo, nessun punto)?` : template ? `Completare "${task.title}"? +${task.reward}pt
-
-\u{1F501} Ricorrente: si ripresenter\xE0 tra ${template.intervalDays} giorn${template.intervalDays === 1 ? "o" : "i"}.` : `Completare "${task.title}"? +${task.reward}pt`;
-    if (!window.confirm(confirmMsg)) return;
     const now = (/* @__PURE__ */ new Date()).toISOString();
     let tasks = latestTasks.map(
       (t2) => t2.id === task.id ? { ...t2, status: "completed", completedAt: now, rewardApplied: !isLate } : t2
@@ -31090,7 +31081,6 @@ This typically indicates that your device does not have a healthy Internet conne
     await updateDoc(userRef, { tasks });
   }
   async function uncompleteTask(task) {
-    if (!window.confirm(`Completata per errore? Ripristina "${task.title}" tra le task attive`)) return;
     let tasks = latestTasks.map(
       (t2) => t2.id === task.id ? { ...t2, status: "active", completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false } : t2
     );

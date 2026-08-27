@@ -9,13 +9,14 @@
     "build:web": "vite build --base=/GLP-App-Claude/ && node scripts/stamp-sw.js",
     "build:android": "vite build --base=/ && node scripts/stamp-sw.js",
     "preview": "vite preview",
-    "predeploy": "npm run build:web",
+    "predeploy": "npm run build:board && npm run build:web",
     "deploy": "gh-pages -d dist",
     "cap:sync": "powershell -ExecutionPolicy Bypass -File fix-android.ps1",
     "emulators": "firebase emulators:start --only auth,firestore,storage --import=./.emulator-data --export-on-exit",
     "seed:emulator": "node scripts/seed-emulator.mjs",
     "dev:emulator": "vite --mode emulator",
-    "build:extension": "esbuild chrome-extension/src/popup.js --bundle --outfile=chrome-extension/popup.bundle.js --format=iife --platform=browser"
+    "build:extension": "esbuild chrome-extension/src/popup.js --bundle --outfile=chrome-extension/popup.bundle.js --format=iife --platform=browser",
+    "build:board": "esbuild task-board/src/main.js --bundle --outfile=public/task-board/board.bundle.js --format=iife --platform=browser"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.3.0",

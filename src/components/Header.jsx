@@ -36,7 +36,7 @@ function VersionBadge() {
 
 export default function Header({ isReadOnly }) {
   const { state, actions } = useApp()
-  const { currentUser, authUserId, userColors, globalData, allUsersData } = state
+  const { currentUser, authUserId, userColors, globalData, allUsersData, theme } = state
   const color = userColors[currentUser]
   const score = globalData?.score ?? 0
   const { displayVal: scoreDisplay, animClass: scoreAnim } = useCountUp(score)
@@ -71,6 +71,11 @@ export default function Header({ isReadOnly }) {
       </div>
       <VersionBadge />
       <div className="header-actions">
+        <button className="icon-btn" onClick={() => actions.toggleTheme()} title="Cambia tema chiaro/scuro">
+          <span className="material-icons-round" style={{ fontSize: 20 }}>
+            {theme === 'light' ? 'dark_mode' : 'light_mode'}
+          </span>
+        </button>
         {!isReadOnly && (
           <button className="icon-btn" onClick={() => actions.openModal('globalSearch')} title="Cerca">
             <span className="material-icons-round" style={{ fontSize: 20 }}>search</span>

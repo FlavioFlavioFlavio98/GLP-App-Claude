@@ -156,7 +156,7 @@ body {
 .icon-btn {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.08);
-  color: #aaa;
+  color: var(--text-sec);
   cursor: pointer;
   padding: 6px;
   border-radius: var(--radius-sm);
@@ -809,14 +809,15 @@ input[type="color"] {
    ============================================= */
 .drag-handle {
   display: flex; align-items: center; justify-content: center;
-  color: rgba(255,255,255,0.18);
+  color: var(--text-sec);
+  opacity: 0.35;
   cursor: grab; padding: 0 10px 0 0;
   touch-action: none; /* critical for touch drag */
   flex-shrink: 0;
-  transition: color var(--transition);
+  transition: color var(--transition), opacity var(--transition);
   -webkit-tap-highlight-color: transparent;
 }
-.drag-handle:hover { color: rgba(255,255,255,0.4); }
+.drag-handle:hover { opacity: 0.75; }
 .drag-handle:active { cursor: grabbing; }
 .drag-handle .material-icons-round { font-size: 20px; }
 

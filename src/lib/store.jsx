@@ -225,6 +225,13 @@ export function AppProvider({ children }) {
     },
 
     setTheme(themeId) { dispatch({ type: 'SET_THEME', theme: themeId }) },
+    // Scorciatoia chiaro/scuro accessibile da ogni pagina (icona in header) —
+    // ricorda l'ultimo tema scuro scelto (dark/forest/volcano/midnight/aurora)
+    // così tornando da "Chiaro" si ripristina quello, non sempre "dark".
+    toggleTheme() {
+      const { theme, lastDarkTheme } = state
+      dispatch({ type: 'SET_THEME', theme: theme === 'light' ? (lastDarkTheme || 'dark') : 'light' })
+    },
     setUserColor(user, color) { dispatch({ type: 'SET_USER_COLOR', user, color }) },
     setViewDate(dateStr) { dispatch({ type: 'SET_VIEW_DATE', date: dateStr }) },
     openModal(name, payload) { dispatch({ type: 'SET_MODAL', name, payload }) },

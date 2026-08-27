@@ -117,6 +117,6 @@ const btnStyle = {
   width: 44, height: 44, borderRadius: '50%',
   border: '1px solid rgba(255,255,255,0.15)',
   background: 'rgba(255,255,255,0.06)',
-  color: '#fff', fontSize: '0.8em', fontWeight: 700,
+  color: 'var(--text)', fontSize: '0.8em', fontWeight: 700,
   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
 }

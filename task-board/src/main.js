@@ -1,11 +1,14 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, browserLocalPersistence, setPersistence } from 'firebase/auth'
-import { getFirestore, doc, onSnapshot } from 'firebase/firestore'
+import { getFirestore, doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { buildRecurringInstance, hasPendingInstance, addDays } from '../../src/lib/recurringTasksLogic'
+import { toDateString } from '../../src/lib/habitLogic'
 
 // Stessa config/account dedicato usato per estensione Chrome e app Wear OS
 // (flavio.rossi95@gmail.com, autorizzato in firestore.rules, stessi dati
 // users/flavio). Pagina statica pubblicata su GitHub Pages insieme alla web
-// app, pensata per restare aperta come tab fissata su Chrome sul laptop.
+// app, pensata per restare aperta come finestra "sempre in primo piano" sul
+// laptop (Document Picture-in-Picture) invece che come semplice tab.
 const firebaseConfig = {
   apiKey: 'AIzaSyA001klzJou17djB76Q-t2eRTKbU9NZoQs',
   authDomain: 'gamification-life-project.firebaseapp.com',
@@ -19,6 +22,7 @@ const FIXED_EMAIL = 'flavio.rossi95@gmail.com'
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 const db = getFirestore(app)
+const userRef = doc(db, 'users', 'flavio')
 
 const loginView = document.getElementById('loginView')
 const boardView = document.getElementById('boardView')
@@ -28,6 +32,7 @@ const loginStatus = document.getElementById('loginStatus')
 const listEl = document.getElementById('list')
 const footerEl = document.getElementById('footer')
 const clockEl = document.getElementById('clock')
+const pipBtn = document.getElementById('pipBtn')
 
 loginBtn.addEventListener('click', doLogin)
 passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin() })
@@ -49,8 +54,7 @@ const PRIORITY_COLOR = { high: '#EB5757', medium: '#F2994A', low: '#4A90D9' }
 const PRIORITY_LABEL = { high: 'Alta', medium: 'Media', low: 'Bassa' }
 
 function todayStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return toDateString(new Date())
 }
 
 function updateClock() {
@@ -62,7 +66,63 @@ function updateClock() {
 updateClock()
 setInterval(updateClock, 30_000)
 
-function render(tasks) {
+let latestTasks = []
+let latestRecurring = []
+
+function getRecurringTemplate(task) {
+  if (!task.recurringId) return null
+  return latestRecurring.find(r => r.id === task.recurringId) || null
+}
+
+// Aggiunge, se applicabile, la prossima istanza della task ricorrente
+// nello stesso array/scrittura del completamento — stessa logica di
+// store.jsx _spawnNextRecurringInstance, per restare coerente con
+// web/Android/estensione/watch.
+function spawnNextRecurringInstance(task, tasksSoFar) {
+  if (!task.recurringId) return tasksSoFar
+  const template = latestRecurring.find(r => r.id === task.recurringId)
+  if (!template || template.active === false) return tasksSoFar
+  if (hasPendingInstance(tasksSoFar, template.id)) return tasksSoFar
+  const next = buildRecurringInstance(template, todayStr())
+  return [...tasksSoFar, next]
+}
+
+async function completeTask(task) {
+  const template = getRecurringTemplate(task)
+  const isLate = task.status === 'expired'
+  const confirmMsg = isLate
+    ? `Chiudere "${task.title}" (completamento tardivo, nessun punto)?`
+    : template
+      ? `Completare "${task.title}"? +${task.reward}pt\n\n🔁 Ricorrente: si ripresenterà tra ${template.intervalDays} giorn${template.intervalDays === 1 ? 'o' : 'i'}.`
+      : `Completare "${task.title}"? +${task.reward}pt`
+  if (!window.confirm(confirmMsg)) return
+
+  const now = new Date().toISOString()
+  let tasks = latestTasks.map(t =>
+    t.id === task.id
+      ? { ...t, status: 'completed', completedAt: now, rewardApplied: !isLate }
+      : t
+  )
+  tasks = spawnNextRecurringInstance(task, tasks)
+  await updateDoc(userRef, { tasks })
+}
+
+async function uncompleteTask(task) {
+  if (!window.confirm(`Completata per errore? Ripristina "${task.title}" tra le task attive`)) return
+  let tasks = latestTasks.map(t =>
+    t.id === task.id
+      ? { ...t, status: 'active', completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false }
+      : t
+  )
+  if (task.recurringId) {
+    tasks = tasks.filter(t => !(t.recurringId === task.recurringId && t.id !== task.id && t.status === 'active'))
+  }
+  await updateDoc(userRef, { tasks })
+}
+
+function render(tasks, recurring) {
+  latestTasks = tasks
+  latestRecurring = recurring
   const today = todayStr()
 
   // Stessa logica di TaskSection.jsx per "oggi": attive con scadenza entro
@@ -85,12 +145,21 @@ function render(tasks) {
   } else {
     for (const t of dayTasks) {
       const row = document.createElement('div')
-      row.className = 'row' + (t.status === 'completed' ? ' done' : '')
+      row.className = 'row' + (t.status === 'completed' ? ' done' : '') + ' clickable'
+      row.title = t.status === 'completed' ? 'Tocca per annullare il completamento' : 'Tocca per completare'
+      row.addEventListener('click', () => {
+        if (t.status === 'completed') uncompleteTask(t)
+        else completeTask(t)
+      })
 
-      const dot = document.createElement('div')
-      dot.className = 'dot'
-      dot.style.background = t.status === 'expired' ? '#EB5757' : (PRIORITY_COLOR[t.priority] || '#4A90D9')
-      row.appendChild(dot)
+      const check = document.createElement('div')
+      check.className = 'check' + (t.status === 'completed' ? ' checked' : '')
+      if (t.status === 'completed') {
+        check.textContent = '✓'
+      } else {
+        check.style.borderColor = t.status === 'expired' ? '#EB5757' : (PRIORITY_COLOR[t.priority] || '#4A90D9')
+      }
+      row.appendChild(check)
 
       const main = document.createElement('div')
       main.className = 'main'
@@ -112,10 +181,11 @@ function render(tasks) {
       if (t.status === 'expired') {
         meta.innerHTML = `<span class="tag expired">SCADUTA · -${t.penalty || 0}pt</span>`
       } else if (t.status === 'completed') {
-        meta.innerHTML = `<span class="tag done">✓ completata · +${t.reward || 0}pt</span>`
+        meta.innerHTML = `<span class="tag done">completata${t.rewardApplied ? ` · +${t.reward || 0}pt` : ''}</span>`
       } else {
         meta.innerHTML = `<span class="tag priority">${PRIORITY_LABEL[t.priority] || ''}</span>${t.reward ? `<span class="tag reward">+${t.reward}pt</span>` : ''}`
       }
+      if (t.recurringId) meta.innerHTML += `<span class="tag recurring">🔁</span>`
       main.appendChild(meta)
 
       row.appendChild(main)
@@ -135,8 +205,10 @@ onAuthStateChanged(auth, user => {
   if (user) {
     loginView.style.display = 'none'
     boardView.style.display = 'flex'
-    const ref = doc(db, 'users', 'flavio')
-    unsubscribe = onSnapshot(ref, snap => render(snap.data()?.tasks || []), () => {
+    unsubscribe = onSnapshot(userRef, snap => {
+      const data = snap.data() || {}
+      render(data.tasks || [], data.recurringTasks || [])
+    }, () => {
       listEl.innerHTML = '<div class="empty">Errore di connessione</div>'
     })
   } else {
@@ -145,3 +217,50 @@ onAuthStateChanged(auth, user => {
     passwordInput.focus()
   }
 })
+
+// ─── Sempre in primo piano (Document Picture-in-Picture) ──────────────────
+// L'intera pagina resta nello stesso contesto JS: i listener Firestore
+// continuano a girare invariati anche quando gli elementi DOM vengono
+// spostati nella finestra PiP, quindi gli aggiornamenti dal telefono/watch
+// arrivano lì in tempo reale esattamente come nella tab normale.
+let pipWindow = null
+
+async function copyStylesInto(targetDoc) {
+  for (const styleSheet of document.styleSheets) {
+    try {
+      const css = [...styleSheet.cssRules].map(r => r.cssText).join('\n')
+      const style = document.createElement('style')
+      style.textContent = css
+      targetDoc.head.appendChild(style)
+    } catch {
+      const link = targetDoc.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = styleSheet.href
+      targetDoc.head.appendChild(link)
+    }
+  }
+}
+
+async function togglePiP() {
+  if (!('documentPictureInPicture' in window)) {
+    alert('Questa versione di Chrome non supporta ancora la modalità "sempre in primo piano". Aggiorna Chrome e riprova.')
+    return
+  }
+  if (pipWindow) { pipWindow.close(); return }
+
+  pipWindow = await window.documentPictureInPicture.requestWindow({ width: 300, height: 480 })
+  await copyStylesInto(pipWindow.document)
+  pipWindow.document.title = 'Task di oggi'
+
+  const pageEl = document.querySelector('.page')
+  pipWindow.document.body.appendChild(pageEl)
+  pipWindow.document.body.style.margin = '0'
+  pipWindow.document.body.style.background = '#0d0d10'
+
+  pipWindow.addEventListener('pagehide', () => {
+    document.body.insertBefore(pageEl, document.body.firstChild)
+    pipWindow = null
+  })
+}
+
+pipBtn.addEventListener('click', togglePiP)

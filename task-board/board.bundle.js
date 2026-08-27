@@ -18504,6 +18504,20 @@
       return new _ObjectValue(__PRIVATE_deepClone(this.value));
     }
   };
+  function __PRIVATE_extractFieldMask(e2) {
+    const t2 = [];
+    return forEach(e2.fields, (e3, n2) => {
+      const r2 = new Oe([e3]);
+      if (__PRIVATE_isMapValue(n2)) {
+        const e4 = __PRIVATE_extractFieldMask(n2.mapValue).fields;
+        if (0 === e4.length)
+          t2.push(r2);
+        else
+          for (const n3 of e4) t2.push(r2.child(n3));
+      } else
+        t2.push(r2);
+    }), new FieldMask(t2);
+  }
   function __PRIVATE_toDouble(e2, t2) {
     if (e2.useProto3Json) {
       if (isNaN(t2)) return {
@@ -18625,6 +18639,11 @@
       return e3 instanceof __PRIVATE_ArrayUnionTransformOperation && t3 instanceof __PRIVATE_ArrayUnionTransformOperation || e3 instanceof __PRIVATE_ArrayRemoveTransformOperation && t3 instanceof __PRIVATE_ArrayRemoveTransformOperation ? __PRIVATE_arrayEquals(e3.elements, t3.elements, __PRIVATE_valueEquals$1) : e3 instanceof __PRIVATE_NumericIncrementTransformOperation && t3 instanceof __PRIVATE_NumericIncrementTransformOperation || e3 instanceof __PRIVATE_NumericMinimumTransformOperation && t3 instanceof __PRIVATE_NumericMinimumTransformOperation || e3 instanceof __PRIVATE_NumericMaximumTransformOperation && t3 instanceof __PRIVATE_NumericMaximumTransformOperation ? __PRIVATE_valueEquals$1(e3.l, t3.l) : e3 instanceof __PRIVATE_ServerTimestampTransform && t3 instanceof __PRIVATE_ServerTimestampTransform;
     }(e2.transform, t2.transform);
   }
+  var MutationResult = class {
+    constructor(e2, t2) {
+      this.version = e2, this.transformResults = t2;
+    }
+  };
   var Precondition = class _Precondition {
     constructor(e2, t2) {
       this.updateTime = e2, this.exists = t2;
@@ -18696,6 +18715,14 @@
       return n3;
     }(e2, t2, n2);
   }
+  function __PRIVATE_mutationExtractBaseValue(e2, t2) {
+    let n2 = null;
+    for (const r2 of e2.fieldTransforms) {
+      const e3 = t2.data.field(r2.field), i2 = __PRIVATE_computeTransformOperationBaseValue(r2.transform, e3 || null);
+      null != i2 && (null === n2 && (n2 = ObjectValue.empty()), n2.set(r2.field, i2));
+    }
+    return n2 || null;
+  }
   function __PRIVATE_mutationEquals(e2, t2) {
     return e2.type === t2.type && (!!e2.key.isEqual(t2.key) && (!!e2.precondition.isEqual(t2.precondition) && (!!function __PRIVATE_fieldTransformsAreEqual(e3, t3) {
       return void 0 === e3 && void 0 === t3 || !(!e3 || !t3) && __PRIVATE_arrayEquals(e3, t3, (e4, t4) => __PRIVATE_fieldTransformEquals(e4, t4));
@@ -18749,6 +18776,14 @@
   var __PRIVATE_DeleteMutation = class extends Mutation {
     constructor(e2, t2) {
       super(), this.key = e2, this.precondition = t2, this.type = 2, this.fieldTransforms = [];
+    }
+    getFieldMask() {
+      return null;
+    }
+  };
+  var __PRIVATE_VerifyMutation = class extends Mutation {
+    constructor(e2, t2) {
+      super(), this.key = e2, this.precondition = t2, this.type = 3, this.fieldTransforms = [];
     }
     getFieldMask() {
       return null;
@@ -19344,6 +19379,34 @@
   };
   var et;
   var tt;
+  function __PRIVATE_isPermanentError(e2) {
+    switch (e2) {
+      case aa.OK:
+        return l(64938);
+      case aa.CANCELLED:
+      case aa.UNKNOWN:
+      case aa.DEADLINE_EXCEEDED:
+      case aa.RESOURCE_EXHAUSTED:
+      case aa.INTERNAL:
+      case aa.UNAVAILABLE:
+      case aa.UNAUTHENTICATED:
+        return false;
+      case aa.INVALID_ARGUMENT:
+      case aa.NOT_FOUND:
+      case aa.ALREADY_EXISTS:
+      case aa.PERMISSION_DENIED:
+      case aa.FAILED_PRECONDITION:
+      case aa.ABORTED:
+      case aa.OUT_OF_RANGE:
+      case aa.UNIMPLEMENTED:
+      case aa.DATA_LOSS:
+        return true;
+      default:
+        return l(15467, {
+          code: e2
+        });
+    }
+  }
   function __PRIVATE_mapCodeFromRpcCode(e2) {
     if (void 0 === e2)
       return __PRIVATE_logError("GRPC error has no .code"), aa.UNKNOWN;
@@ -20116,6 +20179,12 @@
       key: e2.toString()
     }), e2.popFirst(5);
   }
+  function __PRIVATE_toMutationDocument(e2, t2, n2) {
+    return {
+      name: __PRIVATE_toName(e2, t2),
+      fields: n2.value.mapValue.fields
+    };
+  }
   function __PRIVATE_fromWatchChange(e2, t2) {
     let n2;
     if ("targetChange" in t2) {
@@ -20170,6 +20239,78 @@
       }
     }
     return n2;
+  }
+  function toMutation(e2, t2) {
+    let n2;
+    if (t2 instanceof __PRIVATE_SetMutation) n2 = {
+      update: __PRIVATE_toMutationDocument(e2, t2.key, t2.value)
+    };
+    else if (t2 instanceof __PRIVATE_DeleteMutation) n2 = {
+      delete: __PRIVATE_toName(e2, t2.key)
+    };
+    else if (t2 instanceof __PRIVATE_PatchMutation) n2 = {
+      update: __PRIVATE_toMutationDocument(e2, t2.key, t2.data),
+      updateMask: __PRIVATE_toDocumentMask(t2.fieldMask)
+    };
+    else {
+      if (!(t2 instanceof __PRIVATE_VerifyMutation)) return l(16599, {
+        we: t2.type
+      });
+      n2 = {
+        verify: __PRIVATE_toName(e2, t2.key)
+      };
+    }
+    return t2.fieldTransforms.length > 0 && (n2.updateTransforms = t2.fieldTransforms.map((e3) => function __PRIVATE_toFieldTransform(e4, t3) {
+      const n3 = t3.transform;
+      if (n3 instanceof __PRIVATE_ServerTimestampTransform) return {
+        fieldPath: t3.field.canonicalString(),
+        setToServerValue: "REQUEST_TIME"
+      };
+      if (n3 instanceof __PRIVATE_ArrayUnionTransformOperation) return {
+        fieldPath: t3.field.canonicalString(),
+        appendMissingElements: {
+          values: n3.elements
+        }
+      };
+      if (n3 instanceof __PRIVATE_ArrayRemoveTransformOperation) return {
+        fieldPath: t3.field.canonicalString(),
+        removeAllFromArray: {
+          values: n3.elements
+        }
+      };
+      if (n3 instanceof __PRIVATE_NumericIncrementTransformOperation) return {
+        fieldPath: t3.field.canonicalString(),
+        increment: n3.l
+      };
+      if (n3 instanceof __PRIVATE_NumericMinimumTransformOperation) return {
+        fieldPath: t3.field.canonicalString(),
+        minimum: n3.l
+      };
+      if (n3 instanceof __PRIVATE_NumericMaximumTransformOperation) return {
+        fieldPath: t3.field.canonicalString(),
+        maximum: n3.l
+      };
+      throw l(20930, {
+        transform: t3.transform
+      });
+    }(0, e3))), t2.precondition.isNone || (n2.currentDocument = function __PRIVATE_toPrecondition(e3, t3) {
+      return void 0 !== t3.updateTime ? {
+        updateTime: __PRIVATE_toVersion(e3, t3.updateTime)
+      } : void 0 !== t3.exists ? {
+        exists: t3.exists
+      } : l(27497);
+    }(e2, t2.precondition)), n2;
+  }
+  function __PRIVATE_fromWriteResults(e2, t2) {
+    return e2 && e2.length > 0 ? (__PRIVATE_hardAssert(void 0 !== t2, 14353), e2.map((e3) => function __PRIVATE_fromWriteResult(e4, t3) {
+      let n2 = e4.updateTime ? __PRIVATE_fromVersion(e4.updateTime) : __PRIVATE_fromVersion(t3);
+      return n2.isEqual(SnapshotVersion.min()) && // The Firestore Emulator currently returns an update time of 0 for
+      // deletes of non-existing documents (rather than null). This breaks the
+      // test "get deleted doc while offline with source=cache" as NoDocuments
+      // with version 0 are filtered by IndexedDb's RemoteDocumentCache.
+      // TODO(#2149): Remove this when Emulator is fixed
+      (n2 = __PRIVATE_fromVersion(t3)), new MutationResult(n2, e4.transformResults || []);
+    }(e3, t2))) : [];
   }
   function __PRIVATE_toDocumentsTarget(e2, t2) {
     return {
@@ -20442,6 +20583,12 @@
     }(e2) : l(54877, {
       filter: e2
     });
+  }
+  function __PRIVATE_toDocumentMask(e2) {
+    const t2 = [];
+    return e2.fields.forEach((e3) => t2.push(e3.canonicalString())), {
+      fieldPaths: t2
+    };
   }
   function __PRIVATE_isValidResourceName(e2) {
     return e2.length >= 4 && "projects" === e2.get(0) && "databases" === e2.get(2);
@@ -21506,6 +21653,57 @@
       t2.database = __PRIVATE_getEncodedDatabaseId(this.serializer), t2.removeTarget = e2, this.tn(t2);
     }
   };
+  var __PRIVATE_PersistentWriteStream = class extends __PRIVATE_PersistentStream {
+    constructor(e2, t2, n2, r2, i2, s2) {
+      super(e2, "write_stream_connection_backoff", "write_stream_idle", "health_check_timeout", t2, n2, r2, s2), this.serializer = i2;
+    }
+    /**
+     * Tracks whether or not a handshake has been successfully exchanged and
+     * the stream is ready to accept mutations.
+     */
+    get Rn() {
+      return this.zt > 0;
+    }
+    // Override of PersistentStream.start
+    start() {
+      this.lastStreamToken = void 0, super.start();
+    }
+    sn() {
+      this.Rn && this.In([]);
+    }
+    cn(e2, t2) {
+      return this.connection.vt("Write", e2, t2);
+    }
+    En(e2) {
+      return __PRIVATE_hardAssert(!!e2.streamToken, 31322), this.lastStreamToken = e2.streamToken, // The first response is always the handshake response
+      __PRIVATE_hardAssert(!e2.writeResults || 0 === e2.writeResults.length, 55816), this.listener.An();
+    }
+    onNext(e2) {
+      __PRIVATE_hardAssert(!!e2.streamToken, 12678), this.lastStreamToken = e2.streamToken, // A successful first write response means the stream is healthy,
+      // Note, that we could consider a successful handshake healthy, however,
+      // the write itself might be causing an error we want to back off from.
+      this.jt.reset();
+      const t2 = __PRIVATE_fromWriteResults(e2.writeResults, e2.commitTime), n2 = __PRIVATE_fromVersion(e2.commitTime);
+      return this.listener.Vn(n2, t2);
+    }
+    /**
+     * Sends an initial streamToken to the server, performing the handshake
+     * required to make the StreamingWrite RPC work. Subsequent
+     * calls should wait until onHandshakeComplete was called.
+     */
+    dn() {
+      const e2 = {};
+      e2.database = __PRIVATE_getEncodedDatabaseId(this.serializer), this.tn(e2);
+    }
+    /** Sends a group of mutations to the Firestore backend to apply. */
+    In(e2) {
+      const t2 = {
+        streamToken: this.lastStreamToken,
+        writes: e2.map((e3) => toMutation(this.serializer, e3))
+      };
+      this.tn(t2);
+    }
+  };
   var Datastore = class {
   };
   var __PRIVATE_DatastoreImpl = class extends Datastore {
@@ -22136,6 +22334,15 @@ Total Duration: ${a - u2}ms`);
     type: property("string", n._jsonSchemaVersion),
     vectorValues: property("object")
   };
+  var xt = /^__.*__$/;
+  var ParsedUpdateData = class {
+    constructor(e2, t2, n2) {
+      this.data = e2, this.fieldMask = t2, this.fieldTransforms = n2;
+    }
+    toMutation(e2, t2) {
+      return new __PRIVATE_PatchMutation(e2, this.data, this.fieldMask, t2, this.fieldTransforms);
+    }
+  };
   function __PRIVATE_isWrite(e2) {
     switch (e2) {
       case 0:
@@ -22150,6 +22357,145 @@ Total Duration: ${a - u2}ms`);
           dataSource: e2
         });
     }
+  }
+  var ParseContextImpl = class _ParseContextImpl {
+    /**
+     * Initializes a ParseContext with the given source and path.
+     *
+     * @param settings - The settings for the parser.
+     * @param databaseId - The database ID of the Firestore instance.
+     * @param serializer - The serializer to use to generate the Value proto.
+     * @param ignoreUndefinedProperties - Whether to ignore undefined properties
+     * rather than throw.
+     * @param fieldTransforms - A mutable list of field transforms encountered
+     * while parsing the data.
+     * @param fieldMask - A mutable list of field paths encountered while parsing
+     * the data.
+     *
+     * TODO(b/34871131): We don't support array paths right now, so path can be
+     * null to indicate the context represents any location within an array (in
+     * which case certain features will not work and errors will be somewhat
+     * compromised).
+     */
+    constructor(e2, t2, n2, r2, i2, s2) {
+      this.settings = e2, this.databaseId = t2, this.serializer = n2, this.ignoreUndefinedProperties = r2, // Minor hack: If fieldTransforms is undefined, we assume this is an
+      // external call and we need to validate the entire path.
+      void 0 === i2 && this.validatePath(), this.fieldTransforms = i2 || [], this.fieldMask = s2 || [];
+    }
+    get path() {
+      return this.settings.path;
+    }
+    get dataSource() {
+      return this.settings.dataSource;
+    }
+    /** Returns a new context with the specified settings overwritten. */
+    contextWith(e2) {
+      return new _ParseContextImpl({
+        ...this.settings,
+        ...e2
+      }, this.databaseId, this.serializer, this.ignoreUndefinedProperties, this.fieldTransforms, this.fieldMask);
+    }
+    childContextForField(e2) {
+      const t2 = this.path?.child(e2), n2 = this.contextWith({
+        path: t2,
+        arrayElement: false
+      });
+      return n2.validatePathSegment(e2), n2;
+    }
+    childContextForFieldPath(e2) {
+      const t2 = this.path?.child(e2), n2 = this.contextWith({
+        path: t2,
+        arrayElement: false
+      });
+      return n2.validatePath(), n2;
+    }
+    childContextForArray(e2) {
+      return this.contextWith({
+        path: void 0,
+        arrayElement: true
+      });
+    }
+    createError(e2) {
+      return createError(e2, this.settings.methodName, this.settings.hasConverter || false, this.path, this.settings.targetDoc);
+    }
+    /** Returns 'true' if 'fieldPath' was traversed when creating this context. */
+    contains(e2) {
+      return void 0 !== this.fieldMask.find((t2) => e2.isPrefixOf(t2)) || void 0 !== this.fieldTransforms.find((t2) => e2.isPrefixOf(t2.field));
+    }
+    validatePath() {
+      if (this.path) for (let e2 = 0; e2 < this.path.length; e2++) this.validatePathSegment(this.path.get(e2));
+    }
+    validatePathSegment(e2) {
+      if (0 === e2.length) throw this.createError("Document fields must not be empty");
+      if (__PRIVATE_isWrite(this.dataSource) && xt.test(e2)) throw this.createError('Document fields cannot begin and end with "__"');
+    }
+  };
+  var UserDataReader = class {
+    constructor(e2, t2, n2) {
+      this.databaseId = e2, this.ignoreUndefinedProperties = t2, this.serializer = n2 || __PRIVATE_newSerializer(e2);
+    }
+    /** Creates a new top-level parse context. */
+    createContext(e2, t2, n2, r2 = false) {
+      return new ParseContextImpl({
+        dataSource: e2,
+        methodName: t2,
+        targetDoc: n2,
+        path: Oe.emptyPath(),
+        arrayElement: false,
+        hasConverter: r2
+      }, this.databaseId, this.serializer, this.ignoreUndefinedProperties);
+    }
+  };
+  function la(e2) {
+    const t2 = e2._freezeSettings(), n2 = __PRIVATE_newSerializer(e2._databaseId);
+    return new UserDataReader(e2._databaseId, !!t2.ignoreUndefinedProperties, n2);
+  }
+  var __PRIVATE_DeleteFieldValueImpl = class ___PRIVATE_DeleteFieldValueImpl extends FieldValue {
+    _toFieldTransform(e2) {
+      if (2 !== e2.dataSource) throw 1 === e2.dataSource ? e2.createError(`${this._methodName}() can only appear at the top level of your update data`) : e2.createError(`${this._methodName}() cannot be used with set() unless you pass {merge:true}`);
+      return e2.fieldMask.push(e2.path), null;
+    }
+    isEqual(e2) {
+      return e2 instanceof ___PRIVATE_DeleteFieldValueImpl;
+    }
+  };
+  function __PRIVATE_parseUpdateData(e2, t2, n2, r2) {
+    const i2 = e2.createContext(1, t2, n2);
+    __PRIVATE_validatePlainObject("Data must be an object, but it was:", i2, r2);
+    const s2 = [], _ = ObjectValue.empty();
+    forEach(r2, (e3, r3) => {
+      const o3 = __PRIVATE_fieldPathFromDotSeparatedString(t2, e3, n2);
+      r3 = getModularInstance(r3);
+      const a = i2.childContextForFieldPath(o3);
+      if (r3 instanceof __PRIVATE_DeleteFieldValueImpl)
+        s2.push(o3);
+      else {
+        const e4 = __PRIVATE_parseData(r3, a);
+        null != e4 && (s2.push(o3), _.set(o3, e4));
+      }
+    });
+    const o2 = new FieldMask(s2);
+    return new ParsedUpdateData(_, o2, i2.fieldTransforms);
+  }
+  function __PRIVATE_parseUpdateVarargs(e2, t2, n2, r2, i2, _) {
+    const o2 = e2.createContext(1, t2, n2), a = [ta(t2, r2, n2)], u2 = [i2];
+    if (_.length % 2 != 0) throw new s(aa.INVALID_ARGUMENT, `Function ${t2}() needs to be called with an even number of arguments that alternate between field names and values.`);
+    for (let e3 = 0; e3 < _.length; e3 += 2) a.push(ta(t2, _[e3])), u2.push(_[e3 + 1]);
+    const c2 = [], l2 = ObjectValue.empty();
+    for (let e3 = a.length - 1; e3 >= 0; --e3) if (!__PRIVATE_fieldMaskContains(c2, a[e3])) {
+      const t3 = a[e3];
+      let n3 = u2[e3];
+      n3 = getModularInstance(n3);
+      const r3 = o2.childContextForFieldPath(t3);
+      if (n3 instanceof __PRIVATE_DeleteFieldValueImpl)
+        c2.push(t3);
+      else {
+        const e4 = __PRIVATE_parseData(n3, r3);
+        null != e4 && (c2.push(t3), l2.set(t3, e4));
+      }
+    }
+    const E = new FieldMask(c2);
+    return new ParsedUpdateData(l2, E, o2.fieldTransforms);
   }
   function __PRIVATE_parseData(e2, t2, r2) {
     if (__PRIVATE_looksLikeJsonObject(
@@ -22326,6 +22672,9 @@ Total Duration: ${a - u2}ms`);
     n2 && (a += " (via `toFirestore()`)"), a += ". ";
     let u2 = "";
     return (_ || o2) && (u2 += " (found", _ && (u2 += ` in field ${r2}`), o2 && (u2 += ` in document ${i2}`), u2 += ")"), new s(aa.INVALID_ARGUMENT, a + e2 + u2);
+  }
+  function __PRIVATE_fieldMaskContains(e2, t2) {
+    return e2.some((e3) => e3.isEqual(t2));
   }
   function __PRIVATE_isUserData(e2) {
     return "function" == typeof e2._readUserData;
@@ -26316,6 +26665,28 @@ Total Duration: ${a - u2}ms`);
       return this.batchId === e2.batchId && __PRIVATE_arrayEquals(this.mutations, e2.mutations, (e3, t2) => __PRIVATE_mutationEquals(e3, t2)) && __PRIVATE_arrayEquals(this.baseMutations, e2.baseMutations, (e3, t2) => __PRIVATE_mutationEquals(e3, t2));
     }
   };
+  var MutationBatchResult = class _MutationBatchResult {
+    constructor(e2, t2, n2, r2) {
+      this.batch = e2, this.commitVersion = t2, this.mutationResults = n2, this.docVersions = r2;
+    }
+    /**
+     * Creates a new MutationBatchResult for the given batch and results. There
+     * must be one result for each mutation in the batch. This static factory
+     * caches a document=&gt;version mapping (docVersions).
+     */
+    static from(e2, t2, n2) {
+      __PRIVATE_hardAssert(e2.mutations.length === n2.length, 58842, {
+        Br: e2.mutations.length,
+        Ur: n2.length
+      });
+      let r2 = /* @__PURE__ */ function __PRIVATE_documentVersionMap() {
+        return it;
+      }();
+      const i2 = e2.mutations;
+      for (let e3 = 0; e3 < i2.length; e3++) r2 = r2.insert(i2[e3].key, n2[e3].version);
+      return new _MutationBatchResult(e2, t2, n2, r2);
+    }
+  };
   var Kt = "";
   function __PRIVATE_encodeResourcePath(e2) {
     let t2 = "";
@@ -27910,6 +28281,33 @@ Total Duration: ${a - u2}ms`);
       });
     });
   }
+  function __PRIVATE_localStoreAcknowledgeBatch(e2, t2) {
+    const n2 = __PRIVATE_debugCast(e2);
+    return n2.persistence.runTransaction("Acknowledge batch", "readwrite-primary", (e3) => {
+      const r2 = t2.batch.keys(), i2 = n2.Uo.newChangeBuffer({
+        trackRemovals: true
+      });
+      return function __PRIVATE_applyWriteToRemoteDocuments(e4, t3, n3, r3) {
+        const i3 = n3.batch, s2 = i3.keys();
+        let _ = PersistencePromise.resolve();
+        return s2.forEach((e5) => {
+          _ = _.next(() => r3.getEntry(t3, e5)).next((t4) => {
+            const s3 = n3.docVersions.get(e5);
+            __PRIVATE_hardAssert(null !== s3, 48541), t4.version.compareTo(s3) < 0 && (i3.applyToRemoteDocument(t4, n3), t4.isValidDocument() && // We use the commitVersion as the readTime rather than the
+            // document's updateTime since the updateTime is not advanced
+            // for updates that do not modify the underlying document.
+            (t4.setReadTime(n3.commitVersion), r3.addEntry(t4)));
+          });
+        }), _.next(() => e4.mutationQueue.removeMutationBatch(t3, i3));
+      }(n2, e3, t2, i2).next(() => i2.apply(e3)).next(() => n2.mutationQueue.performConsistencyCheck(e3)).next(() => n2.documentOverlayCache.removeOverlaysForBatchId(e3, r2, t2.batch.batchId)).next(() => n2.localDocuments.recalculateAndSaveOverlaysForDocumentKeys(e3, function __PRIVATE_getKeysWithTransformResults(e4) {
+        let t3 = __PRIVATE_documentKeySet();
+        for (let n3 = 0; n3 < e4.mutationResults.length; ++n3) {
+          e4.mutationResults[n3].transformResults.length > 0 && (t3 = t3.add(e4.batch.mutations[n3].key));
+        }
+        return t3;
+      }(t2))).next(() => n2.localDocuments.getDocuments(e3, r2));
+    });
+  }
   function __PRIVATE_localStoreGetLastRemoteSnapshotVersion(e2) {
     const t2 = __PRIVATE_debugCast(e2);
     return t2.persistence.runTransaction("Get last remote snapshot version", "readonly", (e3) => t2.A_.getLastRemoteSnapshotVersion(e3));
@@ -27984,6 +28382,10 @@ Total Duration: ${a - u2}ms`);
         Ko: i2
       };
     });
+  }
+  function __PRIVATE_localStoreGetNextMutationBatch(e2, t2) {
+    const n2 = __PRIVATE_debugCast(e2);
+    return n2.persistence.runTransaction("Get next mutation batch", "readonly", (e3) => (void 0 === t2 && (t2 = Ke), n2.mutationQueue.getNextMutationBatchAfterBatchId(e3, t2)));
   }
   function __PRIVATE_localStoreAllocateTarget(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2);
@@ -28386,6 +28788,66 @@ This typically indicates that your device does not have a healthy Internet conne
       ), await __PRIVATE_enableNetworkInternal(e2);
     });
   }
+  function __PRIVATE_executeWithRecovery(e2, t2) {
+    return t2().catch((n2) => __PRIVATE_disableNetworkUntilRecovery(e2, n2, t2));
+  }
+  async function __PRIVATE_fillWritePipeline(e2) {
+    const t2 = __PRIVATE_debugCast(e2), n2 = __PRIVATE_ensureWriteStream(t2);
+    let r2 = t2.ia.length > 0 ? t2.ia[t2.ia.length - 1].batchId : Ke;
+    for (; __PRIVATE_canAddToWritePipeline(t2); ) try {
+      const e3 = await __PRIVATE_localStoreGetNextMutationBatch(t2.localStore, r2);
+      if (null === e3) {
+        0 === t2.ia.length && n2.Xt();
+        break;
+      }
+      r2 = e3.batchId, __PRIVATE_addToWritePipeline(t2, e3);
+    } catch (e3) {
+      await __PRIVATE_disableNetworkUntilRecovery(t2, e3);
+    }
+    __PRIVATE_shouldStartWriteStream(t2) && __PRIVATE_startWriteStream(t2);
+  }
+  function __PRIVATE_canAddToWritePipeline(e2) {
+    return __PRIVATE_canUseNetwork(e2) && e2.ia.length < 10;
+  }
+  function __PRIVATE_addToWritePipeline(e2, t2) {
+    e2.ia.push(t2);
+    const n2 = __PRIVATE_ensureWriteStream(e2);
+    n2.Jt() && n2.Rn && n2.In(t2.mutations);
+  }
+  function __PRIVATE_shouldStartWriteStream(e2) {
+    return __PRIVATE_canUseNetwork(e2) && !__PRIVATE_ensureWriteStream(e2).Ht() && e2.ia.length > 0;
+  }
+  function __PRIVATE_startWriteStream(e2) {
+    __PRIVATE_ensureWriteStream(e2).start();
+  }
+  async function __PRIVATE_onWriteStreamOpen(e2) {
+    __PRIVATE_ensureWriteStream(e2).dn();
+  }
+  async function __PRIVATE_onWriteHandshakeComplete(e2) {
+    const t2 = __PRIVATE_ensureWriteStream(e2);
+    for (const n2 of e2.ia) t2.In(n2.mutations);
+  }
+  async function __PRIVATE_onMutationResult(e2, t2, n2) {
+    const r2 = e2.ia.shift(), i2 = MutationBatchResult.from(r2, t2, n2);
+    await __PRIVATE_executeWithRecovery(e2, () => e2.remoteSyncer.applySuccessfulWrite(i2)), // It's possible that with the completion of this mutation another
+    // slot has freed up.
+    await __PRIVATE_fillWritePipeline(e2);
+  }
+  async function __PRIVATE_onWriteStreamClose(e2, t2) {
+    t2 && __PRIVATE_ensureWriteStream(e2).Rn && // This error affects the actual write.
+    await async function __PRIVATE_handleWriteError(e3, t3) {
+      if (function __PRIVATE_isPermanentWriteError(e4) {
+        return __PRIVATE_isPermanentError(e4) && e4 !== aa.ABORTED;
+      }(t3.code)) {
+        const n2 = e3.ia.shift();
+        __PRIVATE_ensureWriteStream(e3).Zt(), await __PRIVATE_executeWithRecovery(e3, () => e3.remoteSyncer.rejectFailedWrite(n2.batchId, t3)), // It's possible that with the completion of this mutation
+        // another slot has freed up.
+        await __PRIVATE_fillWritePipeline(e3);
+      }
+    }(e2, t2), // The write stream might have been started by refilling the write
+    // pipeline for failed writes
+    __PRIVATE_shouldStartWriteStream(e2) && __PRIVATE_startWriteStream(e2);
+  }
   async function __PRIVATE_remoteStoreHandleCredentialChange(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2);
     n2.asyncQueue.verifyOperationInProgress(), __PRIVATE_logDebug(hr, "RemoteStore received new credentials");
@@ -28431,6 +28893,22 @@ This typically indicates that your device does not have a healthy Internet conne
         /* OnlineState.Unknown */
       )) : (await e2.Pa.stop(), __PRIVATE_cleanUpWatchStreamState(e2));
     })), e2.Pa;
+  }
+  function __PRIVATE_ensureWriteStream(e2) {
+    return e2.Ra || // Create stream (but note that it is not started yet).
+    (e2.Ra = function __PRIVATE_newPersistentWriteStream(e3, t2, n2) {
+      const r2 = __PRIVATE_debugCast(e3);
+      return r2.mn(), new __PRIVATE_PersistentWriteStream(t2, r2.connection, r2.authCredentials, r2.appCheckCredentials, r2.serializer, n2);
+    }(e2.datastore, e2.asyncQueue, {
+      ut: () => Promise.resolve(),
+      lt: __PRIVATE_onWriteStreamOpen.bind(null, e2),
+      ht: __PRIVATE_onWriteStreamClose.bind(null, e2),
+      An: __PRIVATE_onWriteHandshakeComplete.bind(null, e2),
+      Vn: __PRIVATE_onMutationResult.bind(null, e2)
+    }), e2.la.push(async (t2) => {
+      t2 ? (e2.Ra.Zt(), // This will start the write stream if necessary.
+      await __PRIVATE_fillWritePipeline(e2)) : (await e2.Ra.stop(), e2.ia.length > 0 && (__PRIVATE_logDebug(hr, `Stopping write stream with ${e2.ia.length} pending writes`), e2.ia = []));
+    })), e2.Ra;
   }
   var __PRIVATE_AsyncObserver = class {
     constructor(e2) {
@@ -29333,6 +29811,49 @@ This typically indicates that your device does not have a healthy Internet conne
     // watch target.
     (n2.sharedClientState.removeLocalQueryTarget(r2.targetId), __PRIVATE_remoteStoreUnlisten(n2.remoteStore, r2.targetId));
   }
+  async function __PRIVATE_syncEngineWrite(e2, t2, n2) {
+    const r2 = __PRIVATE_syncEngineEnsureWriteCallbacks(e2);
+    try {
+      const e3 = await function __PRIVATE_localStoreWriteLocally(e4, t3) {
+        const n3 = __PRIVATE_debugCast(e4), r3 = Timestamp.now(), i2 = t3.reduce((e5, t4) => e5.add(t4.key), __PRIVATE_documentKeySet());
+        let s2, _;
+        return n3.persistence.runTransaction("Locally write mutations", "readwrite", (e5) => {
+          let o2 = __PRIVATE_mutableDocumentMap(), a = __PRIVATE_documentKeySet();
+          return n3.Uo.getEntries(e5, i2).next((e6) => {
+            o2 = e6, o2.forEach((e7, t4) => {
+              t4.isValidDocument() || (a = a.add(e7));
+            });
+          }).next(() => n3.localDocuments.getOverlayedDocuments(e5, o2)).next((i3) => {
+            s2 = i3;
+            const _2 = [];
+            for (const e6 of t3) {
+              const t4 = __PRIVATE_mutationExtractBaseValue(e6, s2.get(e6.key).overlayedDocument);
+              null != t4 && // NOTE: The base state should only be applied if there's some
+              // existing document to override, so use a Precondition of
+              // exists=true
+              _2.push(new __PRIVATE_PatchMutation(e6.key, t4, __PRIVATE_extractFieldMask(t4.value.mapValue), Precondition.exists(true)));
+            }
+            return n3.mutationQueue.addMutationBatch(e5, r3, _2, t3);
+          }).next((t4) => {
+            _ = t4;
+            const r4 = t4.applyToLocalDocumentSet(s2, a);
+            return n3.documentOverlayCache.saveOverlays(e5, t4.batchId, r4);
+          });
+        }).then(() => ({
+          batchId: _.batchId,
+          changes: __PRIVATE_convertOverlayedDocumentMapToDocumentMap(s2)
+        }));
+      }(r2.localStore, t2);
+      r2.sharedClientState.addPendingMutation(e3.batchId), function __PRIVATE_addMutationCallback(e4, t3, n3) {
+        let r3 = e4.Vc[e4.currentUser.toKey()];
+        r3 || (r3 = new SortedMap(__PRIVATE_primitiveComparator));
+        r3 = r3.insert(t3, n3), e4.Vc[e4.currentUser.toKey()] = r3;
+      }(r2, e3.batchId, n2), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(r2, e3.changes), await __PRIVATE_fillWritePipeline(r2.remoteStore);
+    } catch (e3) {
+      const t3 = __PRIVATE_wrapInUserErrorIfRecoverable(e3, "Failed to persist write");
+      n2.reject(t3);
+    }
+  }
   async function __PRIVATE_syncEngineApplyRemoteEvent(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2);
     try {
@@ -29394,6 +29915,48 @@ This typically indicates that your device does not have a healthy Internet conne
       /* keepPersistedTargetData */
       false
     ).then(() => __PRIVATE_removeAndCleanupTarget(r2, t2, n2)).catch(__PRIVATE_ignoreIfPrimaryLeaseLoss);
+  }
+  async function __PRIVATE_syncEngineApplySuccessfulWrite(e2, t2) {
+    const n2 = __PRIVATE_debugCast(e2), r2 = t2.batch.batchId;
+    try {
+      const e3 = await __PRIVATE_localStoreAcknowledgeBatch(n2.localStore, t2);
+      __PRIVATE_processUserCallback(
+        n2,
+        r2,
+        /*error=*/
+        null
+      ), __PRIVATE_triggerPendingWritesCallbacks(n2, r2), n2.sharedClientState.updateMutationState(r2, "acknowledged"), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(n2, e3);
+    } catch (e3) {
+      await __PRIVATE_ignoreIfPrimaryLeaseLoss(e3);
+    }
+  }
+  async function __PRIVATE_syncEngineRejectFailedWrite(e2, t2, n2) {
+    const r2 = __PRIVATE_debugCast(e2);
+    try {
+      const e3 = await function __PRIVATE_localStoreRejectBatch(e4, t3) {
+        const n3 = __PRIVATE_debugCast(e4);
+        return n3.persistence.runTransaction("Reject batch", "readwrite-primary", (e5) => {
+          let r3;
+          return n3.mutationQueue.lookupMutationBatch(e5, t3).next((t4) => (__PRIVATE_hardAssert(null !== t4, 37113), r3 = t4.keys(), n3.mutationQueue.removeMutationBatch(e5, t4))).next(() => n3.mutationQueue.performConsistencyCheck(e5)).next(() => n3.documentOverlayCache.removeOverlaysForBatchId(e5, r3, t3)).next(() => n3.localDocuments.recalculateAndSaveOverlaysForDocumentKeys(e5, r3)).next(() => n3.localDocuments.getDocuments(e5, r3));
+        });
+      }(r2.localStore, t2);
+      __PRIVATE_processUserCallback(r2, t2, n2), __PRIVATE_triggerPendingWritesCallbacks(r2, t2), r2.sharedClientState.updateMutationState(t2, "rejected", n2), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(r2, e3);
+    } catch (n3) {
+      await __PRIVATE_ignoreIfPrimaryLeaseLoss(n3);
+    }
+  }
+  function __PRIVATE_triggerPendingWritesCallbacks(e2, t2) {
+    (e2.dc.get(t2) || []).forEach((e3) => {
+      e3.resolve();
+    }), e2.dc.delete(t2);
+  }
+  function __PRIVATE_processUserCallback(e2, t2, n2) {
+    const r2 = __PRIVATE_debugCast(e2);
+    let i2 = r2.Vc[r2.currentUser.toKey()];
+    if (i2) {
+      const e3 = i2.get(t2);
+      e3 && (n2 ? e3.reject(n2) : e3.resolve(), i2 = i2.remove(t2)), r2.Vc[r2.currentUser.toKey()] = i2;
+    }
   }
   function __PRIVATE_removeAndCleanupTarget(e2, t2, n2 = null) {
     e2.sharedClientState.removeLocalQueryTarget(t2);
@@ -29496,6 +30059,10 @@ This typically indicates that your device does not have a healthy Internet conne
   function __PRIVATE_ensureWatchCallbacks(e2) {
     const t2 = __PRIVATE_debugCast(e2);
     return t2.remoteStore.remoteSyncer.applyRemoteEvent = __PRIVATE_syncEngineApplyRemoteEvent.bind(null, t2), t2.remoteStore.remoteSyncer.getRemoteKeysForTarget = __PRIVATE_syncEngineGetRemoteKeysForTarget.bind(null, t2), t2.remoteStore.remoteSyncer.rejectListen = __PRIVATE_syncEngineRejectListen.bind(null, t2), t2.Ec.hn = __PRIVATE_eventManagerOnWatchChange.bind(null, t2.eventManager), t2.Ec.yc = __PRIVATE_eventManagerOnWatchError.bind(null, t2.eventManager), t2;
+  }
+  function __PRIVATE_syncEngineEnsureWriteCallbacks(e2) {
+    const t2 = __PRIVATE_debugCast(e2);
+    return t2.remoteStore.remoteSyncer.applySuccessfulWrite = __PRIVATE_syncEngineApplySuccessfulWrite.bind(null, t2), t2.remoteStore.remoteSyncer.rejectFailedWrite = __PRIVATE_syncEngineRejectFailedWrite.bind(null, t2), t2;
   }
   var __PRIVATE_MemoryOfflineComponentProvider = class {
     constructor() {
@@ -29679,6 +30246,9 @@ This typically indicates that your device does not have a healthy Internet conne
   async function __PRIVATE_ensureOnlineComponents(e2) {
     return e2._onlineComponents || (e2._uninitializedComponentsProvider ? (__PRIVATE_logDebug(fr, "Using user provided OnlineComponentProvider"), await __PRIVATE_setOnlineComponentProvider(e2, e2._uninitializedComponentsProvider._online)) : (__PRIVATE_logDebug(fr, "Using default OnlineComponentProvider"), await __PRIVATE_setOnlineComponentProvider(e2, new OnlineComponentProvider()))), e2._onlineComponents;
   }
+  function __PRIVATE_getSyncEngine(e2) {
+    return __PRIVATE_ensureOnlineComponents(e2).then((e3) => e3.syncEngine);
+  }
   async function __PRIVATE_getEventManager(e2) {
     const t2 = await __PRIVATE_ensureOnlineComponents(e2), n2 = t2.eventManager;
     return n2.onListen = __PRIVATE_syncEngineListen.bind(null, t2.syncEngine), n2.onUnlisten = __PRIVATE_syncEngineUnlisten.bind(null, t2.syncEngine), n2.onFirstRemoteStoreListen = __PRIVATE_triggerRemoteStoreListen.bind(null, t2.syncEngine), n2.onLastRemoteStoreUnlisten = __PRIVATE_triggerRemoteStoreUnlisten.bind(null, t2.syncEngine), n2;
@@ -29688,6 +30258,10 @@ This typically indicates that your device does not have a healthy Internet conne
     return e2.asyncQueue.enqueueAndForget(async () => __PRIVATE_eventManagerListen(await __PRIVATE_getEventManager(e2), s2)), () => {
       i2.Aa(), e2.asyncQueue.enqueueAndForget(async () => __PRIVATE_eventManagerUnlisten(await __PRIVATE_getEventManager(e2), s2));
     };
+  }
+  function __PRIVATE_firestoreClientWrite(e2, t2) {
+    const n2 = new __PRIVATE_Deferred();
+    return e2.asyncQueue.enqueueAndForget(async () => __PRIVATE_syncEngineWrite(await __PRIVATE_getSyncEngine(e2), t2, n2)), n2.promise;
   }
   var mr = "AsyncQueue";
   var __PRIVATE_AsyncQueueImpl = class {
@@ -30317,6 +30891,15 @@ This typically indicates that your device does not have a healthy Internet conne
     bundleName: property("string"),
     bundle: property("string")
   };
+  function updateDoc(t2, e2, n2, ...r2) {
+    t2 = ra(t2, X);
+    const o2 = ra(t2.firestore, da), i2 = la(o2);
+    let a;
+    a = "string" == typeof // For Compat types, we have to "extract" the underlying types before
+    // performing validation.
+    (e2 = getModularInstance(e2)) || e2 instanceof FieldPath2 ? __PRIVATE_parseUpdateVarargs(i2, "updateDoc", t2._key, e2, n2, r2) : __PRIVATE_parseUpdateData(i2, "updateDoc", t2._key, e2);
+    return executeWrite(o2, [a.toMutation(t2._key, Precondition.exists(true))]);
+  }
   function onSnapshot(t2, ...e2) {
     t2 = getModularInstance(t2);
     let n2 = {
@@ -30355,6 +30938,10 @@ This typically indicates that your device does not have a healthy Internet conne
     const c2 = oa(a);
     return __PRIVATE_firestoreClientListen(c2, u2, o2, i2);
   }
+  function executeWrite(t2, e2) {
+    const n2 = oa(t2);
+    return __PRIVATE_firestoreClientWrite(n2, e2);
+  }
   function __PRIVATE_convertToDocSnapshot(t2, e2, n2) {
     const r2 = n2.docs.get(e2._key), s2 = new ua(t2);
     return new DocumentSnapshot2(t2, s2, e2._key, r2, new SnapshotMetadata(n2.hasPendingWrites, n2.fromCache), e2.converter);
@@ -30386,6 +30973,42 @@ This typically indicates that your device does not have a healthy Internet conne
     registerVersion(Wt2, $t2, "esm2020");
   }();
 
+  // src/lib/habitLogic.js
+  function toDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  // src/lib/recurringTasksLogic.js
+  function addDays(dateStr, days) {
+    const d = /* @__PURE__ */ new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    return toDateString(d);
+  }
+  function buildRecurringInstance(template, fromDateStr) {
+    return {
+      id: `task_${Date.now().toString(36)}`,
+      title: template.title,
+      description: template.description || "",
+      deadline: addDays(fromDateStr, template.intervalDays),
+      reward: template.reward,
+      penalty: template.penalty,
+      priority: template.priority || "medium",
+      status: "active",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      completedAt: null,
+      expiredAt: null,
+      rewardApplied: false,
+      penaltyApplied: false,
+      recurringId: template.id
+    };
+  }
+  function hasPendingInstance(tasks, templateId) {
+    return (tasks || []).some((t2) => t2.recurringId === templateId && t2.status !== "completed");
+  }
+
   // task-board/src/main.js
   var firebaseConfig = {
     apiKey: "AIzaSyA001klzJou17djB76Q-t2eRTKbU9NZoQs",
@@ -30399,6 +31022,7 @@ This typically indicates that your device does not have a healthy Internet conne
   var app = initializeApp(firebaseConfig);
   var auth = getAuth(app);
   var db = getFirestore(app);
+  var userRef = doc(db, "users", "flavio");
   var loginView = document.getElementById("loginView");
   var boardView = document.getElementById("boardView");
   var passwordInput = document.getElementById("password");
@@ -30407,6 +31031,7 @@ This typically indicates that your device does not have a healthy Internet conne
   var listEl = document.getElementById("list");
   var footerEl = document.getElementById("footer");
   var clockEl = document.getElementById("clock");
+  var pipBtn = document.getElementById("pipBtn");
   loginBtn.addEventListener("click", doLogin);
   passwordInput.addEventListener("keydown", (e2) => {
     if (e2.key === "Enter") doLogin();
@@ -30426,8 +31051,7 @@ This typically indicates that your device does not have a healthy Internet conne
   var PRIORITY_COLOR = { high: "#EB5757", medium: "#F2994A", low: "#4A90D9" };
   var PRIORITY_LABEL = { high: "Alta", medium: "Media", low: "Bassa" };
   function todayStr() {
-    const d = /* @__PURE__ */ new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return toDateString(/* @__PURE__ */ new Date());
   }
   function updateClock() {
     const d = /* @__PURE__ */ new Date();
@@ -30437,7 +31061,47 @@ This typically indicates that your device does not have a healthy Internet conne
   }
   updateClock();
   setInterval(updateClock, 3e4);
-  function render(tasks) {
+  var latestTasks = [];
+  var latestRecurring = [];
+  function getRecurringTemplate(task) {
+    if (!task.recurringId) return null;
+    return latestRecurring.find((r2) => r2.id === task.recurringId) || null;
+  }
+  function spawnNextRecurringInstance(task, tasksSoFar) {
+    if (!task.recurringId) return tasksSoFar;
+    const template = latestRecurring.find((r2) => r2.id === task.recurringId);
+    if (!template || template.active === false) return tasksSoFar;
+    if (hasPendingInstance(tasksSoFar, template.id)) return tasksSoFar;
+    const next = buildRecurringInstance(template, todayStr());
+    return [...tasksSoFar, next];
+  }
+  async function completeTask(task) {
+    const template = getRecurringTemplate(task);
+    const isLate = task.status === "expired";
+    const confirmMsg = isLate ? `Chiudere "${task.title}" (completamento tardivo, nessun punto)?` : template ? `Completare "${task.title}"? +${task.reward}pt
+
+\u{1F501} Ricorrente: si ripresenter\xE0 tra ${template.intervalDays} giorn${template.intervalDays === 1 ? "o" : "i"}.` : `Completare "${task.title}"? +${task.reward}pt`;
+    if (!window.confirm(confirmMsg)) return;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    let tasks = latestTasks.map(
+      (t2) => t2.id === task.id ? { ...t2, status: "completed", completedAt: now, rewardApplied: !isLate } : t2
+    );
+    tasks = spawnNextRecurringInstance(task, tasks);
+    await updateDoc(userRef, { tasks });
+  }
+  async function uncompleteTask(task) {
+    if (!window.confirm(`Completata per errore? Ripristina "${task.title}" tra le task attive`)) return;
+    let tasks = latestTasks.map(
+      (t2) => t2.id === task.id ? { ...t2, status: "active", completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false } : t2
+    );
+    if (task.recurringId) {
+      tasks = tasks.filter((t2) => !(t2.recurringId === task.recurringId && t2.id !== task.id && t2.status === "active"));
+    }
+    await updateDoc(userRef, { tasks });
+  }
+  function render(tasks, recurring) {
+    latestTasks = tasks;
+    latestRecurring = recurring;
     const today = todayStr();
     const dayTasks = (tasks || []).filter(
       (t2) => t2.status === "active" && t2.deadline <= today || t2.status === "expired" || t2.status === "completed" && typeof t2.completedAt === "string" && t2.completedAt.startsWith(today)
@@ -30453,11 +31117,20 @@ This typically indicates that your device does not have a healthy Internet conne
     } else {
       for (const t2 of dayTasks) {
         const row = document.createElement("div");
-        row.className = "row" + (t2.status === "completed" ? " done" : "");
-        const dot = document.createElement("div");
-        dot.className = "dot";
-        dot.style.background = t2.status === "expired" ? "#EB5757" : PRIORITY_COLOR[t2.priority] || "#4A90D9";
-        row.appendChild(dot);
+        row.className = "row" + (t2.status === "completed" ? " done" : "") + " clickable";
+        row.title = t2.status === "completed" ? "Tocca per annullare il completamento" : "Tocca per completare";
+        row.addEventListener("click", () => {
+          if (t2.status === "completed") uncompleteTask(t2);
+          else completeTask(t2);
+        });
+        const check = document.createElement("div");
+        check.className = "check" + (t2.status === "completed" ? " checked" : "");
+        if (t2.status === "completed") {
+          check.textContent = "\u2713";
+        } else {
+          check.style.borderColor = t2.status === "expired" ? "#EB5757" : PRIORITY_COLOR[t2.priority] || "#4A90D9";
+        }
+        row.appendChild(check);
         const main = document.createElement("div");
         main.className = "main";
         const title = document.createElement("div");
@@ -30475,10 +31148,11 @@ This typically indicates that your device does not have a healthy Internet conne
         if (t2.status === "expired") {
           meta.innerHTML = `<span class="tag expired">SCADUTA \xB7 -${t2.penalty || 0}pt</span>`;
         } else if (t2.status === "completed") {
-          meta.innerHTML = `<span class="tag done">\u2713 completata \xB7 +${t2.reward || 0}pt</span>`;
+          meta.innerHTML = `<span class="tag done">completata${t2.rewardApplied ? ` \xB7 +${t2.reward || 0}pt` : ""}</span>`;
         } else {
           meta.innerHTML = `<span class="tag priority">${PRIORITY_LABEL[t2.priority] || ""}</span>${t2.reward ? `<span class="tag reward">+${t2.reward}pt</span>` : ""}`;
         }
+        if (t2.recurringId) meta.innerHTML += `<span class="tag recurring">\u{1F501}</span>`;
         main.appendChild(meta);
         row.appendChild(main);
         listEl.appendChild(row);
@@ -30496,8 +31170,10 @@ This typically indicates that your device does not have a healthy Internet conne
     if (user) {
       loginView.style.display = "none";
       boardView.style.display = "flex";
-      const ref = doc(db, "users", "flavio");
-      unsubscribe = onSnapshot(ref, (snap) => render(snap.data()?.tasks || []), () => {
+      unsubscribe = onSnapshot(userRef, (snap) => {
+        const data = snap.data() || {};
+        render(data.tasks || [], data.recurringTasks || []);
+      }, () => {
         listEl.innerHTML = '<div class="empty">Errore di connessione</div>';
       });
     } else {
@@ -30506,6 +31182,44 @@ This typically indicates that your device does not have a healthy Internet conne
       passwordInput.focus();
     }
   });
+  var pipWindow = null;
+  async function copyStylesInto(targetDoc) {
+    for (const styleSheet of document.styleSheets) {
+      try {
+        const css = [...styleSheet.cssRules].map((r2) => r2.cssText).join("\n");
+        const style = document.createElement("style");
+        style.textContent = css;
+        targetDoc.head.appendChild(style);
+      } catch {
+        const link = targetDoc.createElement("link");
+        link.rel = "stylesheet";
+        link.href = styleSheet.href;
+        targetDoc.head.appendChild(link);
+      }
+    }
+  }
+  async function togglePiP() {
+    if (!("documentPictureInPicture" in window)) {
+      alert('Questa versione di Chrome non supporta ancora la modalit\xE0 "sempre in primo piano". Aggiorna Chrome e riprova.');
+      return;
+    }
+    if (pipWindow) {
+      pipWindow.close();
+      return;
+    }
+    pipWindow = await window.documentPictureInPicture.requestWindow({ width: 300, height: 480 });
+    await copyStylesInto(pipWindow.document);
+    pipWindow.document.title = "Task di oggi";
+    const pageEl = document.querySelector(".page");
+    pipWindow.document.body.appendChild(pageEl);
+    pipWindow.document.body.style.margin = "0";
+    pipWindow.document.body.style.background = "#0d0d10";
+    pipWindow.addEventListener("pagehide", () => {
+      document.body.insertBefore(pageEl, document.body.firstChild);
+      pipWindow = null;
+    });
+  }
+  pipBtn.addEventListener("click", togglePiP);
 })();
 /*! Bundled license information:
 
@@ -32290,8 +33004,6 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2020 Google LLC
@@ -32311,22 +33023,6 @@ re2js/build/index.js:
   (**
    * @license
    * Copyright 2018 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-  (**
-   * @license
-   * Copyright 2017 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
    * you may not use this file except in compliance with the License.
@@ -32480,24 +33176,6 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
-  (**
-   * @license
-   * Copyright 2017 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
   (**
    * @license
    * Copyright 2023 Google LLC
@@ -32651,40 +33329,6 @@ re2js/build/index.js:
   (**
    * @license
    * Copyright 2017 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
-  (**
-   * @license
-   * Copyright 2017 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-  (**
-   * @license
-   * Copyright 2020 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
    * you may not use this file except in compliance with the License.
@@ -32873,24 +33517,6 @@ re2js/build/index.js:
 
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (* Copyright 2024 Google LLC* @license *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
-  (**
-   * @license
-   * Copyright 2017 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
 
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
@@ -33401,40 +34027,6 @@ re2js/build/index.js:
   (**
    * @license
    * Copyright 2017 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
-  (**
-   * @license
-   * Copyright 2017 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-  (**
-   * @license
-   * Copyright 2020 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
    * you may not use this file except in compliance with the License.

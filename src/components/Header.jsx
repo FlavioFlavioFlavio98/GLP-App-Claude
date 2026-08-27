@@ -12,9 +12,11 @@ function formatBuildTime(raw) {
   return `${parseInt(m[3])} ${MONTHS_IT[parseInt(m[2]) - 1]} ${m[1]}, ${m[4]}:${m[5]}`
 }
 
-// Visibile su ogni tab (a differenza del BuildInfo dentro DailySummaryPanel,
-// nascosto su Workout/Benessere/Mente/Nutrizione) — per sapere sempre, con
-// un'occhiata, se si sta usando l'ultima versione pubblicata.
+// Riga dedicata a tutta larghezza sotto la identity-bar (non più incastrata
+// tra punteggio e icone: con l'aggiunta dell'icona tema lo spazio disponibile
+// lì è diventato troppo stretto e il testo veniva tagliato su schermi
+// piccoli). Visibile su ogni tab — per sapere sempre, con un'occhiata, se si
+// sta usando l'ultima versione pubblicata.
 function VersionBadge() {
   const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()
   const buildTime = isNative
@@ -24,12 +26,13 @@ function VersionBadge() {
 
   return (
     <div style={{
-      flex: 1, minWidth: 0,
-      fontSize: '0.58em', lineHeight: 1.25, color: 'var(--text-sec)', opacity: 0.6,
+      width: '100%', boxSizing: 'border-box',
+      fontSize: '0.62em', lineHeight: 1.3, color: 'var(--text-sec)', opacity: 0.6,
       fontFamily: 'monospace', textAlign: 'center',
       userSelect: 'text', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      padding: '2px 0 6px',
     }}>
-      v{APP_VERSION}{formatted ? <><br />{formatted}</> : null}
+      v{APP_VERSION}{formatted ? ` · ${formatted}` : ''}
     </div>
   )
 }
@@ -46,50 +49,52 @@ export default function Header({ isReadOnly }) {
   const avatar = authData?.profile?.avatar || (authUserId === 'flavio' ? '🔥' : '⭐')
 
   return (
-    <div className="identity-bar">
-      <div className="offline-badge">OFFLINE</div>
-      <div className="user-info">
-        {/* Avatar — tap to customize (only own user) */}
-        <div
-          className="avatar"
-          style={{
-            background: color + '33', border: `2px solid ${color}`,
-            boxShadow: `0 0 14px ${color}55`,
-            cursor: !isReadOnly ? 'pointer' : 'default',
-            fontSize: '1.2em',
-          }}
-          onClick={() => !isReadOnly && actions.openModal('avatar')}
-          title={!isReadOnly ? 'Cambia avatar' : undefined}
-        >
-          {avatar}
+    <div>
+      <div className="identity-bar">
+        <div className="offline-badge">OFFLINE</div>
+        <div className="user-info">
+          {/* Avatar — tap to customize (only own user) */}
+          <div
+            className="avatar"
+            style={{
+              background: color + '33', border: `2px solid ${color}`,
+              boxShadow: `0 0 14px ${color}55`,
+              cursor: !isReadOnly ? 'pointer' : 'default',
+              fontSize: '1.2em',
+            }}
+            onClick={() => !isReadOnly && actions.openModal('avatar')}
+            title={!isReadOnly ? 'Cambia avatar' : undefined}
+          >
+            {avatar}
+          </div>
+          <div>
+            <span className={scoreAnim} style={{ color, fontSize: '1.1em', fontWeight: 800 }}>
+              {scoreDisplay} pt
+            </span>
+          </div>
         </div>
-        <div>
-          <span className={scoreAnim} style={{ color, fontSize: '1.1em', fontWeight: 800 }}>
-            {scoreDisplay} pt
-          </span>
+        <div className="header-actions">
+          <button className="icon-btn" onClick={() => actions.toggleTheme()} title="Cambia tema chiaro/scuro">
+            <span className="material-icons-round" style={{ fontSize: 20 }}>
+              {theme === 'light' ? 'dark_mode' : 'light_mode'}
+            </span>
+          </button>
+          {!isReadOnly && (
+            <button className="icon-btn" onClick={() => actions.openModal('globalSearch')} title="Cerca">
+              <span className="material-icons-round" style={{ fontSize: 20 }}>search</span>
+            </button>
+          )}
+          {!isReadOnly && (
+            <button className="icon-btn" onClick={() => actions.openModal('insights')} title="Insight">
+              <span style={{ fontSize: 18 }}>💡</span>
+            </button>
+          )}
+          <button className="icon-btn" onClick={() => actions.openModal('settings')}>
+            <span className="material-icons-round" style={{ fontSize: 20 }}>settings</span>
+          </button>
         </div>
       </div>
       <VersionBadge />
-      <div className="header-actions">
-        <button className="icon-btn" onClick={() => actions.toggleTheme()} title="Cambia tema chiaro/scuro">
-          <span className="material-icons-round" style={{ fontSize: 20 }}>
-            {theme === 'light' ? 'dark_mode' : 'light_mode'}
-          </span>
-        </button>
-        {!isReadOnly && (
-          <button className="icon-btn" onClick={() => actions.openModal('globalSearch')} title="Cerca">
-            <span className="material-icons-round" style={{ fontSize: 20 }}>search</span>
-          </button>
-        )}
-        {!isReadOnly && (
-          <button className="icon-btn" onClick={() => actions.openModal('insights')} title="Insight">
-            <span style={{ fontSize: 18 }}>💡</span>
-          </button>
-        )}
-        <button className="icon-btn" onClick={() => actions.openModal('settings')}>
-          <span className="material-icons-round" style={{ fontSize: 20 }}>settings</span>
-        </button>
-      </div>
     </div>
   )
 }

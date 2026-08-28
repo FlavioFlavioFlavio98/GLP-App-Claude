@@ -142,6 +142,35 @@ function ExerciseHeatmap({ exerciseLog, exerciseId, isLight }) {
   )
 }
 
+const EFFORT_INFO = {
+  1: { label: 'Leggero', emoji: '🟢', color: '#4caf50' },
+  2: { label: 'Medio', emoji: '🟡', color: '#ffca28' },
+  3: { label: 'Massimo', emoji: '🔴', color: '#e53935' },
+}
+
+function EffortDistribution({ effortCounts }) {
+  const total = effortCounts[1] + effortCounts[2] + effortCounts[3]
+  const max = Math.max(effortCounts[1], effortCounts[2], effortCounts[3], 1)
+  return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 12, padding: '12px 14px', marginBottom: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {[1, 2, 3].map(level => {
+        const count = effortCounts[level]
+        const pct = total > 0 ? Math.round((count / total) * 100) : 0
+        const info = EFFORT_INFO[level]
+        return (
+          <div key={level} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 76, flexShrink: 0, fontSize: '0.75em', color: '#888' }}>{info.emoji} {info.label}</div>
+            <div style={{ flex: 1, height: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 6, overflow: 'hidden' }}>
+              <div style={{ width: `${(count / max) * 100}%`, height: '100%', borderRadius: 6, background: info.color, transition: 'width 0.4s' }} />
+            </div>
+            <div style={{ width: 56, flexShrink: 0, fontSize: '0.7em', color: '#666', textAlign: 'right' }}>{count} · {pct}%</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ExerciseSingleView() {
@@ -355,6 +384,15 @@ export default function ExerciseSingleView() {
              allena a giorni alterni) */}
         {sectionLabel('🗓️ Frequenza')}
         <ExerciseHeatmap exerciseLog={exerciseLog} exerciseId={exerciseId} isLight={isLight} />
+
+        {/* ── SFORZO PERCEPITO ── quante volte leggero/medio/a cedimento:
+             le sole reps non dicono se ti alleni sempre facile o al limite */}
+        {(stats.effortCounts[1] + stats.effortCounts[2] + stats.effortCounts[3]) > 0 && (
+          <>
+            {sectionLabel('🎚️ Sforzo percepito')}
+            <EffortDistribution effortCounts={stats.effortCounts} />
+          </>
+        )}
 
         {/* ── GRAFICO ── */}
         {sectionLabel('📈 Andamento')}

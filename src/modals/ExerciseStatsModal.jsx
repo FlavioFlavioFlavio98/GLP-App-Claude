@@ -86,6 +86,27 @@ function computeStats(exerciseLog, exerciseId, days) {
   }
 }
 
+// Classifica esercizi per punti totali lifetime — quali "pagano di più" tra
+// tutti quelli che fai, non solo la vista sul singolo esercizio.
+function computeLeaderboard(exerciseLog, exercises) {
+  const totals = {}
+  Object.values(exerciseLog || {}).forEach(daySessions => {
+    (daySessions || []).forEach(s => {
+      if (!totals[s.exerciseId]) totals[s.exerciseId] = { reps: 0, pts: 0 }
+      totals[s.exerciseId].reps += s.reps
+      totals[s.exerciseId].pts += (s.pts || 0)
+    })
+  })
+  return exercises
+    .map(ex => ({
+      ex,
+      reps: totals[ex.id]?.reps || 0,
+      pts: Math.round((totals[ex.id]?.pts || 0) * 100) / 100,
+    }))
+    .filter(row => row.pts > 0)
+    .sort((a, b) => b.pts - a.pts)
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function ExerciseStatsModal() {
@@ -100,12 +121,14 @@ export default function ExerciseStatsModal() {
   const [editEx, setEditEx] = useState(null)
   const [form, setForm] = useState({ name: '', emoji: '💪', pointsPerRep: '0.1' })
   const [saving, setSaving] = useState(false)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
   const canvasRef = useRef(null)
   const chartRef = useRef(null)
 
   const gd = allUsersData?.flavio
   const exercises = (gd?.quickExercises || [])
   const activeEx = exercises.filter(e => e.active !== false)
+  const leaderboard = computeLeaderboard(gd?.exerciseLog || {}, activeEx)
 
   // Auto-select first exercise
   useEffect(() => {
@@ -255,6 +278,44 @@ export default function ExerciseStatsModal() {
               <option key={ex.id} value={ex.id}>{ex.emoji} {ex.name}</option>
             ))}
           </select>
+        )}
+
+        {/* ── CLASSIFICA ESERCIZI (per punti totali) ── */}
+        {leaderboard.length > 1 && (
+          <>
+            <button
+              onClick={() => setShowLeaderboard(v => !v)}
+              style={{
+                width: '100%', textAlign: 'left', background: 'none', border: 'none',
+                color: 'var(--text-sec)', fontSize: '0.72em', fontWeight: 700, cursor: 'pointer',
+                padding: '4px 2px', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8,
+              }}
+            >
+              {showLeaderboard ? '▾' : '▸'} 🏆 Classifica esercizi (per punti)
+            </button>
+            {showLeaderboard && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 16 }}>
+                {leaderboard.map((row, i) => (
+                  <button
+                    key={row.ex.id}
+                    onClick={() => { setSelExId(row.ex.id); setShowLeaderboard(false) }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer',
+                      padding: '8px 10px', borderRadius: 10, border: 'none',
+                      background: row.ex.id === selExId ? 'var(--theme-glow)' : 'rgba(255,255,255,0.03)',
+                      color: 'var(--text)',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.7em', color: '#666', width: 16 }}>{i + 1}</span>
+                    <ExerciseIcon exercise={row.ex} size={22} style={{ borderRadius: 6 }} />
+                    <span style={{ flex: 1, fontSize: '0.82em', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.ex.name}</span>
+                    <span style={{ fontSize: '0.72em', color: '#666' }}>{row.reps} reps</span>
+                    <span style={{ fontSize: '0.78em', fontWeight: 700, color: 'var(--success)' }}>+{row.pts} pt</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* ── STATISTICHE GRIGLIA ── */}

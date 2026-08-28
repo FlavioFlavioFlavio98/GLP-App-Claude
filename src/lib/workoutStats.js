@@ -581,6 +581,10 @@ export function computeAllStats(exerciseLog, exerciseId) {
   let bestSession = null, bestSessionReps = 0, bestSessionDate = null
   let bestDay = null, bestDayReps = 0
   let bestPtsDay = null, bestPtsDayValue = 0
+  // Distribuzione sforzo percepito (1 leggero, 2 medio, 3 massimo) su tutta
+  // la storia — utile per capire se ci si allena sempre facile o spesso al
+  // limite, cosa che le sole reps non mostrano.
+  const effortCounts = { 1: 0, 2: 0, 3: 0 }
   // Storico completo, più recente prima — reps E punti per giorno, non solo
   // reps: a parità di ripetizioni lo sforzo percepito cambia molto il
   // punteggio (es. 100 reps "leggero" vs 100 reps "a cedimento").
@@ -593,6 +597,7 @@ export function computeAllStats(exerciseLog, exerciseId) {
     daySessions.forEach(s => {
       dayPts += (s.pts || 0)
       if (s.reps > bestSessionReps) { bestSessionReps = s.reps; bestSession = s; bestSessionDate = d }
+      if (effortCounts[s.effort] !== undefined) effortCounts[s.effort]++
     })
     dayPts = Math.round(dayPts * 100) / 100
     if (dayPts > bestPtsDayValue) { bestPtsDayValue = dayPts; bestPtsDay = d }
@@ -614,6 +619,7 @@ export function computeAllStats(exerciseLog, exerciseId) {
     bestSessionReps, bestSessionDate,
     bestDayReps, bestDay,
     bestPtsDay, bestPtsDayValue,
+    effortCounts,
     todayReps, todaySessions,
     isNewRecord,
     history,

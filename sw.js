@@ -2,8 +2,8 @@
 // CACHE_NAME and PRECACHE_ASSETS are injected at build time by scripts/stamp-sw.js
 // (reads the real hashed filenames from dist/ after `vite build` — no manual list to
 // maintain, and the cache name changes on every build so stale caches are dropped).
-const CACHE_NAME = 'glp-cache-1787918344882'
-const PRECACHE_ASSETS = ["/GLP-App-Claude/","/GLP-App-Claude/index.html","/GLP-App-Claude/manifest.json","/GLP-App-Claude/assets/index-WlvIV9EP.js","/GLP-App-Claude/assets/index-C56AtMEp.css"]
+const CACHE_NAME = 'glp-cache-1787922261805'
+const PRECACHE_ASSETS = ["/GLP-App-Claude/","/GLP-App-Claude/index.html","/GLP-App-Claude/manifest.json","/GLP-App-Claude/assets/index-Y17-SKvd.js","/GLP-App-Claude/assets/index-C56AtMEp.css"]
 
 // External font/icon CDNs we opportunistically cache (cache-first, static content)
 const EXTERNAL_CACHE_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net']

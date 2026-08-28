@@ -728,34 +728,40 @@ exports.syncWidgetsOnUserDataChange = onDocumentWritten(
 )
 
 // ── backupUserData ──────────────────────────────────────────────────────────
-// Copia giornaliera del documento principale (users/flavio) in una
-// sottocollezione separata — aggiunta dopo un incidente in cui un bug lato
-// client ha sovrascritto silenziosamente tutti i dati (score, task, log
-// allenamenti, storico completo) con un account vuoto, senza alcun backup da
-// cui recuperare. Non protegge da un bug che colpisce nello stesso istante
-// del backup, ma limita qualunque incidente futuro a "al massimo un giorno
-// perso" invece di "tutto lo storico perso per sempre". Retention 60 giorni
-// per non far crescere la sottocollezione all'infinito.
+// Copia ORARIA del documento principale (users/flavio) in una sottocollezione
+// separata — aggiunta dopo un incidente in cui un bug lato client ha
+// sovrascritto silenziosamente tutti i dati (score, task, log allenamenti,
+// storico completo) con un account vuoto. Un secondo livello di sicurezza
+// indipendente dal Point-in-Time Recovery di Firestore (attivato lo stesso
+// giorno, recupero al minuto per 7 giorni): questi backup restano accessibili
+// anche se PITR venisse mai disattivato, e permettono di risalire a un'ora
+// specifica senza dover usare gcloud/REST API come nel recupero di oggi.
+// Retention 14 giorni (168 backup ~300KB l'uno, trascurabile) per non far
+// crescere la sottocollezione all'infinito.
 exports.backupUserData = onSchedule(
-  { schedule: '30 2 * * *', timeZone: 'Europe/Rome', region: REGION },
+  { schedule: '0 * * * *', timeZone: 'Europe/Rome', region: REGION },
   async () => {
     const db = admin.firestore()
     const flavioRef = db.collection('users').doc('flavio')
     const snap = await flavioRef.get()
     if (!snap.exists) return
 
-    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
-    await flavioRef.collection('backups').doc(today).set({
+    const now = new Date()
+    const dateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+    const hourStr = now.toLocaleTimeString('sv-SE', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).slice(0, 2)
+    const backupId = `${dateStr}-${hourStr}`
+
+    await flavioRef.collection('backups').doc(backupId).set({
       data: snap.data(),
       backedUpAt: admin.firestore.FieldValue.serverTimestamp(),
     })
 
-    // Retention: elimina i backup più vecchi di 60 giorni
+    // Retention: elimina i backup più vecchi di 14 giorni
     const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - 60)
-    const cutoffStr = cutoff.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+    cutoff.setDate(cutoff.getDate() - 14)
+    const cutoffId = `${cutoff.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })}-00`
     const oldBackups = await flavioRef.collection('backups')
-      .where(admin.firestore.FieldPath.documentId(), '<', cutoffStr)
+      .where(admin.firestore.FieldPath.documentId(), '<', cutoffId)
       .get()
     if (!oldBackups.empty) {
       const batch = db.batch()

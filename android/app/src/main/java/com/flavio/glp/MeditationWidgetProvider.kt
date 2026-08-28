@@ -27,10 +27,12 @@ class MeditationWidgetProvider : AppWidgetProvider() {
             val count = prefs.getInt("meditation_count_today", 0)
             views.setTextViewText(R.id.widget_meditation_count, "$count oggi")
 
-            // Tap ovunque sul widget → logga subito un momento, nessuna schermata
-            // intermedia (vedi MeditationActionService).
-            val logIntent = Intent(context, MeditationActionService::class.java)
-            val logPi = PendingIntent.getService(
+            // Tap ovunque sul widget → chiede i minuti (default 1) e conferma
+            // con invio, vedi LogMeditationActivity.
+            val logIntent = Intent(context, LogMeditationActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            val logPi = PendingIntent.getActivity(
                 context, appWidgetId, logIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )

@@ -5,7 +5,7 @@ import { toDateString } from './habitLogic'
 // niente da compilare — a differenza di Willpower non c'è successo/fallimento,
 // ogni voce è per definizione un "l'ho fatto". Obiettivo: gamification pura per
 // costruire l'abitudine (punti + streak + conteggio settimanale).
-// meditationLog: { [dateStr]: [{id, time, pts}] }
+// meditationLog: { [dateStr]: [{id, time, pts, minutes}] }
 // meditationNotes: { [dateStr]: text } — riflessione libera del giorno, per
 // motivarsi rileggendo come ci si è sentiti dopo.
 
@@ -31,6 +31,12 @@ function flattenEntries(meditationLog) {
   })
   entries.sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
   return entries
+}
+
+// Storico sessioni per la UI, più recenti prima — così si vede a colpo
+// d'occhio l'ultima aggiunta senza scorrere fino in fondo.
+export function getMeditationHistory(meditationLog) {
+  return flattenEntries(meditationLog).reverse()
 }
 
 // Statistiche sugli ultimi 7 giorni (rolling) per la card compatta.

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { computeMeditationWeekStats, getMeditationRate, setMeditationRate } from '../lib/meditationStats'
+import { useState, useEffect, useRef } from 'react'
+import { computeMeditationWeekStats, getMeditationHistory, getMeditationRate, setMeditationRate } from '../lib/meditationStats'
 import { toDateString } from '../lib/habitLogic'
 import ActivityRateEditor from './ActivityRateEditor'
 
@@ -7,6 +7,10 @@ function fmtDate(dateStr) {
   if (!dateStr) return '-'
   const [, m, d] = dateStr.split('-')
   return `${parseInt(d)}/${parseInt(m)}`
+}
+
+function fmtTime(time) {
+  return (time || '').slice(0, 5)
 }
 
 function StatCell({ label, value, color }) {
@@ -60,12 +64,28 @@ function NoteBox({ dateStr, initialText, label, actions, autoFocus }) {
 
 export default function MeditationSection({ meditationLog, meditationNotes, actions }) {
   const [showPastNotes, setShowPastNotes] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [logging, setLogging] = useState(false)
+  const [minutes, setMinutes] = useState('1')
+  const minutesRef = useRef(null)
   const stats = computeMeditationWeekStats(meditationLog)
   const today = toDateString(new Date())
+  const history = getMeditationHistory(meditationLog)
 
   const pastNotes = Object.entries(meditationNotes || {})
     .filter(([date, text]) => date !== today && (text || '').trim())
     .sort((a, b) => b[0].localeCompare(a[0]))
+
+  function openLogging() {
+    setMinutes('1')
+    setLogging(true)
+    setTimeout(() => { minutesRef.current?.focus(); minutesRef.current?.select() }, 30)
+  }
+
+  function submitLog() {
+    actions.logMeditation(minutes)
+    setLogging(false)
+  }
 
   return (
     <div style={{
@@ -79,25 +99,88 @@ export default function MeditationSection({ meditationLog, meditationNotes, acti
         <ActivityRateEditor getRate={getMeditationRate} setRate={setMeditationRate} unit="pt" label="Punti per momento" />
       </div>
 
-      <button
-        onClick={() => actions.logMeditation()}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          padding: '13px 14px', marginBottom: 12,
-          background: 'var(--theme-color)', border: 'none',
-          borderRadius: 12, cursor: 'pointer', color: '#000',
-          fontSize: '0.92em', fontWeight: 800,
-        }}
-      >
-        <span className="material-icons-round" style={{ fontSize: 21 }}>self_improvement</span>
-        Ho meditato un momento
-      </button>
+      {!logging ? (
+        <button
+          onClick={openLogging}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '13px 14px', marginBottom: 12,
+            background: 'var(--theme-color)', border: 'none',
+            borderRadius: 12, cursor: 'pointer', color: '#000',
+            fontSize: '0.92em', fontWeight: 800,
+          }}
+        >
+          <span className="material-icons-round" style={{ fontSize: 21 }}>self_improvement</span>
+          Ho meditato un momento
+        </button>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <input
+            ref={minutesRef}
+            type="number"
+            min="1"
+            value={minutes}
+            onChange={e => setMinutes(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submitLog(); if (e.key === 'Escape') setLogging(false) }}
+            style={{
+              width: 70, boxSizing: 'border-box', textAlign: 'center',
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 10, padding: '10px 6px', color: 'var(--text)', fontSize: '1em', fontWeight: 700, outline: 'none',
+            }}
+          />
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.8em', color: 'var(--text-sec)' }}>minuti</div>
+          <button
+            onClick={submitLog}
+            style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: 'var(--theme-color)', color: '#000', fontSize: '0.85em', fontWeight: 800, cursor: 'pointer' }}
+          >
+            Registra
+          </button>
+          <button
+            onClick={() => setLogging(false)}
+            style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--text-sec)', fontSize: '0.85em', cursor: 'pointer' }}
+          >
+            Annulla
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 14 }}>
         <StatCell label="Ultimi 7gg" value={stats.total} />
         <StatCell label="Streak" value={`${stats.streak}g`} color={stats.streak > 0 ? 'var(--success, #4caf50)' : undefined} />
         <StatCell label="Totale" value={stats.lifetimeTotal} />
       </div>
+
+      {history.length > 0 && (
+        <>
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            style={{
+              width: '100%', textAlign: 'left', background: 'none', border: 'none',
+              color: 'var(--text-sec)', fontSize: '0.72em', fontWeight: 700, cursor: 'pointer',
+              padding: '6px 2px', textTransform: 'uppercase', letterSpacing: 0.4,
+            }}
+          >
+            {showHistory ? '▾' : '▸'} Storico sessioni ({history.length})
+          </button>
+          {showHistory && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, maxHeight: 220, overflowY: 'auto' }}>
+              {history.map(e => (
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8 }}>
+                  <span style={{ fontSize: '0.75em', color: 'var(--text-sec)', flex: 1 }}>{fmtDate(e.date)} · {fmtTime(e.time)}</span>
+                  <span style={{ fontSize: '0.78em', fontWeight: 700, color: 'var(--theme-color)' }}>{e.minutes || 1} min</span>
+                  <button
+                    className="btn-icon"
+                    style={{ padding: 2 }}
+                    onClick={() => actions.deleteMeditationEntry(e.date, e.id)}
+                  >
+                    <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       <NoteBox
         dateStr={today}

@@ -182,21 +182,21 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     // sparire — vedi TaskWidgetUtils.activeTasksForDate.
                     val isExpired = (task["status"] as? String) == "expired"
 
+                    // Scaduta: solo un piccolo indicatore rosso (il pallino) — il resto
+                    // (nome, colore) resta identico a una task normale, niente più "rosso
+                    // allarme" sul testo (stesso criterio applicato alla web app).
                     views.setTextViewText(NAME_IDS[index], name)
                     views.setInt(NAME_IDS[index], "setPaintFlags", Paint.ANTI_ALIAS_FLAG)
-                    views.setTextColor(
-                        NAME_IDS[index],
-                        if (isExpired) android.graphics.Color.parseColor("#EB5757") else android.graphics.Color.WHITE
-                    )
+                    views.setTextColor(NAME_IDS[index], android.graphics.Color.WHITE)
 
                     // Niente data nel meta: il widget è già filtrato per la data
                     // selezionata sopra, quindi è ridondante ripeterla per ogni riga.
-                    val meta = if (isExpired) "SCADUTA -${penalty}pt" else "+${reward}pt"
+                    val meta = if (isExpired) "scaduta -${penalty}pt" else "+${reward}pt"
                     views.setTextViewText(META_IDS[index], meta)
 
                     // Cerchietto colorato in base alla priorità (stesso schema colori
                     // di taskColors.js sul web: alta/media/bassa = rosso/arancio/blu),
-                    // pieno rosso quando scaduta.
+                    // pieno rosso (piccolo indicatore, non un allarme) quando scaduta.
                     val priorityColor = when (priority) {
                         "high" -> "#EB5757"
                         "low"  -> "#4A90D9"

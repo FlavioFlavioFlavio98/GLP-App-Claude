@@ -1125,19 +1125,21 @@ export function AppProvider({ children }) {
     // dialogo, nessuna scelta successo/fallimento: se tocchi il pulsante è
     // perché l'hai fatto. +pt per gamification, statistiche/streak per
     // motivare la costanza. Usata anche dal widget 1x1 Android.
-    async logMeditation() {
+    async logMeditation(minutes) {
       if (state.authUserId !== 'flavio') return
+      const mins = Math.max(1, parseFloat(minutes) || 1)
       const rate = getMeditationRate()
       const logDate = toDateString(new Date())
       const logEntry = {
         id: Date.now().toString(),
         pts: rate,
+        minutes: mins,
         time: new Date().toTimeString().slice(0, 8),
       }
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`meditationLog.${logDate}`]: arrayUnion(logEntry) })
       actions.vibrate('light')
-      actions.showToast(`Momento registrato! +${rate}pt 🧘`, '🧘')
+      actions.showToast(`Sessione da ${mins} min registrata! +${rate}pt 🧘`, '🧘')
     },
 
     async deleteMeditationEntry(dateStr, logId) {

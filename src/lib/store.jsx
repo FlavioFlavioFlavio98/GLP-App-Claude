@@ -158,22 +158,32 @@ export function AppProvider({ children }) {
         const userId = EMAIL_TO_USER[user.email]
         dispatch({ type: 'SET_AUTH', payload: { user, userId } })
 
-        // Start Firestore listeners for both users
+        // Start Firestore listeners for both users. "Ensure doc exists" è
+        // gestito QUI, nello stesso snapshot, invece che con un getDoc()
+        // separato — un incidente reale ha mostrato che quel pattern era
+        // pericoloso: se per un solo istante la lettura restituiva un falso
+        // "non esiste" (cache stantia, blip di rete), il setDoc successivo
+        // sovrascriveva silenziosamente dati veri con un account vuoto,
+        // senza alcuna conferma né possibilità di annullare. Ora: si crea
+        // SOLO se il server (mai la cache locale, snap.metadata.fromCache)
+        // conferma davvero l'assenza, al massimo una volta per sessione per
+        // utente, e sempre con merge:true come ulteriore rete di sicurezza.
+        const ensuredUsers = new Set()
         const unsubs = USERS.map(u =>
           onSnapshot(doc(db, 'users', u), snap => {
-            if (snap.exists()) dispatch({ type: 'SET_USER_DATA', user: u, data: snap.data() })
+            if (snap.exists()) {
+              dispatch({ type: 'SET_USER_DATA', user: u, data: snap.data() })
+            } else if (!snap.metadata.fromCache && !ensuredUsers.has(u)) {
+              ensuredUsers.add(u)
+              setDoc(
+                doc(db, 'users', u),
+                { score: 0, habits: [], rewards: [], history: [], dailyLogs: {}, tags: [] },
+                { merge: true }
+              ).catch(e => console.error('[ensure user doc]', e))
+            }
           })
         )
         firestoreUnsubsRef.current = unsubs
-
-        // Ensure user docs exist
-        USERS.forEach(async u => {
-          const ref = doc(db, 'users', u)
-          const snap = await getDoc(ref)
-          if (!snap.exists()) {
-            await setDoc(ref, { score: 0, habits: [], rewards: [], history: [], dailyLogs: {}, tags: [] })
-          }
-        })
       } else {
         // Not authenticated or not allowed
         dispatch({ type: 'SET_AUTH', payload: null })

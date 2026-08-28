@@ -15,7 +15,7 @@ import UpdateBanner from './components/UpdateBanner'
 import { AchievementQueue } from './components/AchievementOverlay'
 import { trackThemeUsed } from './lib/achievementLogic'
 import DailySummaryPanel from './components/DailySummaryPanel'
-import { trackAppOpen } from './lib/trackAppOpen'
+import { trackAppOpen, trackSectionUsage } from './lib/trackAppOpen'
 import BottomNav from './components/BottomNav'
 
 // ── Tab principali: caricate on-demand, solo la tab attiva scarica il suo codice ──
@@ -108,6 +108,7 @@ export default function App() {
   function changeTab(tab) {
     setCurrentTab(tab)
     localStorage.setItem('glp_tab', tab)
+    trackSectionUsage('tabs', tab)
   }
   const wakeLockRef = useRef(null)
 

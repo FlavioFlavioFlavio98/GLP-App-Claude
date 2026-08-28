@@ -11,6 +11,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { updatePersistentNotification } from './fcm'
+import { trackSectionUsage } from './trackAppOpen'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate, getStudyRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
@@ -245,7 +246,10 @@ export function AppProvider({ children }) {
     },
     setUserColor(user, color) { dispatch({ type: 'SET_USER_COLOR', user, color }) },
     setViewDate(dateStr) { dispatch({ type: 'SET_VIEW_DATE', date: dateStr }) },
-    openModal(name, payload) { dispatch({ type: 'SET_MODAL', name, payload }) },
+    openModal(name, payload) {
+      dispatch({ type: 'SET_MODAL', name, payload })
+      trackSectionUsage('modals', name)
+    },
     closeModal() { dispatch({ type: 'CLOSE_MODAL' }) },
     setDensity(d) { dispatch({ type: 'SET_DENSITY', density: d }) },
     setMinimalMode(v) { dispatch({ type: 'SET_MINIMAL_MODE', value: v }) },
@@ -833,6 +837,7 @@ export function AppProvider({ children }) {
     async uploadBodyPhotos(files, note, dateStr) {
       const { authUserId } = state
       if (authUserId !== 'flavio') return
+      trackSectionUsage('actions', 'bodyPhotos')
       const realUid = auth.currentUser?.uid
       if (!realUid) { actions.showToast('Utente non autenticato', '❌'); return }
       const ts = Date.now()
@@ -1101,6 +1106,7 @@ export function AppProvider({ children }) {
       if (state.authUserId !== 'flavio') return
       const trimmed = (text || '').trim().slice(0, 100)
       if (!trimmed) { actions.showToast('Descrivi cosa hai fatto/non fatto', '⚠️'); return }
+      trackSectionUsage('actions', 'willpower')
       const rate = parseFloat(points) > 0 ? parseFloat(points) : getWillpowerRate()
       const pts = succeeded ? rate : -rate
       const logDate = dateStr || toDateString(new Date())
@@ -1137,6 +1143,7 @@ export function AppProvider({ children }) {
     // motivare la costanza. Usata anche dal widget 1x1 Android.
     async logMeditation(minutes) {
       if (state.authUserId !== 'flavio') return
+      trackSectionUsage('actions', 'meditation')
       const mins = Math.max(1, parseFloat(minutes) || 1)
       const rate = getMeditationRate()
       const logDate = toDateString(new Date())
@@ -1178,6 +1185,7 @@ export function AppProvider({ children }) {
       if (state.authUserId !== 'flavio') return
       const trimmed = (transcript || '').trim()
       if (trimmed.length < 10) { actions.showToast('Incolla un testo più lungo', '⚠️'); return }
+      trackSectionUsage('actions', 'dayRecap')
 
       const logDate = dateStr || toDateString(new Date())
       const gd = state.allUsersData?.flavio
@@ -1342,6 +1350,7 @@ export function AppProvider({ children }) {
       if (state.authUserId !== 'flavio') return
       const numDuration = parseFloat(durationMin) || 0
       if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      trackSectionUsage('actions', 'barefoot')
       const pts = parseFloat((numDuration * getBarefootRate()).toFixed(2))
       const logDate = dateStr || toDateString(new Date())
       const logEntry = {
@@ -1390,6 +1399,7 @@ export function AppProvider({ children }) {
       if (state.authUserId !== 'flavio') return
       const numDuration = parseFloat(durationMin) || 0
       if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      trackSectionUsage('actions', 'hang')
       const pts = parseFloat((numDuration * getHangRate()).toFixed(2))
       const logDate = dateStr || toDateString(new Date())
       const logEntry = {
@@ -1438,6 +1448,7 @@ export function AppProvider({ children }) {
     // calcolato lato client e passato com'è, per coerenza col tasso corrente).
     async setMindSocialEntry(dateStr, afterNoon, minutes) {
       if (state.authUserId !== 'flavio') return
+      trackSectionUsage('actions', 'youtubeSocial')
       const pts = computeSocialPts(afterNoon, minutes)
       const entry = { afterNoon: !!afterNoon, minutes: parseFloat(minutes) || 0, pts }
       const ref = doc(db, 'users', 'flavio')
@@ -1449,6 +1460,7 @@ export function AppProvider({ children }) {
     // sessioni: si sovrascrive, non si "aggiunge". Nessun punteggio per ora.
     async setSunExposure(dateStr, timeOfDay, level) {
       if (state.authUserId !== 'flavio') return
+      trackSectionUsage('actions', 'sunExposure')
       const gd = state.allUsersData?.flavio
       if (!gd) return
       const current = gd.sunExposureLog?.[dateStr] || { morning: null, evening: null }
@@ -2210,6 +2222,7 @@ export function AppProvider({ children }) {
 
     async reviewDiscovery(id) {
       if (isReadOnly()) return
+      trackSectionUsage('actions', 'discoveries')
       const { authUserId, globalData } = state
       const now = new Date().toISOString()
       const todayStr = toDateString(new Date())

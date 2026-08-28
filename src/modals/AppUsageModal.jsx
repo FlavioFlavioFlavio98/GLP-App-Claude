@@ -62,6 +62,63 @@ function getWeekdayStats(appUsage) {
   }))
 }
 
+// Etichette leggibili per il report "sezioni più usate" — chiavi non
+// presenti qui mostrano semplicemente il nome grezzo (fallback sicuro se
+// aggiungo una nuova modale/azione e mi scordo di etichettarla qui).
+const SECTION_LABELS = {
+  // tabs
+  oggi: '📅 Oggi', abitudini: '🔁 Abitudini', task: '📋 Task', workout: '🏋️ Workout',
+  body: '🧍 Body', mente: '🧠 Mente', nutrizione: '🍽️ Nutrizione', stats: '📊 Stats',
+  // actions (sotto-sezioni sempre visibili insieme in un tab — qui conta l'uso reale, non l'apertura)
+  meditation: '🧘 Meditazione', discoveries: '💡 Scoperte', willpower: '🔥 Willpower',
+  dayRecap: '📝 Riepilogo giorno', barefoot: '🦶 Barefoot', hang: '🧗 Hang',
+  sunExposure: '☀️ Esposizione solare', youtubeSocial: '📱 YouTube/Social', bodyPhotos: '📸 Foto progressi',
+  // modals
+  add: 'Aggiungi abitudine', edit: 'Modifica abitudine', taskAdd: 'Aggiungi task', taskEdit: 'Modifica task',
+  quickExercise: 'Aggiungi esercizio', exerciseSingle: 'Dettaglio esercizio', exerciseStats: 'Statistiche esercizio',
+  recurringTasks: 'Task ricorrenti', globalSearch: 'Ricerca globale', singleHabit: 'Dettaglio abitudine',
+  singleReward: 'Dettaglio reward', settings: 'Impostazioni', avatar: 'Avatar', insights: 'Insight',
+  appUsage: 'Uso app', analytics: 'Analytics', stats: 'Stats', statsPage: 'Pagina stats',
+  weeklyView: 'Vista settimanale', weeklyRecap: 'Riepilogo settimanale', mobility: 'Mobility',
+  study: 'Studio', willpowerEntry: 'Voce willpower',
+  willpowerStats: 'Statistiche willpower', weight: 'Peso', proteinEntry: 'Aggiungi alimento',
+  proteinFoodsManage: 'Gestione alimenti', eveningReview: 'Revisione serale', pdfReport: 'Report PDF',
+}
+
+function sectionLabel(key) {
+  return SECTION_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1)
+}
+
+function RankingList({ title, data }) {
+  const entries = Object.entries(data || {}).sort((a, b) => b[1] - a[1])
+  if (entries.length === 0) return null
+  const max = entries[0][1]
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontWeight: 700, fontSize: '0.88em', marginBottom: 10 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {entries.map(([key, count], i) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 120, flexShrink: 0, fontSize: '0.72em', color: i === 0 ? 'var(--theme-color)' : '#888', fontWeight: i === 0 ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {sectionLabel(key)}
+            </div>
+            <div style={{ flex: 1, height: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 6, overflow: 'hidden' }}>
+              <div style={{
+                width: `${(count / max) * 100}%`, height: '100%', borderRadius: 6,
+                background: i === 0 ? 'var(--theme-color)' : 'rgba(255,255,255,0.15)',
+                transition: 'width 0.4s',
+              }} />
+            </div>
+            <div style={{ width: 24, fontSize: '0.7em', color: i === 0 ? 'var(--theme-color)' : '#555', textAlign: 'right', fontWeight: i === 0 ? 700 : 400 }}>
+              {count}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function getHeatmapColor(val) {
   if (!val || val === 0) return 'rgba(255,255,255,0.05)'
   if (val <= 2)  return 'rgba(74,222,128,0.3)'
@@ -81,6 +138,7 @@ export default function AppUsageModal() {
 
   // appUsage prima degli hook che dipendono da esso
   const appUsage = allUsersData?.flavio?.appUsage || {}
+  const sectionUsage = allUsersData?.flavio?.sectionUsage || {}
 
   // ── Heatmap (useMemo deve stare PRIMA dei return) ─────────────────────────
   const heatmapWeeks = useMemo(() => {
@@ -299,6 +357,21 @@ export default function AppUsageModal() {
             ))}
             <span style={{ fontSize: '0.62em', color: '#444' }}>Più</span>
           </div>
+        </div>
+
+        {/* Sezioni più/meno usate — per capire cosa snellire */}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 16, marginBottom: 4 }}>
+          <div style={{ fontSize: '0.68em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 14 }}>
+            📌 Cosa uso di più
+          </div>
+          <RankingList title="Tab principali" data={sectionUsage.tabs} />
+          <RankingList title="Sotto-sezioni" data={sectionUsage.actions} />
+          <RankingList title="Schermate aperte" data={sectionUsage.modals} />
+          {Object.keys(sectionUsage).length === 0 && (
+            <div style={{ fontSize: '0.78em', color: '#555', textAlign: 'center', padding: '10px 0 6px' }}>
+              Ancora poco storico — torna qui tra qualche giorno d'uso
+            </div>
+          )}
         </div>
 
         <button className="btn-sec" onClick={() => actions.closeModal()}>Chiudi</button>

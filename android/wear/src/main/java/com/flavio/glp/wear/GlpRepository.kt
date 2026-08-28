@@ -76,13 +76,20 @@ object GlpRepository {
             .addOnFailureListener(onError)
     }
 
+    // Transazione invece di get()+update(): questa scrittura modifica un
+    // elemento esistente dell'array "tasks", quindi arrayUnion da solo non
+    // basta — serve una vera lettura atomica con retry in caso di scrittura
+    // concorrente da telefono/web nella stessa finestra (stessa classe di bug
+    // della perdita dati del 28/8/2026). Score con FieldValue.increment
+    // invece di un add manuale sul valore letto, altra race indipendente.
     fun completeTask(taskId: String, reward: Int, onDone: () -> Unit, onError: (Exception) -> Unit) {
         val ref = userRef()
-        ref.get().addOnSuccessListener { doc ->
+        val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
+        FirebaseFirestore.getInstance().runTransaction { transaction ->
+            val doc = transaction.get(ref)
             @Suppress("UNCHECKED_CAST")
             val tasks = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
-            val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
-                .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
             val updated = tasks.map { task ->
                 if (task["id"]?.toString() == taskId) {
                     task.toMutableMap().apply {
@@ -92,11 +99,9 @@ object GlpRepository {
                     }
                 } else task
             }
-            val currentScore = doc.getDouble("score") ?: 0.0
-            ref.update("tasks", updated, "score", currentScore + reward)
-                .addOnSuccessListener { onDone() }
-                .addOnFailureListener(onError)
-        }.addOnFailureListener(onError)
+            transaction.update(ref, mapOf("tasks" to updated, "score" to FieldValue.increment(reward.toLong())))
+        }.addOnSuccessListener { onDone() }
+            .addOnFailureListener(onError)
     }
 
     // Esercizi (ordine alfabetico) + id degli ultimi 3 usati oggi (più recente
@@ -171,10 +176,14 @@ object GlpRepository {
 
     fun toggleHabit(habitId: String, currentlyDone: Boolean, onDone: () -> Unit, onError: (Exception) -> Unit) {
         val ref = userRef()
-        ref.get().addOnSuccessListener { doc ->
+        val todayStr = today()
+        // Transazione invece di get()+update(): stessa motivazione di
+        // completeTask qui sopra — modifica un elemento esistente dell'array
+        // "habits", serve lettura atomica con retry.
+        FirebaseFirestore.getInstance().runTransaction { transaction ->
+            val doc = transaction.get(ref)
             @Suppress("UNCHECKED_CAST")
             val habitsArr = (doc.get("habits") as? List<Map<String, Any>> ?: emptyList()).toMutableList()
-            val todayStr = today()
             @Suppress("UNCHECKED_CAST")
             val dailyLogs = (doc.get("dailyLogs") as? Map<String, Any>) ?: emptyMap()
             @Suppress("UNCHECKED_CAST")
@@ -196,13 +205,16 @@ object GlpRepository {
                 if (idx >= 0) habitsArr[idx] = habitsArr[idx].toMutableMap().apply { put("lastDone", todayStr) }
             }
 
-            ref.update(
-                "dailyLogs.$todayStr.habits", doneIds,
-                "dailyLogs.$todayStr.habitLevels", habitLevels,
-                "habits", habitsArr,
-            ).addOnSuccessListener { onDone() }
-                .addOnFailureListener(onError)
-        }.addOnFailureListener(onError)
+            transaction.update(
+                ref,
+                mapOf(
+                    "dailyLogs.$todayStr.habits" to doneIds,
+                    "dailyLogs.$todayStr.habitLevels" to habitLevels,
+                    "habits" to habitsArr,
+                )
+            )
+        }.addOnSuccessListener { onDone() }
+            .addOnFailureListener(onError)
     }
 
     // Log dal watch con reps/sforzo scelti dall'utente — stessa formula punti

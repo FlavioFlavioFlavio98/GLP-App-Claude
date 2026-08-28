@@ -5,6 +5,7 @@ import { applyTheme, applyUserColors } from './lib/themes'
 import { getLevel } from './lib/levels'
 
 import Header from './components/Header'
+import BackupReminderBanner from './components/BackupReminderBanner'
 import ProgressCircle from './components/ProgressCircle'
 import DateNav from './components/DateNav'
 import LevelUpOverlay from './components/LevelUpOverlay'
@@ -359,6 +360,10 @@ export default function App() {
 
       {/* ── HEADER FISSO (sempre visibile su tutte le tab) ── */}
       <Header isReadOnly={isReadOnly} />
+
+      {!isReadOnly && authUserId === 'flavio' && (
+        <BackupReminderBanner lastDataExportAt={globalData?.lastDataExportAt} actions={actions} />
+      )}
 
       {minimalMode && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 12px', background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 10, fontSize: '0.75em', color: '#EF9F27' }}>

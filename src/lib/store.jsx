@@ -12,6 +12,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll }
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { updatePersistentNotification } from './fcm'
 import { trackSectionUsage } from './trackAppOpen'
+import { downloadDataBackup } from './dataExport'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate, getStudyRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
@@ -613,6 +614,19 @@ export function AppProvider({ children }) {
         console.error(e)
         actions.showToast('File non valido', '❌')
       }
+    },
+
+    // Backup manuale scaricabile — copia JSON di tutti i dati sotto il
+    // controllo dell'utente, indipendente da Firestore/PITR. Registra la
+    // data dell'ultimo export sul documento (non in localStorage) così il
+    // promemoria del banner resta coerente tra web/telefono/laptop.
+    async exportUserData() {
+      const { authUserId, globalData } = state
+      if (authUserId !== 'flavio' || !globalData) return
+      const now = new Date()
+      downloadDataBackup(globalData, toDateString(now))
+      await updateDoc(doc(db, 'users', 'flavio'), { lastDataExportAt: now.toISOString() })
+      actions.showToast('Backup scaricato 💾', '✅')
     },
 
     // Cancella TUTTI i dati dell'utente (documento principale, sotto-collezioni,

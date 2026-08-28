@@ -421,6 +421,13 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
           </button>
         </div>
 
+        {authUserId === 'flavio' && (
+          <BackupSection
+            lastDataExportAt={allUsersData?.flavio?.lastDataExportAt}
+            actions={actions}
+          />
+        )}
+
         {authUserId === 'flavio' && <DangerZoneSection actions={actions} />}
 
         <button className="btn-sec" onClick={() => actions.closeModal()}>Chiudi</button>
@@ -704,6 +711,44 @@ function ToggleRow({ label, sublabel, icon, value, onChange }) {
           position: 'absolute', top: 3, transition: 'left 0.2s',
           left: value ? 23 : 3,
         }} />
+      </button>
+    </div>
+  )
+}
+
+// ─── Backup manuale: export JSON scaricabile ──────────────────────────────────
+// Copia di tutti i dati sotto il controllo diretto dell'utente, indipendente
+// da Firestore/PITR/backup automatico — aggiunta dopo l'incidente del
+// 28/8/2026. lastDataExportAt vive sul documento (non in localStorage) così
+// resta coerente qualunque dispositivo usi per esportare.
+
+function daysSince(isoDate) {
+  if (!isoDate) return null
+  const diffMs = Date.now() - new Date(isoDate).getTime()
+  return Math.floor(diffMs / 86400000)
+}
+
+function BackupSection({ lastDataExportAt, actions }) {
+  const [exporting, setExporting] = useState(false)
+  const days = daysSince(lastDataExportAt)
+
+  async function handleExport() {
+    setExporting(true)
+    await actions.exportUserData()
+    setExporting(false)
+  }
+
+  return (
+    <div className="settings-section" style={{ marginTop: 24 }}>
+      <div className="settings-section-title">💾 Backup manuale</div>
+      <p style={{ fontSize: '0.75em', color: '#888', margin: '2px 0 10px' }}>
+        {lastDataExportAt
+          ? `Ultimo backup scaricato ${days === 0 ? 'oggi' : `${days} giorn${days === 1 ? 'o' : 'i'} fa`}`
+          : 'Nessun backup scaricato finora'}
+      </p>
+      <button className="btn-backup" onClick={handleExport} disabled={exporting}>
+        <span className="material-icons-round" style={{ fontSize: 18 }}>download</span>
+        {exporting ? 'Preparazione...' : 'Scarica backup (JSON)'}
       </button>
     </div>
   )

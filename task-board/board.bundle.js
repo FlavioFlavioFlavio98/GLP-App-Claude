@@ -18504,20 +18504,6 @@
       return new _ObjectValue(__PRIVATE_deepClone(this.value));
     }
   };
-  function __PRIVATE_extractFieldMask(e2) {
-    const t2 = [];
-    return forEach(e2.fields, (e3, n2) => {
-      const r2 = new Oe([e3]);
-      if (__PRIVATE_isMapValue(n2)) {
-        const e4 = __PRIVATE_extractFieldMask(n2.mapValue).fields;
-        if (0 === e4.length)
-          t2.push(r2);
-        else
-          for (const n3 of e4) t2.push(r2.child(n3));
-      } else
-        t2.push(r2);
-    }), new FieldMask(t2);
-  }
   function __PRIVATE_toDouble(e2, t2) {
     if (e2.useProto3Json) {
       if (isNaN(t2)) return {
@@ -18639,11 +18625,6 @@
       return e3 instanceof __PRIVATE_ArrayUnionTransformOperation && t3 instanceof __PRIVATE_ArrayUnionTransformOperation || e3 instanceof __PRIVATE_ArrayRemoveTransformOperation && t3 instanceof __PRIVATE_ArrayRemoveTransformOperation ? __PRIVATE_arrayEquals(e3.elements, t3.elements, __PRIVATE_valueEquals$1) : e3 instanceof __PRIVATE_NumericIncrementTransformOperation && t3 instanceof __PRIVATE_NumericIncrementTransformOperation || e3 instanceof __PRIVATE_NumericMinimumTransformOperation && t3 instanceof __PRIVATE_NumericMinimumTransformOperation || e3 instanceof __PRIVATE_NumericMaximumTransformOperation && t3 instanceof __PRIVATE_NumericMaximumTransformOperation ? __PRIVATE_valueEquals$1(e3.l, t3.l) : e3 instanceof __PRIVATE_ServerTimestampTransform && t3 instanceof __PRIVATE_ServerTimestampTransform;
     }(e2.transform, t2.transform);
   }
-  var MutationResult = class {
-    constructor(e2, t2) {
-      this.version = e2, this.transformResults = t2;
-    }
-  };
   var Precondition = class _Precondition {
     constructor(e2, t2) {
       this.updateTime = e2, this.exists = t2;
@@ -18714,14 +18695,6 @@
       if (__PRIVATE_preconditionIsValidForDocument(e3.precondition, t3)) return t3.convertToNoDocument(t3.version).setHasLocalMutations(), null;
       return n3;
     }(e2, t2, n2);
-  }
-  function __PRIVATE_mutationExtractBaseValue(e2, t2) {
-    let n2 = null;
-    for (const r2 of e2.fieldTransforms) {
-      const e3 = t2.data.field(r2.field), i2 = __PRIVATE_computeTransformOperationBaseValue(r2.transform, e3 || null);
-      null != i2 && (null === n2 && (n2 = ObjectValue.empty()), n2.set(r2.field, i2));
-    }
-    return n2 || null;
   }
   function __PRIVATE_mutationEquals(e2, t2) {
     return e2.type === t2.type && (!!e2.key.isEqual(t2.key) && (!!e2.precondition.isEqual(t2.precondition) && (!!function __PRIVATE_fieldTransformsAreEqual(e3, t3) {
@@ -20185,6 +20158,23 @@
       fields: n2.value.mapValue.fields
     };
   }
+  function __PRIVATE_fromBatchGetDocumentsResponse(e2, t2) {
+    return "found" in t2 ? function __PRIVATE_fromFound(e3, t3) {
+      __PRIVATE_hardAssert(!!t3.found, 43571), t3.found.name, t3.found.updateTime;
+      const n2 = fromName(e3, t3.found.name), r2 = __PRIVATE_fromVersion(t3.found.updateTime), i2 = t3.found.createTime ? __PRIVATE_fromVersion(t3.found.createTime) : SnapshotVersion.min(), s2 = new ObjectValue({
+        mapValue: {
+          fields: t3.found.fields
+        }
+      });
+      return MutableDocument.newFoundDocument(n2, r2, i2, s2);
+    }(e2, t2) : "missing" in t2 ? function __PRIVATE_fromMissing(e3, t3) {
+      __PRIVATE_hardAssert(!!t3.missing, 3894), __PRIVATE_hardAssert(!!t3.readTime, 22933);
+      const n2 = fromName(e3, t3.missing), r2 = __PRIVATE_fromVersion(t3.readTime);
+      return MutableDocument.newNoDocument(n2, r2);
+    }(e2, t2) : l(7234, {
+      result: t2
+    });
+  }
   function __PRIVATE_fromWatchChange(e2, t2) {
     let n2;
     if ("targetChange" in t2) {
@@ -20300,17 +20290,6 @@
         exists: t3.exists
       } : l(27497);
     }(e2, t2.precondition)), n2;
-  }
-  function __PRIVATE_fromWriteResults(e2, t2) {
-    return e2 && e2.length > 0 ? (__PRIVATE_hardAssert(void 0 !== t2, 14353), e2.map((e3) => function __PRIVATE_fromWriteResult(e4, t3) {
-      let n2 = e4.updateTime ? __PRIVATE_fromVersion(e4.updateTime) : __PRIVATE_fromVersion(t3);
-      return n2.isEqual(SnapshotVersion.min()) && // The Firestore Emulator currently returns an update time of 0 for
-      // deletes of non-existing documents (rather than null). This breaks the
-      // test "get deleted doc while offline with source=cache" as NoDocuments
-      // with version 0 are filtered by IndexedDb's RemoteDocumentCache.
-      // TODO(#2149): Remove this when Emulator is fixed
-      (n2 = __PRIVATE_fromVersion(t3)), new MutationResult(n2, e4.transformResults || []);
-    }(e3, t2))) : [];
   }
   function __PRIVATE_toDocumentsTarget(e2, t2) {
     return {
@@ -21653,57 +21632,6 @@
       t2.database = __PRIVATE_getEncodedDatabaseId(this.serializer), t2.removeTarget = e2, this.tn(t2);
     }
   };
-  var __PRIVATE_PersistentWriteStream = class extends __PRIVATE_PersistentStream {
-    constructor(e2, t2, n2, r2, i2, s2) {
-      super(e2, "write_stream_connection_backoff", "write_stream_idle", "health_check_timeout", t2, n2, r2, s2), this.serializer = i2;
-    }
-    /**
-     * Tracks whether or not a handshake has been successfully exchanged and
-     * the stream is ready to accept mutations.
-     */
-    get Rn() {
-      return this.zt > 0;
-    }
-    // Override of PersistentStream.start
-    start() {
-      this.lastStreamToken = void 0, super.start();
-    }
-    sn() {
-      this.Rn && this.In([]);
-    }
-    cn(e2, t2) {
-      return this.connection.vt("Write", e2, t2);
-    }
-    En(e2) {
-      return __PRIVATE_hardAssert(!!e2.streamToken, 31322), this.lastStreamToken = e2.streamToken, // The first response is always the handshake response
-      __PRIVATE_hardAssert(!e2.writeResults || 0 === e2.writeResults.length, 55816), this.listener.An();
-    }
-    onNext(e2) {
-      __PRIVATE_hardAssert(!!e2.streamToken, 12678), this.lastStreamToken = e2.streamToken, // A successful first write response means the stream is healthy,
-      // Note, that we could consider a successful handshake healthy, however,
-      // the write itself might be causing an error we want to back off from.
-      this.jt.reset();
-      const t2 = __PRIVATE_fromWriteResults(e2.writeResults, e2.commitTime), n2 = __PRIVATE_fromVersion(e2.commitTime);
-      return this.listener.Vn(n2, t2);
-    }
-    /**
-     * Sends an initial streamToken to the server, performing the handshake
-     * required to make the StreamingWrite RPC work. Subsequent
-     * calls should wait until onHandshakeComplete was called.
-     */
-    dn() {
-      const e2 = {};
-      e2.database = __PRIVATE_getEncodedDatabaseId(this.serializer), this.tn(e2);
-    }
-    /** Sends a group of mutations to the Firestore backend to apply. */
-    In(e2) {
-      const t2 = {
-        streamToken: this.lastStreamToken,
-        writes: e2.map((e3) => toMutation(this.serializer, e3))
-      };
-      this.tn(t2);
-    }
-  };
   var Datastore = class {
   };
   var __PRIVATE_DatastoreImpl = class extends Datastore {
@@ -22335,6 +22263,14 @@ Total Duration: ${a - u2}ms`);
     vectorValues: property("object")
   };
   var xt = /^__.*__$/;
+  var ParsedSetData = class {
+    constructor(e2, t2, n2) {
+      this.data = e2, this.fieldMask = t2, this.fieldTransforms = n2;
+    }
+    toMutation(e2, t2) {
+      return null !== this.fieldMask ? new __PRIVATE_PatchMutation(e2, this.data, this.fieldMask, t2, this.fieldTransforms) : new __PRIVATE_SetMutation(e2, this.data, t2, this.fieldTransforms);
+    }
+  };
   var ParsedUpdateData = class {
     constructor(e2, t2, n2) {
       this.data = e2, this.fieldMask = t2, this.fieldTransforms = n2;
@@ -22449,6 +22385,23 @@ Total Duration: ${a - u2}ms`);
   function la(e2) {
     const t2 = e2._freezeSettings(), n2 = __PRIVATE_newSerializer(e2._databaseId);
     return new UserDataReader(e2._databaseId, !!t2.ignoreUndefinedProperties, n2);
+  }
+  function __PRIVATE_parseSetData(e2, t2, n2, r2, i2, _ = {}) {
+    const o2 = e2.createContext(_.merge || _.mergeFields ? 2 : 0, t2, n2, i2);
+    __PRIVATE_validatePlainObject("Data must be an object, but it was:", o2, r2);
+    const a = __PRIVATE_parseObject(r2, o2);
+    let u2, c2;
+    if (_.merge) u2 = new FieldMask(o2.fieldMask), c2 = o2.fieldTransforms;
+    else if (_.mergeFields) {
+      const e3 = [];
+      for (const r3 of _.mergeFields) {
+        const i3 = ta(t2, r3, n2);
+        if (!o2.contains(i3)) throw new s(aa.INVALID_ARGUMENT, `Field '${i3}' is specified in your field mask but missing from your input data.`);
+        __PRIVATE_fieldMaskContains(e3, i3) || e3.push(i3);
+      }
+      u2 = new FieldMask(e3), c2 = o2.fieldTransforms.filter((e4) => u2.covers(e4.field));
+    } else u2 = null, c2 = o2.fieldTransforms;
+    return new ParsedSetData(new ObjectValue(a), u2, c2);
   }
   var __PRIVATE_DeleteFieldValueImpl = class ___PRIVATE_DeleteFieldValueImpl extends FieldValue {
     _toFieldTransform(e2) {
@@ -26665,28 +26618,6 @@ Total Duration: ${a - u2}ms`);
       return this.batchId === e2.batchId && __PRIVATE_arrayEquals(this.mutations, e2.mutations, (e3, t2) => __PRIVATE_mutationEquals(e3, t2)) && __PRIVATE_arrayEquals(this.baseMutations, e2.baseMutations, (e3, t2) => __PRIVATE_mutationEquals(e3, t2));
     }
   };
-  var MutationBatchResult = class _MutationBatchResult {
-    constructor(e2, t2, n2, r2) {
-      this.batch = e2, this.commitVersion = t2, this.mutationResults = n2, this.docVersions = r2;
-    }
-    /**
-     * Creates a new MutationBatchResult for the given batch and results. There
-     * must be one result for each mutation in the batch. This static factory
-     * caches a document=&gt;version mapping (docVersions).
-     */
-    static from(e2, t2, n2) {
-      __PRIVATE_hardAssert(e2.mutations.length === n2.length, 58842, {
-        Br: e2.mutations.length,
-        Ur: n2.length
-      });
-      let r2 = /* @__PURE__ */ function __PRIVATE_documentVersionMap() {
-        return it;
-      }();
-      const i2 = e2.mutations;
-      for (let e3 = 0; e3 < i2.length; e3++) r2 = r2.insert(i2[e3].key, n2[e3].version);
-      return new _MutationBatchResult(e2, t2, n2, r2);
-    }
-  };
   var Kt = "";
   function __PRIVATE_encodeResourcePath(e2) {
     let t2 = "";
@@ -28281,33 +28212,6 @@ Total Duration: ${a - u2}ms`);
       });
     });
   }
-  function __PRIVATE_localStoreAcknowledgeBatch(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2);
-    return n2.persistence.runTransaction("Acknowledge batch", "readwrite-primary", (e3) => {
-      const r2 = t2.batch.keys(), i2 = n2.Uo.newChangeBuffer({
-        trackRemovals: true
-      });
-      return function __PRIVATE_applyWriteToRemoteDocuments(e4, t3, n3, r3) {
-        const i3 = n3.batch, s2 = i3.keys();
-        let _ = PersistencePromise.resolve();
-        return s2.forEach((e5) => {
-          _ = _.next(() => r3.getEntry(t3, e5)).next((t4) => {
-            const s3 = n3.docVersions.get(e5);
-            __PRIVATE_hardAssert(null !== s3, 48541), t4.version.compareTo(s3) < 0 && (i3.applyToRemoteDocument(t4, n3), t4.isValidDocument() && // We use the commitVersion as the readTime rather than the
-            // document's updateTime since the updateTime is not advanced
-            // for updates that do not modify the underlying document.
-            (t4.setReadTime(n3.commitVersion), r3.addEntry(t4)));
-          });
-        }), _.next(() => e4.mutationQueue.removeMutationBatch(t3, i3));
-      }(n2, e3, t2, i2).next(() => i2.apply(e3)).next(() => n2.mutationQueue.performConsistencyCheck(e3)).next(() => n2.documentOverlayCache.removeOverlaysForBatchId(e3, r2, t2.batch.batchId)).next(() => n2.localDocuments.recalculateAndSaveOverlaysForDocumentKeys(e3, function __PRIVATE_getKeysWithTransformResults(e4) {
-        let t3 = __PRIVATE_documentKeySet();
-        for (let n3 = 0; n3 < e4.mutationResults.length; ++n3) {
-          e4.mutationResults[n3].transformResults.length > 0 && (t3 = t3.add(e4.batch.mutations[n3].key));
-        }
-        return t3;
-      }(t2))).next(() => n2.localDocuments.getDocuments(e3, r2));
-    });
-  }
   function __PRIVATE_localStoreGetLastRemoteSnapshotVersion(e2) {
     const t2 = __PRIVATE_debugCast(e2);
     return t2.persistence.runTransaction("Get last remote snapshot version", "readonly", (e3) => t2.A_.getLastRemoteSnapshotVersion(e3));
@@ -28382,10 +28286,6 @@ Total Duration: ${a - u2}ms`);
         Ko: i2
       };
     });
-  }
-  function __PRIVATE_localStoreGetNextMutationBatch(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2);
-    return n2.persistence.runTransaction("Get next mutation batch", "readonly", (e3) => (void 0 === t2 && (t2 = Ke), n2.mutationQueue.getNextMutationBatchAfterBatchId(e3, t2)));
   }
   function __PRIVATE_localStoreAllocateTarget(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2);
@@ -28788,66 +28688,6 @@ This typically indicates that your device does not have a healthy Internet conne
       ), await __PRIVATE_enableNetworkInternal(e2);
     });
   }
-  function __PRIVATE_executeWithRecovery(e2, t2) {
-    return t2().catch((n2) => __PRIVATE_disableNetworkUntilRecovery(e2, n2, t2));
-  }
-  async function __PRIVATE_fillWritePipeline(e2) {
-    const t2 = __PRIVATE_debugCast(e2), n2 = __PRIVATE_ensureWriteStream(t2);
-    let r2 = t2.ia.length > 0 ? t2.ia[t2.ia.length - 1].batchId : Ke;
-    for (; __PRIVATE_canAddToWritePipeline(t2); ) try {
-      const e3 = await __PRIVATE_localStoreGetNextMutationBatch(t2.localStore, r2);
-      if (null === e3) {
-        0 === t2.ia.length && n2.Xt();
-        break;
-      }
-      r2 = e3.batchId, __PRIVATE_addToWritePipeline(t2, e3);
-    } catch (e3) {
-      await __PRIVATE_disableNetworkUntilRecovery(t2, e3);
-    }
-    __PRIVATE_shouldStartWriteStream(t2) && __PRIVATE_startWriteStream(t2);
-  }
-  function __PRIVATE_canAddToWritePipeline(e2) {
-    return __PRIVATE_canUseNetwork(e2) && e2.ia.length < 10;
-  }
-  function __PRIVATE_addToWritePipeline(e2, t2) {
-    e2.ia.push(t2);
-    const n2 = __PRIVATE_ensureWriteStream(e2);
-    n2.Jt() && n2.Rn && n2.In(t2.mutations);
-  }
-  function __PRIVATE_shouldStartWriteStream(e2) {
-    return __PRIVATE_canUseNetwork(e2) && !__PRIVATE_ensureWriteStream(e2).Ht() && e2.ia.length > 0;
-  }
-  function __PRIVATE_startWriteStream(e2) {
-    __PRIVATE_ensureWriteStream(e2).start();
-  }
-  async function __PRIVATE_onWriteStreamOpen(e2) {
-    __PRIVATE_ensureWriteStream(e2).dn();
-  }
-  async function __PRIVATE_onWriteHandshakeComplete(e2) {
-    const t2 = __PRIVATE_ensureWriteStream(e2);
-    for (const n2 of e2.ia) t2.In(n2.mutations);
-  }
-  async function __PRIVATE_onMutationResult(e2, t2, n2) {
-    const r2 = e2.ia.shift(), i2 = MutationBatchResult.from(r2, t2, n2);
-    await __PRIVATE_executeWithRecovery(e2, () => e2.remoteSyncer.applySuccessfulWrite(i2)), // It's possible that with the completion of this mutation another
-    // slot has freed up.
-    await __PRIVATE_fillWritePipeline(e2);
-  }
-  async function __PRIVATE_onWriteStreamClose(e2, t2) {
-    t2 && __PRIVATE_ensureWriteStream(e2).Rn && // This error affects the actual write.
-    await async function __PRIVATE_handleWriteError(e3, t3) {
-      if (function __PRIVATE_isPermanentWriteError(e4) {
-        return __PRIVATE_isPermanentError(e4) && e4 !== aa.ABORTED;
-      }(t3.code)) {
-        const n2 = e3.ia.shift();
-        __PRIVATE_ensureWriteStream(e3).Zt(), await __PRIVATE_executeWithRecovery(e3, () => e3.remoteSyncer.rejectFailedWrite(n2.batchId, t3)), // It's possible that with the completion of this mutation
-        // another slot has freed up.
-        await __PRIVATE_fillWritePipeline(e3);
-      }
-    }(e2, t2), // The write stream might have been started by refilling the write
-    // pipeline for failed writes
-    __PRIVATE_shouldStartWriteStream(e2) && __PRIVATE_startWriteStream(e2);
-  }
   async function __PRIVATE_remoteStoreHandleCredentialChange(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2);
     n2.asyncQueue.verifyOperationInProgress(), __PRIVATE_logDebug(hr, "RemoteStore received new credentials");
@@ -28893,22 +28733,6 @@ This typically indicates that your device does not have a healthy Internet conne
         /* OnlineState.Unknown */
       )) : (await e2.Pa.stop(), __PRIVATE_cleanUpWatchStreamState(e2));
     })), e2.Pa;
-  }
-  function __PRIVATE_ensureWriteStream(e2) {
-    return e2.Ra || // Create stream (but note that it is not started yet).
-    (e2.Ra = function __PRIVATE_newPersistentWriteStream(e3, t2, n2) {
-      const r2 = __PRIVATE_debugCast(e3);
-      return r2.mn(), new __PRIVATE_PersistentWriteStream(t2, r2.connection, r2.authCredentials, r2.appCheckCredentials, r2.serializer, n2);
-    }(e2.datastore, e2.asyncQueue, {
-      ut: () => Promise.resolve(),
-      lt: __PRIVATE_onWriteStreamOpen.bind(null, e2),
-      ht: __PRIVATE_onWriteStreamClose.bind(null, e2),
-      An: __PRIVATE_onWriteHandshakeComplete.bind(null, e2),
-      Vn: __PRIVATE_onMutationResult.bind(null, e2)
-    }), e2.la.push(async (t2) => {
-      t2 ? (e2.Ra.Zt(), // This will start the write stream if necessary.
-      await __PRIVATE_fillWritePipeline(e2)) : (await e2.Ra.stop(), e2.ia.length > 0 && (__PRIVATE_logDebug(hr, `Stopping write stream with ${e2.ia.length} pending writes`), e2.ia = []));
-    })), e2.Ra;
   }
   var __PRIVATE_AsyncObserver = class {
     constructor(e2) {
@@ -29811,49 +29635,6 @@ This typically indicates that your device does not have a healthy Internet conne
     // watch target.
     (n2.sharedClientState.removeLocalQueryTarget(r2.targetId), __PRIVATE_remoteStoreUnlisten(n2.remoteStore, r2.targetId));
   }
-  async function __PRIVATE_syncEngineWrite(e2, t2, n2) {
-    const r2 = __PRIVATE_syncEngineEnsureWriteCallbacks(e2);
-    try {
-      const e3 = await function __PRIVATE_localStoreWriteLocally(e4, t3) {
-        const n3 = __PRIVATE_debugCast(e4), r3 = Timestamp.now(), i2 = t3.reduce((e5, t4) => e5.add(t4.key), __PRIVATE_documentKeySet());
-        let s2, _;
-        return n3.persistence.runTransaction("Locally write mutations", "readwrite", (e5) => {
-          let o2 = __PRIVATE_mutableDocumentMap(), a = __PRIVATE_documentKeySet();
-          return n3.Uo.getEntries(e5, i2).next((e6) => {
-            o2 = e6, o2.forEach((e7, t4) => {
-              t4.isValidDocument() || (a = a.add(e7));
-            });
-          }).next(() => n3.localDocuments.getOverlayedDocuments(e5, o2)).next((i3) => {
-            s2 = i3;
-            const _2 = [];
-            for (const e6 of t3) {
-              const t4 = __PRIVATE_mutationExtractBaseValue(e6, s2.get(e6.key).overlayedDocument);
-              null != t4 && // NOTE: The base state should only be applied if there's some
-              // existing document to override, so use a Precondition of
-              // exists=true
-              _2.push(new __PRIVATE_PatchMutation(e6.key, t4, __PRIVATE_extractFieldMask(t4.value.mapValue), Precondition.exists(true)));
-            }
-            return n3.mutationQueue.addMutationBatch(e5, r3, _2, t3);
-          }).next((t4) => {
-            _ = t4;
-            const r4 = t4.applyToLocalDocumentSet(s2, a);
-            return n3.documentOverlayCache.saveOverlays(e5, t4.batchId, r4);
-          });
-        }).then(() => ({
-          batchId: _.batchId,
-          changes: __PRIVATE_convertOverlayedDocumentMapToDocumentMap(s2)
-        }));
-      }(r2.localStore, t2);
-      r2.sharedClientState.addPendingMutation(e3.batchId), function __PRIVATE_addMutationCallback(e4, t3, n3) {
-        let r3 = e4.Vc[e4.currentUser.toKey()];
-        r3 || (r3 = new SortedMap(__PRIVATE_primitiveComparator));
-        r3 = r3.insert(t3, n3), e4.Vc[e4.currentUser.toKey()] = r3;
-      }(r2, e3.batchId, n2), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(r2, e3.changes), await __PRIVATE_fillWritePipeline(r2.remoteStore);
-    } catch (e3) {
-      const t3 = __PRIVATE_wrapInUserErrorIfRecoverable(e3, "Failed to persist write");
-      n2.reject(t3);
-    }
-  }
   async function __PRIVATE_syncEngineApplyRemoteEvent(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2);
     try {
@@ -29915,48 +29696,6 @@ This typically indicates that your device does not have a healthy Internet conne
       /* keepPersistedTargetData */
       false
     ).then(() => __PRIVATE_removeAndCleanupTarget(r2, t2, n2)).catch(__PRIVATE_ignoreIfPrimaryLeaseLoss);
-  }
-  async function __PRIVATE_syncEngineApplySuccessfulWrite(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2), r2 = t2.batch.batchId;
-    try {
-      const e3 = await __PRIVATE_localStoreAcknowledgeBatch(n2.localStore, t2);
-      __PRIVATE_processUserCallback(
-        n2,
-        r2,
-        /*error=*/
-        null
-      ), __PRIVATE_triggerPendingWritesCallbacks(n2, r2), n2.sharedClientState.updateMutationState(r2, "acknowledged"), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(n2, e3);
-    } catch (e3) {
-      await __PRIVATE_ignoreIfPrimaryLeaseLoss(e3);
-    }
-  }
-  async function __PRIVATE_syncEngineRejectFailedWrite(e2, t2, n2) {
-    const r2 = __PRIVATE_debugCast(e2);
-    try {
-      const e3 = await function __PRIVATE_localStoreRejectBatch(e4, t3) {
-        const n3 = __PRIVATE_debugCast(e4);
-        return n3.persistence.runTransaction("Reject batch", "readwrite-primary", (e5) => {
-          let r3;
-          return n3.mutationQueue.lookupMutationBatch(e5, t3).next((t4) => (__PRIVATE_hardAssert(null !== t4, 37113), r3 = t4.keys(), n3.mutationQueue.removeMutationBatch(e5, t4))).next(() => n3.mutationQueue.performConsistencyCheck(e5)).next(() => n3.documentOverlayCache.removeOverlaysForBatchId(e5, r3, t3)).next(() => n3.localDocuments.recalculateAndSaveOverlaysForDocumentKeys(e5, r3)).next(() => n3.localDocuments.getDocuments(e5, r3));
-        });
-      }(r2.localStore, t2);
-      __PRIVATE_processUserCallback(r2, t2, n2), __PRIVATE_triggerPendingWritesCallbacks(r2, t2), r2.sharedClientState.updateMutationState(t2, "rejected", n2), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(r2, e3);
-    } catch (n3) {
-      await __PRIVATE_ignoreIfPrimaryLeaseLoss(n3);
-    }
-  }
-  function __PRIVATE_triggerPendingWritesCallbacks(e2, t2) {
-    (e2.dc.get(t2) || []).forEach((e3) => {
-      e3.resolve();
-    }), e2.dc.delete(t2);
-  }
-  function __PRIVATE_processUserCallback(e2, t2, n2) {
-    const r2 = __PRIVATE_debugCast(e2);
-    let i2 = r2.Vc[r2.currentUser.toKey()];
-    if (i2) {
-      const e3 = i2.get(t2);
-      e3 && (n2 ? e3.reject(n2) : e3.resolve(), i2 = i2.remove(t2)), r2.Vc[r2.currentUser.toKey()] = i2;
-    }
   }
   function __PRIVATE_removeAndCleanupTarget(e2, t2, n2 = null) {
     e2.sharedClientState.removeLocalQueryTarget(t2);
@@ -30060,10 +29799,6 @@ This typically indicates that your device does not have a healthy Internet conne
     const t2 = __PRIVATE_debugCast(e2);
     return t2.remoteStore.remoteSyncer.applyRemoteEvent = __PRIVATE_syncEngineApplyRemoteEvent.bind(null, t2), t2.remoteStore.remoteSyncer.getRemoteKeysForTarget = __PRIVATE_syncEngineGetRemoteKeysForTarget.bind(null, t2), t2.remoteStore.remoteSyncer.rejectListen = __PRIVATE_syncEngineRejectListen.bind(null, t2), t2.Ec.hn = __PRIVATE_eventManagerOnWatchChange.bind(null, t2.eventManager), t2.Ec.yc = __PRIVATE_eventManagerOnWatchError.bind(null, t2.eventManager), t2;
   }
-  function __PRIVATE_syncEngineEnsureWriteCallbacks(e2) {
-    const t2 = __PRIVATE_debugCast(e2);
-    return t2.remoteStore.remoteSyncer.applySuccessfulWrite = __PRIVATE_syncEngineApplySuccessfulWrite.bind(null, t2), t2.remoteStore.remoteSyncer.rejectFailedWrite = __PRIVATE_syncEngineRejectFailedWrite.bind(null, t2), t2;
-  }
   var __PRIVATE_MemoryOfflineComponentProvider = class {
     constructor() {
       this.kind = "memory", this.synchronizeTabs = false;
@@ -30165,6 +29900,158 @@ This typically indicates that your device does not have a healthy Internet conne
   OnlineComponentProvider.provider = {
     build: () => new OnlineComponentProvider()
   };
+  var Transaction = class {
+    constructor(e2) {
+      this.datastore = e2, // The version of each document that was read during this transaction.
+      this.readVersions = /* @__PURE__ */ new Map(), this.mutations = [], this.committed = false, /**
+       * A deferred usage error that occurred previously in this transaction that
+       * will cause the transaction to fail once it actually commits.
+       */
+      this.lastTransactionError = null, /**
+       * Set of documents that have been written in the transaction.
+       *
+       * When there's more than one write to the same key in a transaction, any
+       * writes after the first are handled differently.
+       */
+      this.writtenDocs = /* @__PURE__ */ new Set();
+    }
+    async lookup(e2) {
+      if (this.ensureCommitNotCalled(), this.mutations.length > 0) throw this.lastTransactionError = new s(aa.INVALID_ARGUMENT, "Firestore transactions require all reads to be executed before all writes."), this.lastTransactionError;
+      const t2 = await async function __PRIVATE_invokeBatchGetDocumentsRpc(e3, t3) {
+        const n2 = __PRIVATE_debugCast(e3), r2 = {
+          documents: t3.map((e4) => __PRIVATE_toName(n2.serializer, e4))
+        }, i2 = await n2.st("BatchGetDocuments", n2.serializer.databaseId, ResourcePath.emptyPath(), r2, t3.length), s2 = /* @__PURE__ */ new Map();
+        i2.forEach((e4) => {
+          const t4 = __PRIVATE_fromBatchGetDocumentsResponse(n2.serializer, e4);
+          s2.set(t4.key.toString(), t4);
+        });
+        const _ = [];
+        return t3.forEach((e4) => {
+          const t4 = s2.get(e4.toString());
+          __PRIVATE_hardAssert(!!t4, 55234, {
+            key: e4
+          }), _.push(t4);
+        }), _;
+      }(this.datastore, e2);
+      return t2.forEach((e3) => this.recordVersion(e3)), t2;
+    }
+    set(e2, t2) {
+      this.write(t2.toMutation(e2, this.precondition(e2))), this.writtenDocs.add(e2.toString());
+    }
+    update(e2, t2) {
+      try {
+        this.write(t2.toMutation(e2, this.preconditionForUpdate(e2)));
+      } catch (e3) {
+        this.lastTransactionError = e3;
+      }
+      this.writtenDocs.add(e2.toString());
+    }
+    delete(e2) {
+      this.write(new __PRIVATE_DeleteMutation(e2, this.precondition(e2))), this.writtenDocs.add(e2.toString());
+    }
+    async commit() {
+      if (this.ensureCommitNotCalled(), this.lastTransactionError) throw this.lastTransactionError;
+      const e2 = this.readVersions;
+      this.mutations.forEach((t2) => {
+        e2.delete(t2.key.toString());
+      }), // For each document that was read but not written to, we want to perform
+      // a `verify` operation.
+      e2.forEach((e3, t2) => {
+        const n2 = DocumentKey.fromPath(t2);
+        this.mutations.push(new __PRIVATE_VerifyMutation(n2, this.precondition(n2)));
+      }), await async function __PRIVATE_invokeCommitRpc(e3, t2) {
+        const n2 = __PRIVATE_debugCast(e3), r2 = {
+          writes: t2.map((e4) => toMutation(n2.serializer, e4))
+        };
+        await n2.tt("Commit", n2.serializer.databaseId, ResourcePath.emptyPath(), r2);
+      }(this.datastore, this.mutations), this.committed = true;
+    }
+    recordVersion(e2) {
+      let t2;
+      if (e2.isFoundDocument()) t2 = e2.version;
+      else {
+        if (!e2.isNoDocument()) throw l(50498, {
+          Oc: e2.constructor.name
+        });
+        t2 = SnapshotVersion.min();
+      }
+      const n2 = this.readVersions.get(e2.key.toString());
+      if (n2) {
+        if (!t2.isEqual(n2))
+          throw new s(aa.ABORTED, "Document version changed between two reads.");
+      } else this.readVersions.set(e2.key.toString(), t2);
+    }
+    /**
+     * Returns the version of this document when it was read in this transaction,
+     * as a precondition, or no precondition if it was not read.
+     */
+    precondition(e2) {
+      const t2 = this.readVersions.get(e2.toString());
+      return !this.writtenDocs.has(e2.toString()) && t2 ? t2.isEqual(SnapshotVersion.min()) ? Precondition.exists(false) : Precondition.updateTime(t2) : Precondition.none();
+    }
+    /**
+     * Returns the precondition for a document if the operation is an update.
+     */
+    preconditionForUpdate(e2) {
+      const t2 = this.readVersions.get(e2.toString());
+      if (!this.writtenDocs.has(e2.toString()) && t2) {
+        if (t2.isEqual(SnapshotVersion.min()))
+          throw new s(aa.INVALID_ARGUMENT, "Can't update a document that doesn't exist.");
+        return Precondition.updateTime(t2);
+      }
+      return Precondition.exists(true);
+    }
+    write(e2) {
+      this.ensureCommitNotCalled(), this.mutations.push(e2);
+    }
+    ensureCommitNotCalled() {
+    }
+  };
+  var __PRIVATE_TransactionRunner = class {
+    constructor(e2, t2, n2, r2, i2) {
+      this.asyncQueue = e2, this.datastore = t2, this.options = n2, this.updateFunction = r2, this.deferred = i2, this.Mc = n2.maxAttempts, this.jt = new __PRIVATE_ExponentialBackoff(
+        this.asyncQueue,
+        "transaction_retry"
+        /* TimerId.TransactionRetry */
+      );
+    }
+    /** Runs the transaction and sets the result on deferred. */
+    Nc() {
+      this.Mc -= 1, this.Lc();
+    }
+    Lc() {
+      this.jt.Ut(async () => {
+        const e2 = new Transaction(this.datastore), t2 = this.Bc(e2);
+        t2 && t2.then((t3) => {
+          this.asyncQueue.enqueueAndForget(() => e2.commit().then(() => {
+            this.deferred.resolve(t3);
+          }).catch((e3) => {
+            this.Uc(e3);
+          }));
+        }).catch((e3) => {
+          this.Uc(e3);
+        });
+      });
+    }
+    Bc(e2) {
+      try {
+        const t2 = this.updateFunction(e2);
+        return !__PRIVATE_isNullOrUndefined(t2) && t2.catch && t2.then ? t2 : (this.deferred.reject(Error("Transaction callback must return a Promise")), null);
+      } catch (e3) {
+        return this.deferred.reject(e3), null;
+      }
+    }
+    Uc(e2) {
+      this.Mc > 0 && this.kc(e2) ? (this.Mc -= 1, this.asyncQueue.enqueueAndForget(() => (this.Lc(), Promise.resolve()))) : this.deferred.reject(e2);
+    }
+    kc(e2) {
+      if ("FirebaseError" === e2?.name) {
+        const t2 = e2.code;
+        return "aborted" === t2 || "failed-precondition" === t2 || "already-exists" === t2 || !__PRIVATE_isPermanentError(t2);
+      }
+      return false;
+    }
+  };
   var fr = "FirestoreClient";
   var FirestoreClient = class {
     constructor(e2, t2, n2, r2, i2) {
@@ -30246,8 +30133,8 @@ This typically indicates that your device does not have a healthy Internet conne
   async function __PRIVATE_ensureOnlineComponents(e2) {
     return e2._onlineComponents || (e2._uninitializedComponentsProvider ? (__PRIVATE_logDebug(fr, "Using user provided OnlineComponentProvider"), await __PRIVATE_setOnlineComponentProvider(e2, e2._uninitializedComponentsProvider._online)) : (__PRIVATE_logDebug(fr, "Using default OnlineComponentProvider"), await __PRIVATE_setOnlineComponentProvider(e2, new OnlineComponentProvider()))), e2._onlineComponents;
   }
-  function __PRIVATE_getSyncEngine(e2) {
-    return __PRIVATE_ensureOnlineComponents(e2).then((e3) => e3.syncEngine);
+  function __PRIVATE_getDatastore(e2) {
+    return __PRIVATE_ensureOnlineComponents(e2).then((e3) => e3.datastore);
   }
   async function __PRIVATE_getEventManager(e2) {
     const t2 = await __PRIVATE_ensureOnlineComponents(e2), n2 = t2.eventManager;
@@ -30259,9 +30146,12 @@ This typically indicates that your device does not have a healthy Internet conne
       i2.Aa(), e2.asyncQueue.enqueueAndForget(async () => __PRIVATE_eventManagerUnlisten(await __PRIVATE_getEventManager(e2), s2));
     };
   }
-  function __PRIVATE_firestoreClientWrite(e2, t2) {
-    const n2 = new __PRIVATE_Deferred();
-    return e2.asyncQueue.enqueueAndForget(async () => __PRIVATE_syncEngineWrite(await __PRIVATE_getSyncEngine(e2), t2, n2)), n2.promise;
+  function __PRIVATE_firestoreClientTransaction(e2, t2, n2) {
+    const r2 = new __PRIVATE_Deferred();
+    return e2.asyncQueue.enqueueAndForget(async () => {
+      const i2 = await __PRIVATE_getDatastore(e2);
+      new __PRIVATE_TransactionRunner(e2.asyncQueue, i2, n2, t2, r2).Nc();
+    }), r2.promise;
   }
   var mr = "AsyncQueue";
   var __PRIVATE_AsyncQueueImpl = class {
@@ -30663,6 +30553,27 @@ This typically indicates that your device does not have a healthy Internet conne
   function __PRIVATE_validateHasExplicitOrderByForLimitToLast(t2) {
     if ("L" === t2.limitType && 0 === t2.explicitOrderBy.length) throw new s(aa.UNIMPLEMENTED, "limitToLast() queries require specifying at least one orderBy() clause");
   }
+  function __PRIVATE_applyFirestoreDataConverter(t2, e2, n2) {
+    let r2;
+    return r2 = t2 ? n2 && (n2.merge || n2.mergeFields) ? t2.toFirestore(e2, n2) : t2.toFirestore(e2) : e2, r2;
+  }
+  var __PRIVATE_LiteUserDataWriter = class extends AbstractUserDataWriter {
+    constructor(t2) {
+      super(), this.firestore = t2;
+    }
+    convertBytes(t2) {
+      return new Bytes(t2);
+    }
+    convertReference(t2) {
+      const e2 = this.convertDocumentKey(t2, this.firestore._databaseId);
+      return new X(
+        this.firestore,
+        /* converter= */
+        null,
+        e2
+      );
+    }
+  };
   var SnapshotMetadata = class {
     /** @hideconstructor */
     constructor(t2, e2) {
@@ -30891,14 +30802,90 @@ This typically indicates that your device does not have a healthy Internet conne
     bundleName: property("string"),
     bundle: property("string")
   };
-  function updateDoc(t2, e2, n2, ...r2) {
-    t2 = ra(t2, X);
-    const o2 = ra(t2.firestore, da), i2 = la(o2);
-    let a;
-    a = "string" == typeof // For Compat types, we have to "extract" the underlying types before
-    // performing validation.
-    (e2 = getModularInstance(e2)) || e2 instanceof FieldPath2 ? __PRIVATE_parseUpdateVarargs(i2, "updateDoc", t2._key, e2, n2, r2) : __PRIVATE_parseUpdateData(i2, "updateDoc", t2._key, e2);
-    return executeWrite(o2, [a.toMutation(t2._key, Precondition.exists(true))]);
+  var jt = {
+    maxAttempts: 5
+  };
+  function __PRIVATE_validateReference(t2, e2) {
+    if ((t2 = getModularInstance(t2)).firestore !== e2) throw new s(aa.INVALID_ARGUMENT, "Provided document reference is from a different Firestore instance.");
+    return t2;
+  }
+  var Ut2 = class Transaction2 {
+    /** @hideconstructor */
+    constructor(t2, e2) {
+      this._firestore = t2, this._transaction = e2, this._dataReader = la(t2);
+    }
+    /**
+     * Reads the document referenced by the provided {@link DocumentReference}.
+     *
+     * @param documentRef - A reference to the document to be read.
+     * @returns A `DocumentSnapshot` with the read data.
+     */
+    get(t2) {
+      const e2 = __PRIVATE_validateReference(t2, this._firestore), n2 = new __PRIVATE_LiteUserDataWriter(this._firestore);
+      return this._transaction.lookup([e2._key]).then((t3) => {
+        if (!t3 || 1 !== t3.length) return l(24041);
+        const r2 = t3[0];
+        if (r2.isFoundDocument()) return new Jt(this._firestore, n2, r2.key, r2, e2.converter);
+        if (r2.isNoDocument()) return new Jt(this._firestore, n2, e2._key, null, e2.converter);
+        throw l(18433, {
+          doc: r2
+        });
+      });
+    }
+    set(t2, e2, n2) {
+      const r2 = __PRIVATE_validateReference(t2, this._firestore), s2 = __PRIVATE_applyFirestoreDataConverter(r2.converter, e2, n2), o2 = __PRIVATE_parseSetData(this._dataReader, "Transaction.set", r2._key, s2, null !== r2.converter, n2);
+      return this._transaction.set(r2._key, o2), this;
+    }
+    update(t2, e2, n2, ...r2) {
+      const s2 = __PRIVATE_validateReference(t2, this._firestore);
+      let o2;
+      return o2 = "string" == typeof (e2 = getModularInstance(e2)) || e2 instanceof FieldPath2 ? __PRIVATE_parseUpdateVarargs(this._dataReader, "Transaction.update", s2._key, e2, n2, r2) : __PRIVATE_parseUpdateData(this._dataReader, "Transaction.update", s2._key, e2), this._transaction.update(s2._key, o2), this;
+    }
+    /**
+     * Deletes the document referred to by the provided {@link DocumentReference}.
+     *
+     * @param documentRef - A reference to the document to be deleted.
+     * @returns This `Transaction` instance. Used for chaining method calls.
+     */
+    delete(t2) {
+      const e2 = __PRIVATE_validateReference(t2, this._firestore);
+      return this._transaction.delete(e2._key), this;
+    }
+  };
+  var Transaction3 = class extends Ut2 {
+    // This class implements the same logic as the Transaction API in the Lite SDK
+    // but is subclassed in order to return its own DocumentSnapshot types.
+    /** @hideconstructor */
+    constructor(t2, e2) {
+      super(t2, e2), this._firestore = t2;
+    }
+    /**
+     * Reads the document referenced by the provided {@link DocumentReference}.
+     *
+     * @param documentRef - A reference to the document to be read.
+     * @returns A `DocumentSnapshot` with the read data.
+     */
+    get(t2) {
+      const e2 = __PRIVATE_validateReference(t2, this._firestore), n2 = new ua(this._firestore);
+      return super.get(t2).then((t3) => new DocumentSnapshot2(this._firestore, n2, e2._key, t3._document, new SnapshotMetadata(
+        /* hasPendingWrites= */
+        false,
+        /* fromCache= */
+        false
+      ), e2.converter));
+    }
+  };
+  function runTransaction(t2, e2, n2) {
+    t2 = ra(t2, da);
+    const r2 = {
+      ...jt,
+      ...n2
+    };
+    !function __PRIVATE_validateTransactionOptions(t3) {
+      if (t3.maxAttempts < 1) throw new s(aa.INVALID_ARGUMENT, "Max attempts must be at least 1");
+    }(r2);
+    const o2 = oa(t2);
+    return __PRIVATE_firestoreClientTransaction(o2, (n3) => e2(new Transaction3(t2, n3)), r2);
   }
   function onSnapshot(t2, ...e2) {
     t2 = getModularInstance(t2);
@@ -30937,10 +30924,6 @@ This typically indicates that your device does not have a healthy Internet conne
     }
     const c2 = oa(a);
     return __PRIVATE_firestoreClientListen(c2, u2, o2, i2);
-  }
-  function executeWrite(t2, e2) {
-    const n2 = oa(t2);
-    return __PRIVATE_firestoreClientWrite(n2, e2);
   }
   function __PRIVATE_convertToDocSnapshot(t2, e2, n2) {
     const r2 = n2.docs.get(e2._key), s2 = new ua(t2);
@@ -31061,37 +31044,40 @@ This typically indicates that your device does not have a healthy Internet conne
   }
   updateClock();
   setInterval(updateClock, 3e4);
-  var latestTasks = [];
-  var latestRecurring = [];
-  function spawnNextRecurringInstance(task, tasksSoFar) {
-    if (!task.recurringId) return tasksSoFar;
-    const template = latestRecurring.find((r2) => r2.id === task.recurringId);
-    if (!template || template.active === false) return tasksSoFar;
-    if (hasPendingInstance(tasksSoFar, template.id)) return tasksSoFar;
-    const next = buildRecurringInstance(template, todayStr());
-    return [...tasksSoFar, next];
-  }
   async function completeTask(task) {
     const isLate = task.status === "expired";
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    let tasks = latestTasks.map(
-      (t2) => t2.id === task.id ? { ...t2, status: "completed", completedAt: now, rewardApplied: !isLate } : t2
-    );
-    tasks = spawnNextRecurringInstance(task, tasks);
-    await updateDoc(userRef, { tasks });
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(userRef);
+      const data = snap.data() || {};
+      const tasks = data.tasks || [];
+      let updated = tasks.map(
+        (t2) => t2.id === task.id ? { ...t2, status: "completed", completedAt: now, rewardApplied: !isLate } : t2
+      );
+      if (task.recurringId) {
+        const template = (data.recurringTasks || []).find((r2) => r2.id === task.recurringId);
+        if (template && template.active !== false && !hasPendingInstance(updated, template.id)) {
+          updated = [...updated, buildRecurringInstance(template, todayStr())];
+        }
+      }
+      transaction.update(userRef, { tasks: updated });
+    });
   }
   async function uncompleteTask(task) {
-    let tasks = latestTasks.map(
-      (t2) => t2.id === task.id ? { ...t2, status: "active", completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false } : t2
-    );
-    if (task.recurringId) {
-      tasks = tasks.filter((t2) => !(t2.recurringId === task.recurringId && t2.id !== task.id && t2.status === "active"));
-    }
-    await updateDoc(userRef, { tasks });
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(userRef);
+      const data = snap.data() || {};
+      const tasks = data.tasks || [];
+      let updated = tasks.map(
+        (t2) => t2.id === task.id ? { ...t2, status: "active", completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false } : t2
+      );
+      if (task.recurringId) {
+        updated = updated.filter((t2) => !(t2.recurringId === task.recurringId && t2.id !== task.id && t2.status === "active"));
+      }
+      transaction.update(userRef, { tasks: updated });
+    });
   }
-  function render(tasks, recurring) {
-    latestTasks = tasks;
-    latestRecurring = recurring;
+  function render(tasks) {
     const today = todayStr();
     const dayTasks = (tasks || []).filter(
       (t2) => t2.status === "active" && t2.deadline <= today || t2.status === "expired" || t2.status === "completed" && typeof t2.completedAt === "string" && t2.completedAt.startsWith(today)
@@ -31162,7 +31148,7 @@ This typically indicates that your device does not have a healthy Internet conne
       boardView.style.display = "flex";
       unsubscribe = onSnapshot(userRef, (snap) => {
         const data = snap.data() || {};
-        render(data.tasks || [], data.recurringTasks || []);
+        render(data.tasks || []);
       }, () => {
         listEl.innerHTML = '<div class="empty">Errore di connessione</div>';
       });
@@ -32994,6 +32980,8 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2020 Google LLC
@@ -33013,6 +33001,22 @@ re2js/build/index.js:
   (**
    * @license
    * Copyright 2018 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+  (**
+   * @license
+   * Copyright 2017 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
    * you may not use this file except in compliance with the License.
@@ -33332,6 +33336,40 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+  (**
+   * @license
+   * Copyright 2020 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
   (**
    * @license
    * Copyright 2018 Google LLC
@@ -33507,6 +33545,24 @@ re2js/build/index.js:
 
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (* Copyright 2024 Google LLC* @license *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
 
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
@@ -34034,6 +34090,40 @@ re2js/build/index.js:
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+  (**
+   * @license
+   * Copyright 2020 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
    * Copyright 2025 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34172,29 +34262,9 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2019 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
-  (**
-   * @license
-   * Copyright 2017 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
    * you may not use this file except in compliance with the License.
@@ -34452,44 +34522,6 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
-
-@firebase/firestore/dist/index.esm.js:
-  (**
-   * @license
-   * Copyright 2020 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-
-@firebase/firestore/dist/index.esm.js:
-  (**
-   * @license
-   * Copyright 2020 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
-
-@firebase/firestore/dist/index.esm.js:
   (**
    * @license
    * Copyright 2020 Google LLC

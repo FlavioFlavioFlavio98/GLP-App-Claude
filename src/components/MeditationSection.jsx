@@ -171,7 +171,7 @@ export default function MeditationSection({ meditationLog, meditationNotes, acti
                   <button
                     className="btn-icon"
                     style={{ padding: 2 }}
-                    onClick={() => actions.deleteMeditationEntry(e.date, e.id)}
+                    onClick={() => { const { date, ...original } = e; actions.deleteMeditationEntry(date, original) }}
                   >
                     <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>
                   </button>

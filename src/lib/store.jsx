@@ -5,7 +5,7 @@ import { app } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
   doc, onSnapshot, updateDoc, setDoc, getDoc, deleteDoc,
-  arrayUnion, collection, getDocs, increment, runTransaction,
+  arrayUnion, arrayRemove, collection, getDocs, increment, runTransaction,
   addDoc, serverTimestamp, deleteField,
 } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
@@ -17,6 +17,7 @@ import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFOR
 import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
 import { getMeditationRate } from './meditationStats'
+import { computeMealPoints, getMealLevelInfo } from './mealStats'
 import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
@@ -1164,14 +1165,44 @@ export function AppProvider({ children }) {
       actions.showToast(`Sessione da ${mins} min registrata! +${rate}pt 🧘`, '🧘')
     },
 
-    async deleteMeditationEntry(dateStr, logId) {
+    // Pasti consapevoli: sessione stile workout (inizio/fine dal componente),
+    // qui si registra solo il risultato finale — durata + autovalutazione di
+    // quanto sei stato calmo (non rileviamo le masticazioni senza sensori).
+    async logMeal(durationMin, level) {
       if (state.authUserId !== 'flavio') return
-      const gd = state.allUsersData?.flavio
-      if (!gd) return
-      const dayLog = (gd.meditationLog?.[dateStr] || [])
-      const newLog = dayLog.filter(e => e.id !== logId)
+      const mins = Math.max(1, Math.round(durationMin))
+      const pts = computeMealPoints(mins, level)
+      const logDate = toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        durationMin: mins,
+        level,
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
       const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { [`meditationLog.${dateStr}`]: newLog })
+      await updateDoc(ref, { [`mealLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      const levelInfo = getMealLevelInfo(level)
+      actions.showToast(`Pasto registrato: ${mins} min ${levelInfo.emoji} — +${pts}pt`, '🍽️')
+    },
+
+    // arrayRemove invece di leggere+filtrare+riscrivere l'intero giorno:
+    // niente lettura, niente race con scritture concorrenti (stessa lezione
+    // della revisione di oggi) — funziona perché l'oggetto arriva identico
+    // a come è salvato (stesso riferimento passato dalla UI).
+    async deleteMealEntry(dateStr, entry) {
+      if (state.authUserId !== 'flavio') return
+      await updateDoc(doc(db, 'users', 'flavio'), { [`mealLog.${dateStr}`]: arrayRemove(entry) })
+      actions.showToast('Voce eliminata', '🗑️')
+    },
+
+    // arrayRemove invece di leggere+filtrare+riscrivere l'intero giorno:
+    // niente lettura, niente race con scritture concorrenti (stessa lezione
+    // della revisione di oggi).
+    async deleteMeditationEntry(dateStr, entry) {
+      if (state.authUserId !== 'flavio') return
+      await updateDoc(doc(db, 'users', 'flavio'), { [`meditationLog.${dateStr}`]: arrayRemove(entry) })
       actions.showToast('Voce eliminata', '↩️')
     },
 

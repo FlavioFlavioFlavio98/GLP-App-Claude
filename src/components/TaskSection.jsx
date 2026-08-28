@@ -188,17 +188,13 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
   const isExpired   = variant === 'expired'
   const isActive    = variant === 'active'
 
-  const borderColor = isCompleted ? 'rgba(76,175,80,0.2)'
-    : isExpired ? 'rgba(229,57,53,0.4)'
-    : 'var(--card-border)'
-
-  const bgColor = isCompleted ? 'rgba(76,175,80,0.06)'
-    : isExpired ? 'rgba(229,57,53,0.06)'
-    : 'var(--card)'
-
-  const accentColor = isCompleted ? '#4caf50'
-    : isExpired ? '#e53935'
-    : getDeadlineColor(task.deadline)
+  // Scadute: solo il badge "SCADUTA" resta rosso come avviso puntuale — il
+  // resto della card è identico a una task normale (sfondo/bordo/colori), per
+  // non dare l'impressione di una situazione di allarme ogni volta che una
+  // task resta indietro.
+  const borderColor = isCompleted ? 'rgba(76,175,80,0.2)' : 'var(--card-border)'
+  const bgColor = isCompleted ? 'rgba(76,175,80,0.06)' : 'var(--card)'
+  const accentColor = isCompleted ? '#4caf50' : getDeadlineColor(task.deadline)
 
   const pColor = PRIORITY_COLORS[task.priority] || '#ff7043'
   const pLabel = PRIORITY_LABELS[task.priority] || 'MEDIA'
@@ -242,7 +238,6 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{
             fontWeight: 600, fontSize: '0.9em', color: 'var(--text)',
-            opacity: isExpired ? 0.7 : 1,
             textDecoration: isCompleted ? 'line-through' : 'none',
           }}>{task.title}</span>
 
@@ -292,8 +287,8 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
           )}
           {isExpired && (
             <>
-              <span style={{ fontSize: '0.7em', color: '#e53935', fontWeight: 600 }}>📅 scad. {deadline}</span>
-              <span style={{ fontSize: '0.68em', color: '#e53935', opacity: 0.8 }}>-{task.penalty}pt applicati</span>
+              <span style={{ fontSize: '0.7em', color: accentColor, fontWeight: 600 }}>📅 scad. {deadline}</span>
+              <span style={{ fontSize: '0.68em', color: '#555' }}>-{task.penalty}pt applicati</span>
             </>
           )}
         </div>
@@ -350,8 +345,8 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
             onPointerDown={e => e.stopPropagation()}
             style={{
               width: 36, height: 36, borderRadius: '50%',
-              border: '2px solid rgba(229,57,53,0.3)',
-              background: 'rgba(229,57,53,0.06)', color: '#e53935',
+              border: '2px solid rgba(255,255,255,0.15)',
+              background: 'rgba(255,255,255,0.05)', color: '#888',
               cursor: 'pointer', display: 'flex', alignItems: 'center',
               justifyContent: 'center', fontSize: '1em',
             }}

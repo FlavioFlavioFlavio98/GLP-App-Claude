@@ -31107,14 +31107,14 @@ This typically indicates that your device does not have a healthy Internet conne
     } else {
       for (const t2 of dayTasks) {
         const row = document.createElement("div");
-        row.className = "row" + (t2.status === "completed" ? " done" : "") + " clickable";
-        row.title = t2.status === "completed" ? "Tocca per annullare il completamento" : "Tocca per completare";
-        row.addEventListener("click", () => {
+        row.className = "row" + (t2.status === "completed" ? " done" : "");
+        const check = document.createElement("div");
+        check.className = "check clickable" + (t2.status === "completed" ? " checked" : "");
+        check.title = t2.status === "completed" ? "Tocca per annullare il completamento" : "Tocca per completare";
+        check.addEventListener("click", () => {
           if (t2.status === "completed") uncompleteTask(t2);
           else completeTask(t2);
         });
-        const check = document.createElement("div");
-        check.className = "check" + (t2.status === "completed" ? " checked" : "");
         if (t2.status === "completed") {
           check.textContent = "\u2713";
         } else {

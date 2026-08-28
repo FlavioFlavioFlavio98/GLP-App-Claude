@@ -38,8 +38,23 @@
    una colonna leggibile — stesso pattern "cornice da telefono" di qualunque
    PWA mobile-first vista da desktop. Gli elementi fixed (nav, FAB, overlay)
    vanno vincolati singolarmente perché ignorano la larghezza di #root. */
+/* Su schermi da laptop la colonna fissa a 480px lascia due grosse fasce
+   vuote ai lati — non serve un redesign a più colonne, basta allargare
+   gradualmente la colonna così lo spazio orizzontale viene sfruttato meglio,
+   restando comunque leggibile (niente righe di testo troppo lunghe).
+   --app-max-width è condivisa con gli elementi "fixed" (es. .fab) che
+   altrimenti ignorano la larghezza di #root e restano ancorati al bordo del
+   viewport invece che alla colonna visibile. */
+:root { --app-max-width: 480px; }
+@media (min-width: 900px) {
+  :root { --app-max-width: 640px; }
+}
+@media (min-width: 1280px) {
+  :root { --app-max-width: 760px; }
+}
+
 #root {
-  max-width: 480px;
+  max-width: var(--app-max-width);
   margin: 0 auto;
   position: relative;
 }
@@ -461,7 +476,8 @@ body.offline .offline-badge { display: block; }
 
 /* FAB */
 .fab {
-  position: fixed; bottom: 50px; right: 24px;
+  position: fixed; bottom: 50px;
+  right: max(24px, calc((100vw - var(--app-max-width)) / 2 + 24px));
   width: 50px; height: 50px;
   background: var(--theme-color); color: #000;
   border-radius: 50%; border: none;

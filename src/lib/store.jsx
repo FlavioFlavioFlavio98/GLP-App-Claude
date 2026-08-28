@@ -15,6 +15,7 @@ import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
 import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFORT, getMobilityRate, getStudyRate } from './workoutStats'
 import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
+import { getMeditationRate } from './meditationStats'
 import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
@@ -1119,6 +1120,45 @@ export function AppProvider({ children }) {
       actions.showToast('Voce eliminata', '↩️')
     },
 
+    // ─── Meditazione ──────────────────────────────────────────────────────────
+    // Micro-momenti (es. 60 sec) loggati con un tap quando li fai — nessun
+    // dialogo, nessuna scelta successo/fallimento: se tocchi il pulsante è
+    // perché l'hai fatto. +pt per gamification, statistiche/streak per
+    // motivare la costanza. Usata anche dal widget 1x1 Android.
+    async logMeditation() {
+      if (state.authUserId !== 'flavio') return
+      const rate = getMeditationRate()
+      const logDate = toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        pts: rate,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`meditationLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      actions.showToast(`Momento registrato! +${rate}pt 🧘`, '🧘')
+    },
+
+    async deleteMeditationEntry(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.meditationLog?.[dateStr] || [])
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`meditationLog.${dateStr}`]: newLog })
+      actions.showToast('Voce eliminata', '↩️')
+    },
+
+    async saveMeditationNote(dateStr, text) {
+      if (isReadOnly()) return
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      await updateDoc(ref, { [`meditationNotes.${dateStr}`]: (text || '').trim() })
+      actions.showToast('Nota salvata', '📝')
+    },
+
     // ─── Riepilogo Giornata ── trascrizione vocale incollata → riepilogo AI a
     // categorie fisse (vedi generateDayRecap in Cloud Functions). I punti si
     // guadagnano solo alla prima generazione del giorno, non rigenerando.
@@ -2114,6 +2154,84 @@ export function AppProvider({ children }) {
       const recurringTasks = (globalData.recurringTasks || []).filter(r => r.id !== id)
       await updateDoc(doc(db, 'users', authUserId), { recurringTasks })
       actions.showToast('Ricorrenza eliminata', '🗑️')
+    },
+
+    // ─── Scoperte (note con ripasso periodico) ─────────────────────────────────
+    // Cose che capitano e che si vogliono ricordare/riapprofondire ogni tanto
+    // (es. "mascherina per dormire, ricontrolla tra 3 giorni"). A differenza
+    // delle task ricorrenti, nessuna evidenza/badge quando scadono — sono solo
+    // ordinate per data di prossimo ripasso, e la data resta sempre modificabile
+    // a mano (pieno controllo, per esplicita richiesta di Flavio). "Ripassare"
+    // posticipa automaticamente di intervalDays giorni e alimenta le statistiche
+    // (reviewCount/reviewHistory) che servono da motivazione ("quante volte ci
+    // sono tornato sopra").
+    async addDiscovery({ title, note, intervalDays, nextReviewAt }) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const todayStr = toDateString(new Date())
+      const discovery = {
+        id: `disc_${Date.now().toString(36)}`,
+        title: title.trim(),
+        note: (note || '').trim(),
+        intervalDays: Math.max(1, parseInt(intervalDays) || 3),
+        nextReviewAt: nextReviewAt || todayStr,
+        createdAt: new Date().toISOString(),
+        reviewCount: 0,
+        lastReviewedAt: null,
+        reviewHistory: [],
+        archived: false,
+      }
+      const discoveries = [...(globalData.discoveries || []), discovery]
+      await updateDoc(doc(db, 'users', authUserId), { discoveries })
+      actions.showToast('Scoperta salvata!', '💡')
+    },
+
+    async updateDiscovery(id, updates) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const discoveries = (globalData.discoveries || []).map(d =>
+        d.id === id ? { ...d, ...updates } : d
+      )
+      await updateDoc(doc(db, 'users', authUserId), { discoveries })
+      actions.showToast('Scoperta aggiornata', '✏️')
+    },
+
+    async reviewDiscovery(id) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const now = new Date().toISOString()
+      const todayStr = toDateString(new Date())
+      const discoveries = (globalData.discoveries || []).map(d => {
+        if (d.id !== id) return d
+        return {
+          ...d,
+          reviewCount: (d.reviewCount || 0) + 1,
+          lastReviewedAt: now,
+          nextReviewAt: addDays(todayStr, d.intervalDays),
+          reviewHistory: [...(d.reviewHistory || []), now].slice(-100),
+        }
+      })
+      await updateDoc(doc(db, 'users', authUserId), { discoveries })
+      actions.showToast('Ripassata! 👍', '💡')
+    },
+
+    async archiveDiscovery(id, archived = true) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const discoveries = (globalData.discoveries || []).map(d =>
+        d.id === id ? { ...d, archived } : d
+      )
+      await updateDoc(doc(db, 'users', authUserId), { discoveries })
+      actions.showToast(archived ? 'Scoperta archiviata' : 'Scoperta ripristinata', archived ? '📦' : '↩️')
+    },
+
+    async deleteDiscovery(id) {
+      if (isReadOnly()) return
+      if (!window.confirm('Eliminare definitivamente questa scoperta?')) return
+      const { authUserId, globalData } = state
+      const discoveries = (globalData.discoveries || []).filter(d => d.id !== id)
+      await updateDoc(doc(db, 'users', authUserId), { discoveries })
+      actions.showToast('Scoperta eliminata', '🗑️')
     },
 
     async reopenTask(task, newDeadline) {

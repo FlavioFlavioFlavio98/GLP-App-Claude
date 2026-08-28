@@ -381,6 +381,10 @@ class MainActivity : BridgeActivity() {
                 @Suppress("UNCHECKED_CAST")
                 val cachedFoods = doc.get("proteinFoods") as? List<Map<String, Any>> ?: emptyList()
 
+                @Suppress("UNCHECKED_CAST")
+                val meditationLog = doc.get("meditationLog") as? Map<String, Any> ?: emptyMap()
+                val meditationCountToday = (meditationLog[today] as? List<*>)?.size ?: 0
+
                 // Salva in SharedPreferences — tutto Int per evitare ClassCastException
                 getSharedPreferences("glp_widget", Context.MODE_PRIVATE).edit()
                     .putString("active_tasks", Gson().toJson(activeTasks.take(TaskWidgetProvider.MAX_ROWS)))
@@ -397,6 +401,7 @@ class MainActivity : BridgeActivity() {
                     .putInt("habits_total", activeHabits.size)
                     .putInt("streak", streak)
                     .putInt("total_score_int", score.toInt())
+                    .putInt("meditation_count_today", meditationCountToday)
                     .putString("pending_habits", Gson().toJson(pendingHabits.take(5)))
                     // Counter per le notifiche locali
                     .putInt("notification_habits_pending", pendingHabits.size)
@@ -423,6 +428,9 @@ class MainActivity : BridgeActivity() {
 
                 val habitsIds = manager.getAppWidgetIds(ComponentName(this, HabitsWidgetProvider::class.java))
                 habitsIds.forEach { HabitsWidgetProvider.updateWidget(this, manager, it) }
+
+                val meditationIds = manager.getAppWidgetIds(ComponentName(this, MeditationWidgetProvider::class.java))
+                meditationIds.forEach { MeditationWidgetProvider.updateWidget(this, manager, it) }
             }
             .addOnFailureListener {
                 android.util.Log.e("GLPWidget", "Firestore error: ${it.message}")

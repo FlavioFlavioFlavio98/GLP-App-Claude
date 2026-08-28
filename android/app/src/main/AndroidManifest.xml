@@ -169,6 +169,18 @@
         <!-- Service per azioni abitudini dal widget -->
         <service android:name=".HabitActionService" android:exported="false"/>
 
+        <!-- Widget 1x1 meditazione: tap = un momento loggato all'istante -->
+        <receiver android:name=".MeditationWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/meditation_widget_info"/>
+        </receiver>
+        <service android:name=".MeditationActionService" android:exported="false"/>
+
         <!-- Widget 2x4 abitudini del giorno -->
         <receiver android:name=".HabitsWidgetProvider"
             android:exported="true">

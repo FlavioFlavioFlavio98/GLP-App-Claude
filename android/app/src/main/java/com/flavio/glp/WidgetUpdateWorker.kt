@@ -121,6 +121,11 @@ class WidgetUpdateWorker(
                 habit["archivedAt"] == null && !doneList.contains(id) && !failedList.contains(id)
             }
 
+            // ── Momenti di meditazione di oggi (per il widget 1x1) ─────────────
+            @Suppress("UNCHECKED_CAST")
+            val meditationLog = doc.get("meditationLog") as? Map<String, Any> ?: emptyMap()
+            val meditationCountToday = (meditationLog[today] as? List<*>)?.size ?: 0
+
             @Suppress("UNCHECKED_CAST")
             val cachedExercises = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
             @Suppress("UNCHECKED_CAST")
@@ -145,6 +150,7 @@ class WidgetUpdateWorker(
                 .putInt("habits_total",      activeHabits.size)
                 .putInt("streak",            streak)
                 .putInt("total_score_int",   score.toInt())
+                .putInt("meditation_count_today", meditationCountToday)
                 // Cache locale per i dialog di aggiunta rapida (AddWorkoutActivity,
                 // AddProteinActivity) — vedi commento nello stesso punto in MainActivity.
                 .putString("cached_exercises", Gson().toJson(cachedExercises))
@@ -162,6 +168,9 @@ class WidgetUpdateWorker(
 
             manager.getAppWidgetIds(ComponentName(context, HabitsWidgetProvider::class.java))
                 .forEach { HabitsWidgetProvider.updateWidget(context, manager, it) }
+
+            manager.getAppWidgetIds(ComponentName(context, MeditationWidgetProvider::class.java))
+                .forEach { MeditationWidgetProvider.updateWidget(context, manager, it) }
 
             android.util.Log.d("GLPWidget", "Worker: earned=$earned spent=$spent net=$net streak=$streak")
             Result.success()

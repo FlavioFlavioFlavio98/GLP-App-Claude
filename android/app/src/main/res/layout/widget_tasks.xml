@@ -186,6 +186,18 @@
                 android:textSize="12sp"
                 android:visibility="gone"/>
 
+            <!-- Completate del giorno: mai righe singole (occupavano tutto lo
+                 spazio visibile, senza scroll, nascondendo le task da fare) —
+                 solo un conteggio, tap apre l'app per i dettagli. -->
+            <TextView
+                android:id="@+id/widget_completed_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#4CAF50"
+                android:textSize="11sp"
+                android:layout_marginTop="6dp"
+                android:visibility="gone"/>
+
         </LinearLayout>
     </LinearLayout>
 

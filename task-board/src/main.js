@@ -136,15 +136,18 @@ function render(tasks, recurring) {
   } else {
     for (const t of dayTasks) {
       const row = document.createElement('div')
-      row.className = 'row' + (t.status === 'completed' ? ' done' : '') + ' clickable'
-      row.title = t.status === 'completed' ? 'Tocca per annullare il completamento' : 'Tocca per completare'
-      row.addEventListener('click', () => {
+      row.className = 'row' + (t.status === 'completed' ? ' done' : '')
+
+      // Solo il cerchietto completa/annulla — cliccare sul titolo non deve
+      // fare nulla, altrimenti un tap per leggere il testo completa per
+      // sbaglio la task.
+      const check = document.createElement('div')
+      check.className = 'check clickable' + (t.status === 'completed' ? ' checked' : '')
+      check.title = t.status === 'completed' ? 'Tocca per annullare il completamento' : 'Tocca per completare'
+      check.addEventListener('click', () => {
         if (t.status === 'completed') uncompleteTask(t)
         else completeTask(t)
       })
-
-      const check = document.createElement('div')
-      check.className = 'check' + (t.status === 'completed' ? ' checked' : '')
       if (t.status === 'completed') {
         check.textContent = '✓'
       } else {

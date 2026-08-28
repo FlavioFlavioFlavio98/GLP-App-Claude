@@ -135,23 +135,32 @@ class TaskWidgetProvider : AppWidgetProvider() {
             val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
             views.setTextViewText(R.id.widget_updated, "Aggiornato: ${timeFormat.format(Date())}")
 
-            // Legge task attive + completate per la data selezionata — le attive
-            // vengono sempre prima, le completate (sbarrate) riempiono gli slot
-            // restanti fino a un massimo di 5 righe totali.
+            // Legge task attive/scadute per la data selezionata. Le completate
+            // NON occupano più righe singole: senza scroll (RemoteViews non lo
+            // supporta) riempivano tutto lo spazio visibile e nascondevano le
+            // task ancora da fare — ora solo un conteggio riassuntivo in fondo.
             val type = object : TypeToken<List<Map<String, Any>>>() {}.type
             val activeTasks: List<Map<String, Any>> =
                 Gson().fromJson(prefs.getString("active_tasks", "[]") ?: "[]", type) ?: emptyList()
             val completedTasks: List<Map<String, Any>> =
                 Gson().fromJson(prefs.getString("completed_tasks_widget", "[]") ?: "[]", type) ?: emptyList()
 
-            val rows = (activeTasks.map { it to false } + completedTasks.map { it to true }).take(MAX_ROWS)
+            if (completedTasks.isEmpty()) {
+                views.setViewVisibility(R.id.widget_completed_summary, View.GONE)
+            } else {
+                views.setViewVisibility(R.id.widget_completed_summary, View.VISIBLE)
+                views.setTextViewText(R.id.widget_completed_summary, "✓ ${completedTasks.size} completat${if (completedTasks.size == 1) "a" else "e"}")
+                views.setOnClickPendingIntent(R.id.widget_completed_summary, openAppPendingIntent)
+            }
+
+            val rows = activeTasks.take(MAX_ROWS)
 
             if (rows.isEmpty()) {
                 views.setViewVisibility(R.id.widget_empty, View.VISIBLE)
                 ROW_IDS.forEach { id -> views.setViewVisibility(id, View.GONE) }
             } else {
                 views.setViewVisibility(R.id.widget_empty, View.GONE)
-                rows.forEachIndexed { index, (task, isCompleted) ->
+                rows.forEachIndexed { index, task ->
                     val taskId = task["id"]?.toString() ?: ""
                     val name = task["title"] as? String ?: "Task"
                     val reward = when (val r = task["reward"]) {
@@ -171,47 +180,32 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     // Task scadute (penalità già applicata a mezzanotte, mai
                     // completate) restano visibili nel widget invece di
                     // sparire — vedi TaskWidgetUtils.activeTasksForDate.
-                    val isExpired = !isCompleted && (task["status"] as? String) == "expired"
+                    val isExpired = (task["status"] as? String) == "expired"
 
                     views.setTextViewText(NAME_IDS[index], name)
-                    views.setInt(
-                        NAME_IDS[index], "setPaintFlags",
-                        if (isCompleted) Paint.STRIKE_THRU_TEXT_FLAG or Paint.ANTI_ALIAS_FLAG else Paint.ANTI_ALIAS_FLAG
-                    )
+                    views.setInt(NAME_IDS[index], "setPaintFlags", Paint.ANTI_ALIAS_FLAG)
                     views.setTextColor(
                         NAME_IDS[index],
-                        when {
-                            isCompleted -> android.graphics.Color.parseColor("#666666")
-                            isExpired -> android.graphics.Color.parseColor("#EB5757")
-                            else -> android.graphics.Color.WHITE
-                        }
+                        if (isExpired) android.graphics.Color.parseColor("#EB5757") else android.graphics.Color.WHITE
                     )
 
                     // Niente data nel meta: il widget è già filtrato per la data
                     // selezionata sopra, quindi è ridondante ripeterla per ogni riga.
-                    val meta = when {
-                        isCompleted -> "+${reward}pt ✓"
-                        isExpired -> "SCADUTA -${penalty}pt"
-                        else -> "+${reward}pt"
-                    }
+                    val meta = if (isExpired) "SCADUTA -${penalty}pt" else "+${reward}pt"
                     views.setTextViewText(META_IDS[index], meta)
 
                     // Cerchietto colorato in base alla priorità (stesso schema colori
                     // di taskColors.js sul web: alta/media/bassa = rosso/arancio/blu),
-                    // pieno verde quando completata, pieno rosso quando scaduta.
+                    // pieno rosso quando scaduta.
                     val priorityColor = when (priority) {
                         "high" -> "#EB5757"
                         "low"  -> "#4A90D9"
                         else   -> "#F2994A" // medium
                     }
-                    views.setImageViewResource(DOT_IDS[index], if (isCompleted || isExpired) R.drawable.circle_dot else R.drawable.circle_ring)
+                    views.setImageViewResource(DOT_IDS[index], if (isExpired) R.drawable.circle_dot else R.drawable.circle_ring)
                     views.setInt(
                         DOT_IDS[index], "setColorFilter",
-                        when {
-                            isCompleted -> android.graphics.Color.parseColor("#4CAF50")
-                            isExpired -> android.graphics.Color.parseColor("#EB5757")
-                            else -> android.graphics.Color.parseColor(priorityColor)
-                        }
+                        android.graphics.Color.parseColor(if (isExpired) "#EB5757" else priorityColor)
                     )
 
                     views.setViewVisibility(ROW_IDS[index], View.VISIBLE)
@@ -235,28 +229,23 @@ class TaskWidgetProvider : AppWidgetProvider() {
                     views.setOnClickPendingIntent(NAME_IDS[index], editPi)
                     views.setOnClickPendingIntent(META_IDS[index], editPi)
 
-                    if (isCompleted) {
-                        // Task già completata: il cerchietto è già "fatto", tap apre solo l'app
-                        views.setOnClickPendingIntent(DOT_IDS[index], openAppPendingIntent)
-                    } else {
-                        // Tap sul cerchietto → apre CompleteTaskActivity (conferma completamento)
-                        // — funziona anche per le scadute: si può ancora completarla in ritardo
-                        // e prendere la ricompensa, la penalità resta comunque applicata.
-                        val completeIntent = Intent(context, CompleteTaskActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            putExtra("task_id", taskId)
-                            putExtra("task_title", name)
-                            putExtra("task_reward", reward.toDouble())
-                            putExtra("task_priority", priority)
-                        }
-                        val completePi = PendingIntent.getActivity(
-                            context,
-                            appWidgetId * 10 + index,
-                            completeIntent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                        )
-                        views.setOnClickPendingIntent(DOT_IDS[index], completePi)
+                    // Tap sul cerchietto → apre CompleteTaskActivity (conferma completamento)
+                    // — funziona anche per le scadute: si può ancora completarla in ritardo
+                    // e prendere la ricompensa, la penalità resta comunque applicata.
+                    val completeIntent = Intent(context, CompleteTaskActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        putExtra("task_id", taskId)
+                        putExtra("task_title", name)
+                        putExtra("task_reward", reward.toDouble())
+                        putExtra("task_priority", priority)
                     }
+                    val completePi = PendingIntent.getActivity(
+                        context,
+                        appWidgetId * 10 + index,
+                        completeIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    views.setOnClickPendingIntent(DOT_IDS[index], completePi)
                 }
                 for (i in rows.size until MAX_ROWS) {
                     views.setViewVisibility(ROW_IDS[i], View.GONE)

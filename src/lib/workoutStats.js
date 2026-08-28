@@ -539,11 +539,12 @@ export function computeAllStats(exerciseLog, exerciseId) {
   }
 
   // ── Lifetime ──
-  let lifetimeReps = 0, lifetimeSessions = 0
+  let lifetimeReps = 0, lifetimeSessions = 0, lifetimePts = 0
   allDates.forEach(d => {
     const ss = sessionsOnDate(d)
-    ss.forEach(s => { lifetimeReps += s.reps; lifetimeSessions++ })
+    ss.forEach(s => { lifetimeReps += s.reps; lifetimeSessions++; lifetimePts += (s.pts || 0) })
   })
+  lifetimePts = Math.round(lifetimePts * 100) / 100
   const avgPerSession = lifetimeSessions > 0 ? Math.round(lifetimeReps / lifetimeSessions) : 0
 
   // ── Week ──
@@ -579,31 +580,43 @@ export function computeAllStats(exerciseLog, exerciseId) {
   // ── Records ──
   let bestSession = null, bestSessionReps = 0, bestSessionDate = null
   let bestDay = null, bestDayReps = 0
+  let bestPtsDay = null, bestPtsDayValue = 0
+  // Storico completo, più recente prima — reps E punti per giorno, non solo
+  // reps: a parità di ripetizioni lo sforzo percepito cambia molto il
+  // punteggio (es. 100 reps "leggero" vs 100 reps "a cedimento").
+  const history = []
   allDates.forEach(d => {
     const dayTotal = repsOnDate(d)
     if (dayTotal > bestDayReps) { bestDayReps = dayTotal; bestDay = d }
-    sessionsOnDate(d).forEach(s => {
+    const daySessions = sessionsOnDate(d)
+    let dayPts = 0
+    daySessions.forEach(s => {
+      dayPts += (s.pts || 0)
       if (s.reps > bestSessionReps) { bestSessionReps = s.reps; bestSession = s; bestSessionDate = d }
     })
+    dayPts = Math.round(dayPts * 100) / 100
+    if (dayPts > bestPtsDayValue) { bestPtsDayValue = dayPts; bestPtsDay = d }
+    if (daySessions.length > 0) {
+      history.push({ date: d, reps: dayTotal, pts: dayPts, sessions: daySessions.slice().reverse() })
+    }
   })
+  history.reverse()
 
   // ── Today ──
   const todayReps = repsOnDate(todayStr)
   const todaySessions = sessionsOnDate(todayStr)
   const isNewRecord = todaySessions.length > 0 && bestSessionDate === todayStr && lifetimeSessions > 1
 
-  // ── Streak ──
-  const streak = computeStreak(exerciseLog, exerciseId)
-
   return {
-    lifetimeReps, lifetimeSessions, avgPerSession,
+    lifetimeReps, lifetimeSessions, lifetimePts, avgPerSession,
     weekReps, lastWeekReps, weekDelta,
     monthReps, lastMonthReps, monthDelta,
     bestSessionReps, bestSessionDate,
     bestDayReps, bestDay,
+    bestPtsDay, bestPtsDayValue,
     todayReps, todaySessions,
     isNewRecord,
-    streak,
+    history,
   }
 }
 

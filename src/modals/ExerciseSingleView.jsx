@@ -78,6 +78,70 @@ function DeltaBadge({ delta }) {
   )
 }
 
+// Heatmap frequenza: ultime ~18 settimane (poco più di 4 mesi), stile
+// GitHub — colora in base a quante volte quel giorno hai fatto l'esercizio
+// (di solito 0 o 1, ma qualche giorno può capitare 2+ sessioni).
+function heatmapColor(count, isLight) {
+  if (!count) return isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)'
+  if (count === 1) return 'rgba(255,202,40,0.45)'
+  if (count === 2) return 'rgba(255,202,40,0.75)'
+  return 'rgba(255,202,40,1)'
+}
+
+function ExerciseHeatmap({ exerciseLog, exerciseId, isLight }) {
+  const WEEKS = 18
+  const weeks = useMemo(() => {
+    const today = new Date()
+    const dow = today.getDay() || 7 // lunedì = 1 ... domenica = 7
+    const thisMonday = new Date(today)
+    thisMonday.setDate(today.getDate() - (dow - 1))
+
+    const result = []
+    for (let w = WEEKS - 1; w >= 0; w--) {
+      const weekStart = new Date(thisMonday)
+      weekStart.setDate(thisMonday.getDate() - w * 7)
+      const week = []
+      for (let d = 0; d < 7; d++) {
+        const cur = new Date(weekStart)
+        cur.setDate(weekStart.getDate() + d)
+        const key = toDateString(cur)
+        const count = (exerciseLog[key] || []).filter(s => s.exerciseId === exerciseId).length
+        week.push({ key, count, future: cur > today })
+      }
+      result.push(week)
+    }
+    return result
+  }, [exerciseLog, exerciseId])
+
+  const activeDays = weeks.flat().filter(d => !d.future && d.count > 0).length
+  const totalDays = weeks.flat().filter(d => !d.future).length
+  const frequencyPct = totalDays > 0 ? Math.round((activeDays / totalDays) * 100) : 0
+
+  return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 12, padding: '12px 14px', marginBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 2, overflowX: 'auto', paddingBottom: 2 }}>
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {week.map((day, di) => (
+              <div
+                key={di}
+                title={day.future ? '' : `${day.key}: ${day.count > 0 ? `${day.count} sessione${day.count === 1 ? '' : 'i'}` : 'niente'}`}
+                style={{
+                  width: 12, height: 12, borderRadius: 2,
+                  background: day.future ? 'transparent' : heatmapColor(day.count, isLight),
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: '0.68em', color: '#888', marginTop: 8 }}>
+        Fatto <strong style={{ color: 'var(--theme-color)' }}>{activeDays}</strong> giorni su {totalDays} (~{frequencyPct}%) nelle ultime {WEEKS} settimane
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ExerciseSingleView() {
@@ -272,9 +336,11 @@ export default function ExerciseSingleView() {
 
         {/* ── RECORD ── */}
         {sectionLabel('⚡ Record personali')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-          <StatCard label="Sessione" value={stats.bestSessionReps || '–'} sub={stats.bestSessionDate ? fmtDate(stats.bestSessionDate) : null} color="#ffca28" />
-          <StatCard label="Giorno" value={stats.bestDayReps || '–'} sub={stats.bestDay ? fmtDate(stats.bestDay) : null} color="#ff7043" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <StatCard label="Sessione (reps)" value={stats.bestSessionReps || '–'} sub={stats.bestSessionDate ? fmtDate(stats.bestSessionDate) : null} color="#ffca28" />
+          <StatCard label="Giorno (reps)" value={stats.bestDayReps || '–'} sub={stats.bestDay ? fmtDate(stats.bestDay) : null} color="#ff7043" />
+          {/* Punti max, non solo reps: a parità di reps lo sforzo percepito cambia il punteggio */}
+          <StatCard label="Giorno (pt)" value={stats.bestPtsDayValue > 0 ? `+${stats.bestPtsDayValue}` : '–'} sub={stats.bestPtsDay ? fmtDate(stats.bestPtsDay) : null} color="var(--success)" />
           <StatCard label="Media/sessione" value={stats.avgPerSession || '–'} sub="rip. medie" color="var(--accent2)" />
         </div>
         {recordFreshness && (
@@ -283,36 +349,12 @@ export default function ExerciseSingleView() {
           </div>
         )}
 
-        {/* ── STREAK ── */}
-        {sectionLabel('🔥 Streak')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div style={{
-            background: stats.streak.current > 0 ? 'rgba(255,202,40,0.08)' : 'var(--card)',
-            border: `1px solid ${stats.streak.current > 0 ? 'var(--theme-color)' : 'var(--card-border)'}`,
-            borderRadius: 12, padding: '12px 10px',
-          }}>
-            <div style={{ fontSize: '0.6em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Streak attuale</div>
-            <div style={{ fontSize: '1.8em', fontWeight: 900, color: stats.streak.current > 0 ? 'var(--theme-color)' : '#444', lineHeight: 1 }}>
-              {stats.streak.current > 0 ? `${stats.streak.current}🔥` : '0'}
-            </div>
-            {stats.streak.current > 0 && stats.streak.currentStart && (
-              <div style={{ fontSize: '0.6em', color: '#888', marginTop: 3 }}>dal {fmtDate(stats.streak.currentStart)}</div>
-            )}
-            <div style={{ fontSize: '0.6em', color: '#555', marginTop: 3 }}>giorni consecutivi</div>
-          </div>
-          <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 12, padding: '12px 10px' }}>
-            <div style={{ fontSize: '0.6em', color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Record streak</div>
-            <div style={{ fontSize: '1.8em', fontWeight: 900, color: '#ff7043', lineHeight: 1 }}>
-              {stats.streak.best || '0'}
-            </div>
-            {stats.streak.bestStart && (
-              <div style={{ fontSize: '0.6em', color: '#888', marginTop: 3 }}>
-                {fmtDate(stats.streak.bestStart)} – {fmtDate(stats.streak.bestEnd)}
-              </div>
-            )}
-            <div style={{ fontSize: '0.6em', color: '#555', marginTop: 3 }}>giorni consecutivi</div>
-          </div>
-        </div>
+        {/* ── HEATMAP ── quanto spesso lo alleni, a colpo d'occhio (non ha
+             senso uno streak per un esercizio che non fai mai 2 giorni di
+             fila — questa mostra la frequenza reale senza penalizzare chi si
+             allena a giorni alterni) */}
+        {sectionLabel('🗓️ Frequenza')}
+        <ExerciseHeatmap exerciseLog={exerciseLog} exerciseId={exerciseId} isLight={isLight} />
 
         {/* ── GRAFICO ── */}
         {sectionLabel('📈 Andamento')}
@@ -325,54 +367,64 @@ export default function ExerciseSingleView() {
           <canvas ref={canvasRef} />
         </div>
 
-        {/* ── SESSIONI OGGI ── */}
-        {stats.todaySessions.length > 0 && (
+        {/* ── STORICO SESSIONI ── tutti i giorni, non solo oggi: reps E punti
+             per giorno, perché a parità di reps lo sforzo percepito cambia
+             il punteggio (es. 100 reps leggere vs 100 reps a cedimento) */}
+        {stats.history.length > 0 && (
           <>
-            {sectionLabel('⏱ Sessioni di oggi')}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
-              {stats.todaySessions.slice().reverse().map((s, i) => {
-                const isSessionRecord = s.reps === stats.bestSessionReps && stats.lifetimeSessions > 1
-                return (
-                  <div key={s.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '8px 12px',
-                    background: isSessionRecord ? 'rgba(255,202,40,0.08)' : 'var(--card)',
-                    border: `1px solid ${isSessionRecord ? 'var(--theme-color)' : 'var(--card-border)'}`,
-                    borderRadius: 10,
-                  }}>
-                    <span style={{ fontSize: '0.75em', color: '#555', minWidth: 44 }}>{s.time?.slice(0, 5) || ''}</span>
-                    {s.effort && <span style={{ fontSize: '0.8em' }}>{getEffortEmoji(s.effort)}</span>}
-                    <span style={{ flex: 1, fontWeight: 700 }}>
-                      {s.reps} reps{s.load > 0 ? ` · ${s.load}kg` : ''}
-                    </span>
-                    {isSessionRecord && <span style={{ fontSize: '0.65em', fontWeight: 700, color: 'var(--theme-color)' }}>🏆 record</span>}
-                    <span style={{ fontSize: '0.75em', color: 'var(--success)' }}>+{s.pts} pt</span>
-                    <button
-                      className="btn-icon"
-                      style={{ padding: 2 }}
-                      title="Modifica ripetizioni"
-                      onClick={async () => {
-                        const val = window.prompt(`Ripetizioni (attuali: ${s.reps}):`, s.reps)
-                        if (val === null) return
-                        await actions.editExerciseSession(todayStr, s.id, val)
-                      }}
-                    >
-                      <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>edit</span>
-                    </button>
-                    <button
-                      className="btn-icon"
-                      style={{ padding: 2 }}
-                      title="Elimina serie"
-                      onClick={async () => {
-                        if (!window.confirm(`Eliminare ${s.reps} reps (-${s.pts} pt)?`)) return
-                        await actions.deleteExerciseSession(todayStr, s.id)
-                      }}
-                    >
-                      <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>delete</span>
-                    </button>
+            {sectionLabel('⏱ Storico sessioni')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, maxHeight: 320, overflowY: 'auto', paddingRight: 2 }}>
+              {stats.history.slice(0, 30).map(({ date, reps, pts, sessions }) => (
+                <div key={date}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72em', color: '#666', marginBottom: 5 }}>
+                    <span style={{ fontWeight: 700 }}>{date === todayStr ? 'Oggi' : fmtDate(date)}</span>
+                    <span>{reps} reps · <span style={{ color: 'var(--success)' }}>+{pts} pt</span></span>
                   </div>
-                )
-              })}
+                  {sessions.map(s => {
+                    const isSessionRecord = s.reps === stats.bestSessionReps && stats.lifetimeSessions > 1
+                    return (
+                      <div key={s.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '8px 12px', marginBottom: 4,
+                        background: isSessionRecord ? 'rgba(255,202,40,0.08)' : 'var(--card)',
+                        border: `1px solid ${isSessionRecord ? 'var(--theme-color)' : 'var(--card-border)'}`,
+                        borderRadius: 10,
+                      }}>
+                        <span style={{ fontSize: '0.75em', color: '#555', minWidth: 44 }}>{s.time?.slice(0, 5) || ''}</span>
+                        {s.effort && <span style={{ fontSize: '0.8em' }}>{getEffortEmoji(s.effort)}</span>}
+                        <span style={{ flex: 1, fontWeight: 700 }}>
+                          {s.reps} reps{s.load > 0 ? ` · ${s.load}kg` : ''}
+                        </span>
+                        {isSessionRecord && <span style={{ fontSize: '0.65em', fontWeight: 700, color: 'var(--theme-color)' }}>🏆 record</span>}
+                        <span style={{ fontSize: '0.75em', color: 'var(--success)' }}>+{s.pts} pt</span>
+                        <button
+                          className="btn-icon"
+                          style={{ padding: 2 }}
+                          title="Modifica ripetizioni"
+                          onClick={async () => {
+                            const val = window.prompt(`Ripetizioni (attuali: ${s.reps}):`, s.reps)
+                            if (val === null) return
+                            await actions.editExerciseSession(date, s.id, val)
+                          }}
+                        >
+                          <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>edit</span>
+                        </button>
+                        <button
+                          className="btn-icon"
+                          style={{ padding: 2 }}
+                          title="Elimina serie"
+                          onClick={async () => {
+                            if (!window.confirm(`Eliminare ${s.reps} reps (-${s.pts} pt)?`)) return
+                            await actions.deleteExerciseSession(date, s.id)
+                          }}
+                        >
+                          <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>delete</span>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
             </div>
           </>
         )}

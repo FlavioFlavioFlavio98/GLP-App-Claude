@@ -13,4 +13,5 @@
     <string name="widget_willpower_description">Registra un momento di willpower velocemente</string>
     <string name="widget_protein_description">Aggiungi un alimento e traccia le proteine velocemente</string>
     <string name="widget_meditation_description">Registra un momento di meditazione con un tocco</string>
+    <string name="widget_voice_task_description">Detta una task ad alta voce, si salva da sola</string>
 </resources>

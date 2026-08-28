@@ -46,6 +46,7 @@ export default function GlobalSearchModal() {
         key: t.id,
         title: t.title,
         sub: `${STATUS_LABEL[t.status] || t.status}${t.deadline ? ` · ${fmtDate(t.deadline)}` : ''}`,
+        completed: t.status === 'completed',
         onClick: () => actions.openModal('taskEdit', { task: t }),
       }))
 
@@ -79,7 +80,12 @@ export default function GlobalSearchModal() {
         onClick: () => actions.openModal('singleReward', r.id),
       }))
 
-    results = [...tasks, ...habits, ...recurring, ...rewards].slice(0, 40)
+    // Le task completate contano quasi sempre come "già gestite" — chi cerca
+    // di solito vuole verificare/aprire quella ancora da fare, quindi le
+    // manda in fondo (sbarrate) invece di mescolarle alle altre.
+    results = [...tasks, ...habits, ...recurring, ...rewards]
+      .sort((a, b) => (a.completed ? 1 : 0) - (b.completed ? 1 : 0))
+      .slice(0, 40)
   }
 
   return (
@@ -137,11 +143,15 @@ export default function GlobalSearchModal() {
                   display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
                   padding: '11px 12px', borderRadius: 10, cursor: 'pointer',
                   background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text)',
+                  opacity: r.completed ? 0.55 : 1,
                 }}
               >
                 <span style={{ fontSize: '1.2em', flexShrink: 0 }}>{t.emoji}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.88em', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                  <div style={{
+                    fontSize: '0.88em', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    textDecoration: r.completed ? 'line-through' : 'none',
+                  }}>{r.title}</div>
                   <div style={{ fontSize: '0.68em', color: '#666' }}>{t.label}{r.sub ? ` · ${r.sub}` : ''}</div>
                 </div>
                 <span className="material-icons-round" style={{ fontSize: 16, color: '#444', flexShrink: 0 }}>chevron_right</span>

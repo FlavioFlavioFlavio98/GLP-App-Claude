@@ -726,3 +726,41 @@ exports.syncWidgetsOnUserDataChange = onDocumentWritten(
     }
   }
 )
+
+// ── backupUserData ──────────────────────────────────────────────────────────
+// Copia giornaliera del documento principale (users/flavio) in una
+// sottocollezione separata — aggiunta dopo un incidente in cui un bug lato
+// client ha sovrascritto silenziosamente tutti i dati (score, task, log
+// allenamenti, storico completo) con un account vuoto, senza alcun backup da
+// cui recuperare. Non protegge da un bug che colpisce nello stesso istante
+// del backup, ma limita qualunque incidente futuro a "al massimo un giorno
+// perso" invece di "tutto lo storico perso per sempre". Retention 60 giorni
+// per non far crescere la sottocollezione all'infinito.
+exports.backupUserData = onSchedule(
+  { schedule: '30 2 * * *', timeZone: 'Europe/Rome', region: REGION },
+  async () => {
+    const db = admin.firestore()
+    const flavioRef = db.collection('users').doc('flavio')
+    const snap = await flavioRef.get()
+    if (!snap.exists) return
+
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+    await flavioRef.collection('backups').doc(today).set({
+      data: snap.data(),
+      backedUpAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    // Retention: elimina i backup più vecchi di 60 giorni
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 60)
+    const cutoffStr = cutoff.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+    const oldBackups = await flavioRef.collection('backups')
+      .where(admin.firestore.FieldPath.documentId(), '<', cutoffStr)
+      .get()
+    if (!oldBackups.empty) {
+      const batch = db.batch()
+      oldBackups.docs.forEach(d => batch.delete(d.ref))
+      await batch.commit()
+    }
+  }
+)

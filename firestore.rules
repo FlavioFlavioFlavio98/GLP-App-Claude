@@ -44,6 +44,16 @@ service cloud.firestore {
       match /bodyPhotos/{photoId} {
         allow read, write: if isAllowedUser();
       }
+
+      // Backup automatico giornaliero del documento principale (vedi Cloud
+      // Function backupUserData) — leggibile per poter verificare che esista,
+      // ma scrivibile solo dalla Cloud Function (Admin SDK, bypassa comunque
+      // queste regole): mai dal client, altrimenti un bug lato client
+      // potrebbe corrompere anche i backup stessi.
+      match /backups/{backupId} {
+        allow read: if isAllowedUser();
+        allow write: if false;
+      }
     }
 
     // Config (ex PIN) — non più usata, blocca tutto

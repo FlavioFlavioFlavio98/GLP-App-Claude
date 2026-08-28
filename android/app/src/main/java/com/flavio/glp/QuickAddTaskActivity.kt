@@ -84,22 +84,23 @@ class QuickAddTaskActivity : Activity() {
             "createdAt" to com.google.firebase.Timestamp.now()
         )
 
+        // arrayUnion invece di get()+update(): un read-modify-write non atomico
+        // qui perderebbe silenziosamente qualunque modifica concorrente a
+        // "tasks" fatta da web/telefono/altro widget nella finestra tra le due
+        // chiamate (stessa classe di bug della perdita dati del 28/8/2026,
+        // anche se più circoscritta).
         val db = FirebaseFirestore.getInstance()
         val userRef = db.collection("users").document("flavio")
-        userRef.get().addOnSuccessListener { doc ->
-            @Suppress("UNCHECKED_CAST")
-            val existing = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
-            userRef.update("tasks", existing + task)
-                .addOnSuccessListener {
-                    Toast.makeText(this, "Task creata", Toast.LENGTH_SHORT).show()
-                    addTaskToWidgetPrefs(task)
-                    finish()
-                }
-                .addOnFailureListener {
-                    Toast.makeText(this, "Errore: ${it.message}", Toast.LENGTH_LONG).show()
-                    finish()
-                }
-        }.addOnFailureListener { finish() }
+        userRef.update("tasks", FieldValue.arrayUnion(task))
+            .addOnSuccessListener {
+                Toast.makeText(this, "Task creata", Toast.LENGTH_SHORT).show()
+                addTaskToWidgetPrefs(task)
+                finish()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Errore: ${it.message}", Toast.LENGTH_LONG).show()
+                finish()
+            }
     }
 
     // Aggiornamento ottimistico: la task appena creata ha sempre deadline uguale

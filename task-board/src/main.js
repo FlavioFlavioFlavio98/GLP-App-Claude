@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, browserLocalPersistence, setPersistence } from 'firebase/auth'
-import { getFirestore, doc, onSnapshot, updateDoc } from 'firebase/firestore'
-import { buildRecurringInstance, hasPendingInstance, addDays } from '../../src/lib/recurringTasksLogic'
+import { getFirestore, doc, onSnapshot, runTransaction } from 'firebase/firestore'
+import { buildRecurringInstance, hasPendingInstance } from '../../src/lib/recurringTasksLogic'
 import { toDateString } from '../../src/lib/habitLogic'
 
 // Stessa config/account dedicato usato per estensione Chrome e app Wear OS
@@ -66,54 +66,57 @@ function updateClock() {
 updateClock()
 setInterval(updateClock, 30_000)
 
-let latestTasks = []
-let latestRecurring = []
-
-// Aggiunge, se applicabile, la prossima istanza della task ricorrente
-// nello stesso array/scrittura del completamento — stessa logica di
-// store.jsx _spawnNextRecurringInstance, per restare coerente con
-// web/Android/estensione/watch.
-function spawnNextRecurringInstance(task, tasksSoFar) {
-  if (!task.recurringId) return tasksSoFar
-  const template = latestRecurring.find(r => r.id === task.recurringId)
-  if (!template || template.active === false) return tasksSoFar
-  if (hasPendingInstance(tasksSoFar, template.id)) return tasksSoFar
-  const next = buildRecurringInstance(template, todayStr())
-  return [...tasksSoFar, next]
-}
-
 // Niente window.confirm(): nella finestra flottante (Document
 // Picture-in-Picture) le dialog native del browser sono bloccate dallo
 // spec — il tap sembrava non fare nulla. Tocco istantaneo, come il widget
 // Android; l'undo (ritocca la spunta) resta la rete di sicurezza per i tap
 // accidentali.
+// Transazione invece di leggere dall'ultimo snapshot in cache e riscrivere
+// l'intero array: quella cache poteva essere di una frazione di secondo
+// stantia rispetto a una scrittura concorrente da telefono/web nella stessa
+// finestra, con quella scrittura persa silenziosamente (stessa classe di bug
+// della perdita dati del 28/8/2026). La transazione rilegge sempre lo stato
+// vero al momento dello scrivere, con retry automatico.
 async function completeTask(task) {
   const isLate = task.status === 'expired'
   const now = new Date().toISOString()
-  let tasks = latestTasks.map(t =>
-    t.id === task.id
-      ? { ...t, status: 'completed', completedAt: now, rewardApplied: !isLate }
-      : t
-  )
-  tasks = spawnNextRecurringInstance(task, tasks)
-  await updateDoc(userRef, { tasks })
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(userRef)
+    const data = snap.data() || {}
+    const tasks = data.tasks || []
+    let updated = tasks.map(t =>
+      t.id === task.id
+        ? { ...t, status: 'completed', completedAt: now, rewardApplied: !isLate }
+        : t
+    )
+    if (task.recurringId) {
+      const template = (data.recurringTasks || []).find(r => r.id === task.recurringId)
+      if (template && template.active !== false && !hasPendingInstance(updated, template.id)) {
+        updated = [...updated, buildRecurringInstance(template, todayStr())]
+      }
+    }
+    transaction.update(userRef, { tasks: updated })
+  })
 }
 
 async function uncompleteTask(task) {
-  let tasks = latestTasks.map(t =>
-    t.id === task.id
-      ? { ...t, status: 'active', completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false }
-      : t
-  )
-  if (task.recurringId) {
-    tasks = tasks.filter(t => !(t.recurringId === task.recurringId && t.id !== task.id && t.status === 'active'))
-  }
-  await updateDoc(userRef, { tasks })
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(userRef)
+    const data = snap.data() || {}
+    const tasks = data.tasks || []
+    let updated = tasks.map(t =>
+      t.id === task.id
+        ? { ...t, status: 'active', completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false }
+        : t
+    )
+    if (task.recurringId) {
+      updated = updated.filter(t => !(t.recurringId === task.recurringId && t.id !== task.id && t.status === 'active'))
+    }
+    transaction.update(userRef, { tasks: updated })
+  })
 }
 
-function render(tasks, recurring) {
-  latestTasks = tasks
-  latestRecurring = recurring
+function render(tasks) {
   const today = todayStr()
 
   // Stessa logica di TaskSection.jsx per "oggi": attive con scadenza entro
@@ -201,7 +204,7 @@ onAuthStateChanged(auth, user => {
     boardView.style.display = 'flex'
     unsubscribe = onSnapshot(userRef, snap => {
       const data = snap.data() || {}
-      render(data.tasks || [], data.recurringTasks || [])
+      render(data.tasks || [])
     }, () => {
       listEl.innerHTML = '<div class="empty">Errore di connessione</div>'
     })

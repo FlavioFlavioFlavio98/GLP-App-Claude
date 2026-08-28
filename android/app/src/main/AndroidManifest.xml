@@ -208,7 +208,8 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:taskAffinity=""/>
+            android:taskAffinity=""
+            android:launchMode="singleInstance"/>
 
         <!-- Widget 2x4 abitudini del giorno -->
         <receiver android:name=".HabitsWidgetProvider"

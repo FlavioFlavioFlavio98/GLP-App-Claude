@@ -358,31 +358,29 @@ class AddTaskActivity : Activity() {
             addTaskToWidgetPrefs(task)
         }
 
-        userRef.get().addOnSuccessListener { doc ->
-            @Suppress("UNCHECKED_CAST")
-            val existing = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
-            val updates = hashMapOf<String, Any>("tasks" to existing + task)
-            if (isAlreadyDone) {
-                updates["score"] = com.google.firebase.firestore.FieldValue.increment(reward.toLong())
-            }
-            userRef.update(updates)
-                .addOnSuccessListener {
-                    if (isAlreadyDone && selectedDeadline == today) {
-                        DayWidgetProvider.applyDelta(this, earnedDelta = reward, taskEarnedDelta = reward)
-                    }
-                    vibrate()
-                    val msg = if (isAlreadyDone) "Task già fatta registrata! +${reward}pt" else "Task creata!"
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-                .addOnFailureListener { e ->
-                    Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
-                    finish()
-                }
-        }.addOnFailureListener { e ->
-            Toast.makeText(this, "Errore connessione: ${e.message}", Toast.LENGTH_LONG).show()
-            finish()
+        // arrayUnion invece di get()+update(): un read-modify-write non atomico
+        // qui perderebbe silenziosamente qualunque modifica concorrente a
+        // "tasks" fatta da web/telefono/altro widget nella finestra tra le due
+        // chiamate (stessa classe di bug della perdita dati del 28/8/2026,
+        // anche se più circoscritta) — e in più evita del tutto la lettura.
+        val updates = hashMapOf<String, Any>("tasks" to com.google.firebase.firestore.FieldValue.arrayUnion(task))
+        if (isAlreadyDone) {
+            updates["score"] = com.google.firebase.firestore.FieldValue.increment(reward.toLong())
         }
+        userRef.update(updates)
+            .addOnSuccessListener {
+                if (isAlreadyDone && selectedDeadline == today) {
+                    DayWidgetProvider.applyDelta(this, earnedDelta = reward, taskEarnedDelta = reward)
+                }
+                vibrate()
+                val msg = if (isAlreadyDone) "Task già fatta registrata! +${reward}pt" else "Task creata!"
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                finish()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
+                finish()
+            }
     }
 
     // Crea la regola ricorrente (recurringTasks) + la prima istanza (tasks) —
@@ -421,26 +419,19 @@ class AddTaskActivity : Activity() {
             addTaskToWidgetPrefs(firstInstance)
         }
 
-        userRef.get().addOnSuccessListener { doc ->
-            @Suppress("UNCHECKED_CAST")
-            val existingTasks = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
-            @Suppress("UNCHECKED_CAST")
-            val existingRecurring = doc.get("recurringTasks") as? List<Map<String, Any>> ?: emptyList()
-            userRef.update(
-                mapOf(
-                    "tasks" to existingTasks + firstInstance,
-                    "recurringTasks" to existingRecurring + template,
-                )
-            ).addOnSuccessListener {
-                vibrate()
-                Toast.makeText(this, "🔁 Task ricorrente creata!", Toast.LENGTH_SHORT).show()
-                finish()
-            }.addOnFailureListener { e ->
-                Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
-                finish()
-            }
+        // arrayUnion su entrambi i campi, niente più get()+update() (stesso
+        // motivo della race in saveTask qui sopra).
+        userRef.update(
+            mapOf(
+                "tasks" to com.google.firebase.firestore.FieldValue.arrayUnion(firstInstance),
+                "recurringTasks" to com.google.firebase.firestore.FieldValue.arrayUnion(template),
+            )
+        ).addOnSuccessListener {
+            vibrate()
+            Toast.makeText(this, "🔁 Task ricorrente creata!", Toast.LENGTH_SHORT).show()
+            finish()
         }.addOnFailureListener { e ->
-            Toast.makeText(this, "Errore connessione: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
             finish()
         }
     }
@@ -455,7 +446,14 @@ class AddTaskActivity : Activity() {
         val db = FirebaseFirestore.getInstance()
         val userRef = db.collection("users").document("flavio")
         val today = sdf.format(Date())
-        userRef.get().addOnSuccessListener { doc ->
+        // Transazione invece di get()+update(): qui si modifica un elemento
+        // esistente dell'array in base al suo stato attuale (attiva→scaduta o
+        // viceversa), quindi arrayUnion non basta — serve una vera lettura
+        // atomica con retry automatico in caso di scrittura concorrente nella
+        // stessa finestra (stessa classe di bug della perdita dati del
+        // 28/8/2026, qui su un singolo elemento invece che sull'intero documento).
+        db.runTransaction { transaction ->
+            val doc = transaction.get(userRef)
             @Suppress("UNCHECKED_CAST")
             val existing = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
             val updated = existing.map { t ->
@@ -485,19 +483,14 @@ class AddTaskActivity : Activity() {
                     }
                 } else t
             }
-            userRef.update("tasks", updated)
-                .addOnSuccessListener {
-                    refreshTaskWidgets()
-                    vibrate()
-                    Toast.makeText(this, "Task aggiornata", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-                .addOnFailureListener { e ->
-                    Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
-                    finish()
-                }
+            transaction.update(userRef, "tasks", updated)
+        }.addOnSuccessListener {
+            refreshTaskWidgets()
+            vibrate()
+            Toast.makeText(this, "Task aggiornata", Toast.LENGTH_SHORT).show()
+            finish()
         }.addOnFailureListener { e ->
-            Toast.makeText(this, "Errore connessione: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
             finish()
         }
     }

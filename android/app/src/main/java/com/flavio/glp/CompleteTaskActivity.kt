@@ -48,7 +48,16 @@ class CompleteTaskActivity : Activity() {
         val db = FirebaseFirestore.getInstance()
         val userRef = db.collection("users").document("flavio")
 
-        userRef.get().addOnSuccessListener { doc ->
+        // Transazione invece di get()+update(): questa scrittura modifica un
+        // elemento esistente dell'array tasks (completamento) ed
+        // eventualmente ne aggiunge un altro (prossima istanza ricorrente) —
+        // arrayUnion da solo non basta, serve una vera lettura atomica con
+        // retry in caso di scrittura concorrente nella stessa finestra
+        // (stessa classe di bug della perdita dati del 28/8/2026). In più lo
+        // score ora usa FieldValue.increment invece di un add manuale sul
+        // valore letto, che era a sua volta un'altra race indipendente.
+        db.runTransaction { transaction ->
+            val doc = transaction.get(userRef)
             @Suppress("UNCHECKED_CAST")
             val tasks = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
             val original = tasks.find { it["id"]?.toString() == taskId }
@@ -96,20 +105,22 @@ class CompleteTaskActivity : Activity() {
                 }
             }
 
-            val currentScore = doc.getDouble("score") ?: 0.0
-            userRef.update(
-                "tasks", updated,
-                "score", currentScore + reward
-            ).addOnSuccessListener {
-                android.util.Log.d("GLPWidget", "Task $taskId completed +${reward}pt")
-                vibrate()
-                Toast.makeText(this, "+${reward.toInt()}pt Task completata!", Toast.LENGTH_SHORT).show()
-                finish()
-            }.addOnFailureListener { e ->
-                android.util.Log.e("GLPWidget", "Error completing task: ${e.message}")
-                finish()
-            }
-        }.addOnFailureListener { finish() }
+            transaction.update(
+                userRef,
+                mapOf(
+                    "tasks" to updated,
+                    "score" to com.google.firebase.firestore.FieldValue.increment(reward)
+                )
+            )
+        }.addOnSuccessListener {
+            android.util.Log.d("GLPWidget", "Task $taskId completed +${reward}pt")
+            vibrate()
+            Toast.makeText(this, "+${reward.toInt()}pt Task completata!", Toast.LENGTH_SHORT).show()
+            finish()
+        }.addOnFailureListener { e ->
+            android.util.Log.e("GLPWidget", "Error completing task: ${e.message}")
+            finish()
+        }
     }
 
     private fun markTaskCompletedOptimistic(taskId: String, title: String, reward: Double, priority: String) {

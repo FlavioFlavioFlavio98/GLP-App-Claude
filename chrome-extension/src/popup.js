@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth'
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { getFirestore, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 
 // Stessa config del progetto Firebase della web app (src/lib/firebase.js) —
 // apiKey pubblica lato client, non è un segreto.
@@ -85,8 +85,6 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   setStatus('Salvataggio...')
   try {
     const ref = doc(db, 'users', 'flavio')
-    const snap = await getDoc(ref)
-    const tasks = snap.data()?.tasks || []
     const newTask = {
       id: `task_${Date.now().toString(36)}`,
       title,
@@ -102,7 +100,10 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       rewardApplied: false,
       penaltyApplied: false,
     }
-    await updateDoc(ref, { tasks: [...tasks, newTask] })
+    // arrayUnion invece di get()+update(): niente lettura, niente race con
+    // scritture concorrenti da web/telefono nella stessa finestra (stessa
+    // classe di bug della perdita dati del 28/8/2026).
+    await updateDoc(ref, { tasks: arrayUnion(newTask) })
     setStatus('✅ Aggiunta!')
     titleInput.value = ''
     descriptionInput.value = ''

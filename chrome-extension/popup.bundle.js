@@ -18631,6 +18631,11 @@
   function __PRIVATE_coercedFieldValuesArray(e2) {
     return isArray(e2) && e2.arrayValue.values ? e2.arrayValue.values.slice() : [];
   }
+  var FieldTransform = class {
+    constructor(e2, t2) {
+      this.field = e2, this.transform = t2;
+    }
+  };
   function __PRIVATE_fieldTransformEquals(e2, t2) {
     return e2.field.isEqual(t2.field) && function __PRIVATE_transformOperationEquals(e3, t3) {
       return e3 instanceof __PRIVATE_ArrayUnionTransformOperation && t3 instanceof __PRIVATE_ArrayUnionTransformOperation || e3 instanceof __PRIVATE_ArrayRemoveTransformOperation && t3 instanceof __PRIVATE_ArrayRemoveTransformOperation ? __PRIVATE_arrayEquals(e3.elements, t3.elements, __PRIVATE_valueEquals$1) : e3 instanceof __PRIVATE_NumericIncrementTransformOperation && t3 instanceof __PRIVATE_NumericIncrementTransformOperation || e3 instanceof __PRIVATE_NumericMinimumTransformOperation && t3 instanceof __PRIVATE_NumericMinimumTransformOperation || e3 instanceof __PRIVATE_NumericMaximumTransformOperation && t3 instanceof __PRIVATE_NumericMaximumTransformOperation ? __PRIVATE_valueEquals$1(e3.l, t3.l) : e3 instanceof __PRIVATE_ServerTimestampTransform && t3 instanceof __PRIVATE_ServerTimestampTransform;
@@ -19232,9 +19237,6 @@
   function __PRIVATE_targetIsPipelineTarget(e2) {
     return !!e2.isCorePipeline;
   }
-  function __PRIVATE_targetIsDocumentTarget(e2) {
-    return !!e2.path && DocumentKey.isDocumentKey(e2.path) && null === e2.collectionGroup && 0 === e2.filters.length;
-  }
   var __PRIVATE_QueryImpl = class {
     /**
      * Initializes a Query with a path and optional additional query constraints.
@@ -19369,11 +19371,6 @@
         });
     }
   }
-  var ExistenceFilter = class {
-    constructor(e2, t2) {
-      this.count = e2, this.unchangedNames = t2;
-    }
-  };
   var et;
   var tt;
   function __PRIVATE_isPermanentError(e2) {
@@ -19533,588 +19530,12 @@
   function __PRIVATE_targetIdSet() {
     return _t;
   }
-  var ot = null;
-  function __PRIVATE_newTextEncoder() {
-    return new TextEncoder();
-  }
   var at = new Integer([4294967295, 4294967295], 0);
-  function __PRIVATE_getMd5HashValue(e2) {
-    const t2 = __PRIVATE_newTextEncoder().encode(e2), n2 = new Md5();
-    return n2.update(t2), new Uint8Array(n2.digest());
-  }
-  function __PRIVATE_get64BitUints(e2) {
-    const t2 = new DataView(e2.buffer), n2 = t2.getUint32(
-      0,
-      /* littleEndian= */
-      true
-    ), r2 = t2.getUint32(
-      4,
-      /* littleEndian= */
-      true
-    ), i2 = t2.getUint32(
-      8,
-      /* littleEndian= */
-      true
-    ), s2 = t2.getUint32(
-      12,
-      /* littleEndian= */
-      true
-    );
-    return [new Integer([n2, r2], 0), new Integer([i2, s2], 0)];
-  }
-  var BloomFilter = class _BloomFilter {
-    constructor(e2, t2, n2) {
-      if (this.bitmap = e2, this.padding = t2, this.hashCount = n2, t2 < 0 || t2 >= 8) throw new __PRIVATE_BloomFilterError(`Invalid padding: ${t2}`);
-      if (n2 < 0) throw new __PRIVATE_BloomFilterError(`Invalid hash count: ${n2}`);
-      if (e2.length > 0 && 0 === this.hashCount)
-        throw new __PRIVATE_BloomFilterError(`Invalid hash count: ${n2}`);
-      if (0 === e2.length && 0 !== t2)
-        throw new __PRIVATE_BloomFilterError(`Invalid padding when bitmap length is 0: ${t2}`);
-      this.m = 8 * e2.length - t2, // Set the bit count in Integer to avoid repetition in mightContain().
-      this.p = Integer.fromNumber(this.m);
-    }
-    // Calculate the ith hash value based on the hashed 64bit integers,
-    // and calculate its corresponding bit index in the bitmap to be checked.
-    v(e2, t2, n2) {
-      let r2 = e2.add(t2.multiply(Integer.fromNumber(n2)));
-      return 1 === r2.compare(at) && (r2 = new Integer([r2.getBits(0), r2.getBits(1)], 0)), r2.modulo(this.p).toNumber();
-    }
-    // Return whether the bit on the given index in the bitmap is set to 1.
-    S(e2) {
-      return !!(this.bitmap[Math.floor(e2 / 8)] & 1 << e2 % 8);
-    }
-    mightContain(e2) {
-      if (0 === this.m) return false;
-      const t2 = __PRIVATE_getMd5HashValue(e2), [n2, r2] = __PRIVATE_get64BitUints(t2);
-      for (let e3 = 0; e3 < this.hashCount; e3++) {
-        const t3 = this.v(n2, r2, e3);
-        if (!this.S(t3)) return false;
-      }
-      return true;
-    }
-    /** Create bloom filter for testing purposes only. */
-    static create(e2, t2, n2) {
-      const r2 = e2 % 8 == 0 ? 0 : 8 - e2 % 8, i2 = new Uint8Array(Math.ceil(e2 / 8)), s2 = new _BloomFilter(i2, r2, t2);
-      return n2.forEach((e3) => s2.insert(e3)), s2;
-    }
-    insert(e2) {
-      if (0 === this.m) return;
-      const t2 = __PRIVATE_getMd5HashValue(e2), [n2, r2] = __PRIVATE_get64BitUints(t2);
-      for (let e3 = 0; e3 < this.hashCount; e3++) {
-        const t3 = this.v(n2, r2, e3);
-        this.D(t3);
-      }
-    }
-    D(e2) {
-      const t2 = Math.floor(e2 / 8), n2 = e2 % 8;
-      this.bitmap[t2] |= 1 << n2;
-    }
-  };
-  var __PRIVATE_BloomFilterError = class extends Error {
-    constructor() {
-      super(...arguments), this.name = "BloomFilterError";
-    }
-  };
-  var RemoteEvent = class _RemoteEvent {
-    constructor(e2, t2, n2, r2, i2, s2) {
-      this.snapshotVersion = e2, this.targetChanges = t2, this.targetMismatches = n2, this.documentUpdates = r2, this.augmentedDocumentUpdates = i2, this.resolvedLimboDocuments = s2;
-    }
-    /**
-     * HACK: Views require RemoteEvents in order to determine whether the view is
-     * CURRENT, but secondary tabs don't receive remote events. So this method is
-     * used to create a synthesized RemoteEvent that can be used to apply a
-     * CURRENT status change to a View, for queries executed in a different tab.
-     */
-    // PORTING NOTE: Multi-tab only
-    static createSynthesizedRemoteEventForCurrentChange(e2, t2, n2) {
-      const r2 = /* @__PURE__ */ new Map();
-      return r2.set(e2, TargetChange.createSynthesizedTargetChangeForCurrentChange(e2, t2, n2)), new _RemoteEvent(SnapshotVersion.min(), r2, new SortedMap(__PRIVATE_primitiveComparator), __PRIVATE_mutableDocumentMap(), __PRIVATE_mutableDocumentMap(), __PRIVATE_documentKeySet());
-    }
-  };
-  var TargetChange = class _TargetChange {
-    constructor(e2, t2, n2, r2, i2) {
-      this.resumeToken = e2, this.current = t2, this.addedDocuments = n2, this.modifiedDocuments = r2, this.removedDocuments = i2;
-    }
-    /**
-     * This method is used to create a synthesized TargetChanges that can be used to
-     * apply a CURRENT status change to a View (for queries executed in a different
-     * tab) or for new queries (to raise snapshots with correct CURRENT status).
-     */
-    static createSynthesizedTargetChangeForCurrentChange(e2, t2, n2) {
-      return new _TargetChange(n2, t2, __PRIVATE_documentKeySet(), __PRIVATE_documentKeySet(), __PRIVATE_documentKeySet());
-    }
-  };
-  var __PRIVATE_DocumentWatchChange = class {
-    constructor(e2, t2, n2, r2) {
-      this.C = e2, this.removedTargetIds = t2, this.key = n2, this.F = r2;
-    }
-  };
-  var __PRIVATE_ExistenceFilterChange = class {
-    constructor(e2, t2) {
-      this.targetId = e2, this.O = t2;
-    }
-  };
-  var __PRIVATE_WatchTargetChange = class {
-    constructor(e2, t2, n2 = ByteString.EMPTY_BYTE_STRING, r2 = null) {
-      this.state = e2, this.targetIds = t2, this.resumeToken = n2, this.cause = r2;
-    }
-  };
-  var __PRIVATE_TargetState = class {
-    /**
-     * Track the targetId for logging.
-     */
-    constructor(e2) {
-      this.targetId = e2, /**
-       * The number of pending responses (adds or removes) that we are waiting on.
-       * We only consider targets active that have no pending responses.
-       */
-      this.M = 0, /**
-       * Keeps track of the document changes since the last raised snapshot.
-       *
-       * These changes are continuously updated as we receive document updates and
-       * always reflect the current set of changes against the last issued snapshot.
-       */
-      this.N = __PRIVATE_snapshotChangesMap(), /** See public getters for explanations of these fields. */
-      this.L = ByteString.EMPTY_BYTE_STRING, this.B = false, /**
-       * Whether this target state should be included in the next snapshot. We
-       * initialize to true so that newly-added targets are included in the next
-       * RemoteEvent.
-       */
-      this.U = true;
-    }
-    /**
-     * Whether this target has been marked 'current'.
-     *
-     * 'Current' has special meaning in the RPC protocol: It implies that the
-     * Watch backend has sent us all changes up to the point at which the target
-     * was added and that the target is consistent with the rest of the watch
-     * stream.
-     */
-    get current() {
-      return this.B;
-    }
-    /** The last resume token sent to us for this target. */
-    get resumeToken() {
-      return this.L;
-    }
-    /** Whether this target has pending target adds or target removes. */
-    get k() {
-      return 0 !== this.M;
-    }
-    /** Whether we have modified any state that should trigger a snapshot. */
-    get q() {
-      return this.U;
-    }
-    /**
-     * Applies the resume token to the TargetChange, but only when it has a new
-     * value. Empty resumeTokens are discarded.
-     */
-    $(e2) {
-      e2.approximateByteSize() > 0 && (this.U = true, this.L = e2);
-    }
-    /**
-     * Creates a target change from the current set of changes.
-     *
-     * To reset the document changes after raising this snapshot, call
-     * `clearPendingChanges()`.
-     */
-    K() {
-      let e2 = __PRIVATE_documentKeySet(), t2 = __PRIVATE_documentKeySet(), n2 = __PRIVATE_documentKeySet();
-      return this.N.forEach((r2, i2) => {
-        switch (i2) {
-          case 0:
-            e2 = e2.add(r2);
-            break;
-          case 2:
-            t2 = t2.add(r2);
-            break;
-          case 1:
-            n2 = n2.add(r2);
-            break;
-          default:
-            l(38017, {
-              changeType: i2
-            });
-        }
-      }), new TargetChange(this.L, this.B, e2, t2, n2);
-    }
-    /**
-     * Resets the document changes and sets `hasPendingChanges` to false.
-     */
-    W() {
-      this.U = false, this.N = __PRIVATE_snapshotChangesMap();
-    }
-    G(e2, t2) {
-      this.U = true, this.N = this.N.insert(e2, t2);
-    }
-    j(e2) {
-      this.U = true, this.N = this.N.remove(e2);
-    }
-    H() {
-      this.M += 1;
-    }
-    J() {
-      this.M -= 1, __PRIVATE_hardAssert(this.M >= 0, 3241, {
-        M: this.M,
-        targetId: this.targetId
-      });
-    }
-    Y() {
-      this.U = true, this.B = true;
-    }
-  };
-  var ut = "WatchChangeAggregator";
-  var __PRIVATE_WatchChangeAggregator = class {
-    constructor(e2) {
-      this.Z = e2, /**
-       * The internal state of all tracked targets.
-       *
-       * Targets have the following lifecycle of [states] within the WatchChangeAggregator:
-       * [unknown] -> recordPendingTargetRequest(t)
-       *           -> [pending]
-       *           -> handleTargetChange(t, Added)
-       *           -> [added / !pending]
-       *           -> recordPendingTargetRequest(t)
-       *           -> [pending]
-       *           -> handleTargetChange(t, Removed)
-       *           -> [unknown]
-       *
-       * A reset on an [added] target leaves the target in an [added] state.
-       * [added / !pending] -> handleTargetChange(t, Reset)
-       *                    -> [added / !pending]
-       *
-       * [active]: is a substate of [added], where also `remoteStore.listenTargets.has(t) === true`.
-       *           Generally it is expected that when a target is [active / !pending]
-       *           then it is also [active], but the implementation does not guarantee
-       *           this will always be true.
-       *
-       */
-      this.X = /* @__PURE__ */ new Map(), /** Keeps track of the documents to update since the last raised snapshot. */
-      this.ee = __PRIVATE_mutableDocumentMap(), this.te = __PRIVATE_documentTargetMap(), /** Keeps track of the augmented documents to update since the last raised snapshot. */
-      this.ne = __PRIVATE_mutableDocumentMap(), /** A mapping of document keys to their set of target IDs. */
-      this.re = __PRIVATE_documentTargetMap(), /**
-       * A map of targets with existence filter mismatches. These targets are
-       * known to be inconsistent and their listens needs to be re-established by
-       * RemoteStore.
-       */
-      this.ie = new SortedMap(__PRIVATE_primitiveComparator);
-    }
-    /**
-     * Processes and adds the DocumentWatchChange to the current set of changes.
-     */
-    se(e2) {
-      for (const t2 of e2.C) e2.F && e2.F.isFoundDocument() ? this._e(t2, e2.F) : this.oe(t2, e2.key, e2.F);
-      for (const t2 of e2.removedTargetIds) this.oe(t2, e2.key, e2.F);
-    }
-    /** Processes and adds the WatchTargetChange to the current set of changes. */
-    ae(e2) {
-      this.forEachTarget(e2, (t2) => {
-        const n2 = this.X.get(t2);
-        if (n2) switch (e2.state) {
-          case 0:
-            this.ue(t2) && n2.$(e2.resumeToken);
-            break;
-          case 1:
-            n2.J(), n2.k || // We have a freshly added target, so we need to reset any state
-            // that we had previously. This can happen e.g. when remove and add
-            // back a target for existence filter mismatches.
-            n2.W(), n2.$(e2.resumeToken);
-            break;
-          case 2:
-            n2.J(), n2.k || this.removeTarget(t2);
-            break;
-          case 3:
-            this.ue(t2) && (n2.Y(), n2.$(e2.resumeToken));
-            break;
-          case 4:
-            this.ue(t2) && // Reset the target and synthesizes removes for all existing
-            // documents. The backend will re-add any documents that still
-            // match the target before it sends the next global snapshot.
-            (this.ce(t2), n2.$(e2.resumeToken));
-            break;
-          default:
-            l(56790, {
-              state: e2.state
-            });
-        }
-        else __PRIVATE_logDebug(ut, `handleTargetChange received targetChange for untracked target ID (${t2}) with state (${e2.state})`);
-      });
-    }
-    /**
-     * Iterates over all targetIds that the watch change applies to: either the
-     * targetIds explicitly listed in the change or the targetIds of all currently
-     * active targets.
-     */
-    forEachTarget(e2, t2) {
-      e2.targetIds.length > 0 ? e2.targetIds.forEach(t2) : this.X.forEach((e3, n2) => {
-        this.ue(n2) && t2(n2);
-      });
-    }
-    le(e2) {
-      return __PRIVATE_targetIsPipelineTarget(e2) ? "documents" === e2.getPipelineSourceType() && 1 === e2.getPipelineDocuments()?.length : __PRIVATE_targetIsDocumentTarget(e2);
-    }
-    /**
-     * Handles existence filters and synthesizes deletes for filter mismatches.
-     * Targets that are invalidated by filter mismatches are added to
-     * `pendingTargetResets`.
-     */
-    Ee(e2) {
-      const t2 = e2.targetId, n2 = e2.O.count, r2 = this.he(t2);
-      if (r2) {
-        const i2 = r2.target;
-        if (this.le(i2)) if (0 === n2) {
-          const e3 = new DocumentKey(__PRIVATE_targetIsPipelineTarget(i2) ? ResourcePath.fromString(i2.getPipelineDocuments()[0]) : i2.path);
-          this.oe(t2, e3, MutableDocument.newNoDocument(e3, SnapshotVersion.min()));
-        } else __PRIVATE_hardAssert(1 === n2, 20013, "Single document existence filter with count: " + n2);
-        else {
-          const r3 = this.Te(t2);
-          if (r3 !== n2) {
-            const n3 = this.Pe(e2), i3 = n3 ? this.Re(n3, e2, r3) : 1;
-            if (0 !== i3) {
-              this.ce(t2);
-              const e3 = 2 === i3 ? "TargetPurposeExistenceFilterMismatchBloom" : "TargetPurposeExistenceFilterMismatch";
-              this.ie = this.ie.insert(t2, e3);
-            }
-            ot?.Ie(function __PRIVATE_createExistenceFilterMismatchInfoForTestingHooks(e3, t3, n4, r4, i4) {
-              const s2 = {
-                localCacheCount: e3,
-                existenceFilterCount: t3.count,
-                databaseId: n4.database,
-                projectId: n4.projectId
-              }, _ = t3.unchangedNames;
-              _ && (s2.bloomFilter = {
-                applied: 0 === i4,
-                hashCount: _?.hashCount ?? 0,
-                bitmapLength: _?.bits?.bitmap?.length ?? 0,
-                padding: _?.bits?.padding ?? 0,
-                mightContain: (e4) => r4?.mightContain(e4) ?? false
-              });
-              return s2;
-            }(r3, e2.O, this.Z.Ae(), n3, i3));
-          }
-        }
-      }
-    }
-    /**
-     * Parse the bloom filter from the "unchanged_names" field of an existence
-     * filter.
-     */
-    Pe(e2) {
-      const t2 = e2.O.unchangedNames;
-      if (!t2 || !t2.bits) return null;
-      const { bits: { bitmap: n2 = "", padding: r2 = 0 }, hashCount: i2 = 0 } = t2;
-      let s2, _;
-      try {
-        s2 = __PRIVATE_normalizeByteString(n2).toUint8Array();
-      } catch (e3) {
-        if (e3 instanceof __PRIVATE_Base64DecodeError) return __PRIVATE_logWarn("Decoding the base64 bloom filter in existence filter failed (" + e3.message + "); ignoring the bloom filter and falling back to full re-query."), null;
-        throw e3;
-      }
-      try {
-        _ = new BloomFilter(s2, r2, i2);
-      } catch (e3) {
-        return __PRIVATE_logWarn(e3 instanceof __PRIVATE_BloomFilterError ? "BloomFilter error: " : "Applying bloom filter failed: ", e3), null;
-      }
-      return 0 === _.m ? null : _;
-    }
-    /**
-     * Apply bloom filter to remove the deleted documents, and return the
-     * application status.
-     */
-    Re(e2, t2, n2) {
-      return t2.O.count === n2 - this.Ve(e2, t2.targetId) ? 0 : 2;
-    }
-    /**
-     * Filter out removed documents based on bloom filter membership result and
-     * return number of documents removed.
-     */
-    Ve(e2, t2) {
-      const n2 = this.Z.getRemoteKeysForTarget(t2);
-      let r2 = 0;
-      return n2.forEach((n3) => {
-        const i2 = this.Z.Ae(), s2 = `projects/${i2.projectId}/databases/${i2.database}/documents/${n3.path.canonicalString()}`;
-        e2.mightContain(s2) || (this.oe(
-          t2,
-          n3,
-          /*updatedDocument=*/
-          null
-        ), r2++);
-      }), r2;
-    }
-    /**
-     * Converts the currently accumulated state into a remote event at the
-     * provided snapshot version. Resets the accumulated changes before returning.
-     */
-    de(e2) {
-      const t2 = /* @__PURE__ */ new Map();
-      this.X.forEach((n3, r3) => {
-        const i2 = this.he(r3);
-        if (i2) {
-          if (n3.current && this.le(i2.target)) {
-            const t3 = __PRIVATE_targetIsPipelineTarget(i2.target) ? ResourcePath.fromString(i2.target.getPipelineDocuments()[0]) : i2.target.path, n4 = new DocumentKey(t3);
-            this.fe(n4).has(r3) || this.me(r3, n4) || this.oe(r3, n4, MutableDocument.newNoDocument(n4, e2));
-          }
-          n3.q && (t2.set(r3, n3.K()), n3.W());
-        }
-      });
-      let n2 = __PRIVATE_documentKeySet();
-      this.re.forEach((e3, t3) => {
-        let r3 = true;
-        t3.forEachWhile((e4) => {
-          const t4 = this.he(e4);
-          return !t4 || "TargetPurposeLimboResolution" === t4.purpose || (r3 = false, false);
-        }), r3 && (n2 = n2.add(e3));
-      }), this.ee.forEach((t3, n3) => n3.setReadTime(e2)), this.ne.forEach((t3, n3) => n3.setReadTime(e2));
-      const r2 = new RemoteEvent(e2, t2, this.ie, this.ee, this.ne, n2);
-      return this.ee = __PRIVATE_mutableDocumentMap(), this.te = __PRIVATE_documentTargetMap(), this.ne = __PRIVATE_mutableDocumentMap(), this.re = __PRIVATE_documentTargetMap(), this.ie = new SortedMap(__PRIVATE_primitiveComparator), r2;
-    }
-    /**
-     * Adds the provided document to the internal list of document updates and
-     * its document key to the given target's mapping.
-     */
-    // Visible for testing.
-    _e(e2, t2) {
-      const n2 = this.X.get(e2);
-      if (!n2 || !this.ue(e2)) return void __PRIVATE_logDebug(ut, `addDocumentToTarget received document for unknown inactive target (${e2})`);
-      const r2 = this.me(e2, t2.key) ? 2 : 0;
-      n2.G(t2.key, r2), __PRIVATE_targetIsPipelineTarget(this.he(e2).target) && "exact" !== this.he(e2).target.getPipelineFlavor() ? this.ne = this.ne.insert(t2.key, t2) : this.ee = this.ee.insert(t2.key, t2), this.te = this.te.insert(t2.key, this.fe(t2.key).add(e2)), this.re = this.re.insert(t2.key, this.pe(t2.key).add(e2));
-    }
-    /**
-     * Removes the provided document from the target mapping. If the
-     * document no longer matches the target, but the document's state is still
-     * known (e.g. we know that the document was deleted or we received the change
-     * that caused the filter mismatch), the new document can be provided
-     * to update the remote document cache.
-     */
-    // Visible for testing.
-    oe(e2, t2, n2) {
-      const r2 = this.X.get(e2);
-      r2 && this.ue(e2) ? (this.me(e2, t2) ? r2.G(
-        t2,
-        1
-        /* ChangeType.Removed */
-      ) : (
-        // The document may have entered and left the target before we raised a
-        // snapshot, so we can just ignore the change.
-        r2.j(t2)
-      ), this.re = this.re.insert(t2, this.pe(t2).delete(e2)), this.re = this.re.insert(t2, this.pe(t2).add(e2)), n2 && (__PRIVATE_targetIsPipelineTarget(this.he(e2).target) && "exact" !== this.he(e2).target.getPipelineFlavor() ? this.ne = this.ne.insert(t2, n2) : this.ee = this.ee.insert(t2, n2))) : __PRIVATE_logDebug(ut, `removeDocumentFromTarget received document for unknown or inactive target (${e2})`);
-    }
-    removeTarget(e2) {
-      this.X.delete(e2);
-    }
-    /**
-     * Returns the current count of documents in the target. This includes both
-     * the number of documents that the LocalStore considers to be part of the
-     * target as well as any accumulated changes.
-     */
-    Te(e2) {
-      const t2 = this.X.get(e2);
-      if (!t2) return 0;
-      const n2 = t2.K();
-      return this.Z.getRemoteKeysForTarget(e2).size + n2.addedDocuments.size - n2.removedDocuments.size;
-    }
-    /**
-     * Increment the number of acks needed from watch before we can consider the
-     * server to be 'in-sync' with the client's active targets.
-     */
-    H(e2) {
-      let t2 = this.X.get(e2);
-      t2 || (__PRIVATE_logDebug(ut, `recordPendingTargetRequest set up tracking for target ID ${e2}`), t2 = new __PRIVATE_TargetState(e2), this.X.set(e2, t2)), t2.H();
-    }
-    pe(e2) {
-      let t2 = this.re.get(e2);
-      return t2 || (t2 = new SortedSet(__PRIVATE_primitiveComparator), this.re = this.re.insert(e2, t2)), t2;
-    }
-    fe(e2) {
-      let t2 = this.te.get(e2);
-      return t2 || (t2 = new SortedSet(__PRIVATE_primitiveComparator), this.te = this.te.insert(e2, t2)), t2;
-    }
-    /**
-     * Verifies that the user is still interested in this target (by calling
-     * `getTargetDataForTarget()`) and that we are not waiting for pending ADDs
-     * from watch.
-     */
-    ue(e2) {
-      const t2 = null !== this.he(e2);
-      return t2 || __PRIVATE_logDebug(ut, "Detected inactive target", e2), t2;
-    }
-    /**
-     * Returns the TargetData for an active target (i.e. a target that the user
-     * is still interested in that has no outstanding target change requests).
-     */
-    he(e2) {
-      const t2 = this.X.get(e2);
-      return void 0 === t2 || t2.k ? null : this.Z.ge(e2);
-    }
-    /**
-     * Resets the state of a Watch target to its initial state (e.g. sets
-     * 'current' to false, clears the resume token and removes its target mapping
-     * from all documents).
-     */
-    ce(e2) {
-      this.X.set(e2, new __PRIVATE_TargetState(e2));
-      this.Z.getRemoteKeysForTarget(e2).forEach((t2) => {
-        this.oe(
-          e2,
-          t2,
-          /*updatedDocument=*/
-          null
-        );
-      });
-    }
-    /**
-     * Returns whether the LocalStore considers the document to be part of the
-     * specified target.
-     */
-    me(e2, t2) {
-      return this.Z.getRemoteKeysForTarget(e2).has(t2);
-    }
-  };
-  function __PRIVATE_documentTargetMap() {
-    return new SortedMap(DocumentKey.comparator);
-  }
-  function __PRIVATE_snapshotChangesMap() {
-    return new SortedMap(DocumentKey.comparator);
-  }
-  var ct = /* @__PURE__ */ (() => {
-    const e2 = {
-      asc: "ASCENDING",
-      desc: "DESCENDING"
-    };
-    return e2;
-  })();
-  var lt = /* @__PURE__ */ (() => {
-    const e2 = {
-      "<": "LESS_THAN",
-      "<=": "LESS_THAN_OR_EQUAL",
-      ">": "GREATER_THAN",
-      ">=": "GREATER_THAN_OR_EQUAL",
-      "==": "EQUAL",
-      "!=": "NOT_EQUAL",
-      "array-contains": "ARRAY_CONTAINS",
-      in: "IN",
-      "not-in": "NOT_IN",
-      "array-contains-any": "ARRAY_CONTAINS_ANY"
-    };
-    return e2;
-  })();
-  var Et = /* @__PURE__ */ (() => {
-    const e2 = {
-      and: "AND",
-      or: "OR"
-    };
-    return e2;
-  })();
   var JsonProtoSerializer = class {
     constructor(e2, t2) {
       this.databaseId = e2, this.useProto3Json = t2;
     }
   };
-  function __PRIVATE_toInt32Proto(e2, t2) {
-    return e2.useProto3Json || __PRIVATE_isNullOrUndefined(t2) ? t2 : {
-      value: t2
-    };
-  }
   function toTimestamp(e2, t2) {
     if (e2.useProto3Json) {
       return `${new Date(1e3 * t2.seconds).toISOString().replace(/\.\d*/, "").replace("Z", "")}.${("000000000" + t2.nanoseconds).slice(-9)}Z`;
@@ -20155,15 +19576,6 @@
   function __PRIVATE_toName(e2, t2) {
     return __PRIVATE_toResourceName(e2.databaseId, t2.path);
   }
-  function fromName(e2, t2) {
-    const n2 = __PRIVATE_fromResourceName(t2);
-    if (n2.get(1) !== e2.databaseId.projectId) throw new s(aa.INVALID_ARGUMENT, "Tried to deserialize key from different project: " + n2.get(1) + " vs " + e2.databaseId.projectId);
-    if (n2.get(3) !== e2.databaseId.database) throw new s(aa.INVALID_ARGUMENT, "Tried to deserialize key from different database: " + n2.get(3) + " vs " + e2.databaseId.database);
-    return new DocumentKey(__PRIVATE_extractLocalPathFromResourceName(n2));
-  }
-  function __PRIVATE_toQueryPath(e2, t2) {
-    return __PRIVATE_toResourceName(e2.databaseId, t2);
-  }
   function __PRIVATE_fromQueryPath(e2) {
     const t2 = __PRIVATE_fromResourceName(e2);
     return 4 === t2.length ? ResourcePath.emptyPath() : __PRIVATE_extractLocalPathFromResourceName(t2);
@@ -20181,61 +19593,6 @@
       name: __PRIVATE_toName(e2, t2),
       fields: n2.value.mapValue.fields
     };
-  }
-  function __PRIVATE_fromWatchChange(e2, t2) {
-    let n2;
-    if ("targetChange" in t2) {
-      t2.targetChange;
-      const r2 = function __PRIVATE_fromWatchTargetChangeState(e3) {
-        return "NO_CHANGE" === e3 ? 0 : "ADD" === e3 ? 1 : "REMOVE" === e3 ? 2 : "CURRENT" === e3 ? 3 : "RESET" === e3 ? 4 : l(39313, {
-          state: e3
-        });
-      }(t2.targetChange.targetChangeType || "NO_CHANGE"), i2 = t2.targetChange.targetIds || [], _ = function __PRIVATE_fromBytes(e3, t3) {
-        return e3.useProto3Json ? (__PRIVATE_hardAssert(void 0 === t3 || "string" == typeof t3, 58123), ByteString.fromBase64String(t3 || "")) : (__PRIVATE_hardAssert(void 0 === t3 || // Check if the value is an instance of both Buffer and Uint8Array,
-        // despite the fact that Buffer extends Uint8Array. In some
-        // environments, such as jsdom, the prototype chain of Buffer
-        // does not indicate that it extends Uint8Array.
-        t3 instanceof Buffer || t3 instanceof Uint8Array, 16193), ByteString.fromUint8Array(t3 || new Uint8Array()));
-      }(e2, t2.targetChange.resumeToken), o2 = t2.targetChange.cause, a = o2 && function __PRIVATE_fromRpcStatus(e3) {
-        const t3 = void 0 === e3.code ? aa.UNKNOWN : __PRIVATE_mapCodeFromRpcCode(e3.code);
-        return new s(t3, e3.message || "");
-      }(o2);
-      n2 = new __PRIVATE_WatchTargetChange(r2, i2, _, a || null);
-    } else if ("documentChange" in t2) {
-      t2.documentChange;
-      const r2 = t2.documentChange;
-      r2.document, r2.document.name, r2.document.updateTime;
-      const i2 = fromName(e2, r2.document.name), s2 = __PRIVATE_fromVersion(r2.document.updateTime), _ = r2.document.createTime ? __PRIVATE_fromVersion(r2.document.createTime) : SnapshotVersion.min(), o2 = new ObjectValue({
-        mapValue: {
-          fields: r2.document.fields
-        }
-      }), a = MutableDocument.newFoundDocument(i2, s2, _, o2), u2 = r2.targetIds || [], c2 = r2.removedTargetIds || [];
-      n2 = new __PRIVATE_DocumentWatchChange(u2, c2, a.key, a);
-    } else if ("documentDelete" in t2) {
-      t2.documentDelete;
-      const r2 = t2.documentDelete;
-      r2.document;
-      const i2 = fromName(e2, r2.document), s2 = r2.readTime ? __PRIVATE_fromVersion(r2.readTime) : SnapshotVersion.min(), _ = MutableDocument.newNoDocument(i2, s2), o2 = r2.removedTargetIds || [];
-      n2 = new __PRIVATE_DocumentWatchChange([], o2, _.key, _);
-    } else if ("documentRemove" in t2) {
-      t2.documentRemove;
-      const r2 = t2.documentRemove;
-      r2.document;
-      const i2 = fromName(e2, r2.document), s2 = r2.removedTargetIds || [];
-      n2 = new __PRIVATE_DocumentWatchChange([], s2, i2, null);
-    } else {
-      if (!("filter" in t2)) return l(11601, {
-        ye: t2
-      });
-      {
-        t2.filter;
-        const e3 = t2.filter;
-        e3.targetId;
-        const { count: r2 = 0, unchangedNames: i2 } = e3, s2 = new ExistenceFilter(r2, i2), _ = e3.targetId;
-        n2 = new __PRIVATE_ExistenceFilterChange(_, s2);
-      }
-    }
-    return n2;
   }
   function toMutation(e2, t2) {
     let n2;
@@ -20309,60 +19666,6 @@
       (n2 = __PRIVATE_fromVersion(t3)), new MutationResult(n2, e4.transformResults || []);
     }(e3, t2))) : [];
   }
-  function __PRIVATE_toDocumentsTarget(e2, t2) {
-    return {
-      documents: [__PRIVATE_toQueryPath(e2, t2.path)]
-    };
-  }
-  function __PRIVATE_toQueryTarget(e2, t2) {
-    const n2 = {
-      structuredQuery: {}
-    }, r2 = t2.path;
-    let i2;
-    null !== t2.collectionGroup ? (i2 = r2, n2.structuredQuery.from = [{
-      collectionId: t2.collectionGroup,
-      allDescendants: true
-    }]) : (i2 = r2.popLast(), n2.structuredQuery.from = [{
-      collectionId: r2.lastSegment()
-    }]), n2.parent = __PRIVATE_toQueryPath(e2, i2);
-    const s2 = function __PRIVATE_toFilters(e3) {
-      if (0 === e3.length) return;
-      return __PRIVATE_toFilter(CompositeFilter.create(
-        e3,
-        "and"
-        /* CompositeOperator.AND */
-      ));
-    }(t2.filters);
-    s2 && (n2.structuredQuery.where = s2);
-    const _ = function __PRIVATE_toOrder(e3) {
-      if (0 === e3.length) return;
-      return e3.map((e4) => (
-        // visible for testing
-        function __PRIVATE_toPropertyOrder(e5) {
-          return {
-            field: __PRIVATE_toFieldPathReference(e5.field),
-            direction: __PRIVATE_toDirection(e5.dir)
-          };
-        }(e4)
-      ));
-    }(t2.orderBy);
-    _ && (n2.structuredQuery.orderBy = _);
-    const o2 = __PRIVATE_toInt32Proto(e2, t2.limit);
-    return null !== o2 && (n2.structuredQuery.limit = o2), t2.startAt && (n2.structuredQuery.startAt = function __PRIVATE_toStartAtCursor(e3) {
-      return {
-        before: e3.inclusive,
-        values: e3.position
-      };
-    }(t2.startAt)), t2.endAt && (n2.structuredQuery.endAt = function __PRIVATE_toEndAtCursor(e3) {
-      return {
-        before: !e3.inclusive,
-        values: e3.position
-      };
-    }(t2.endAt)), {
-      be: n2,
-      parent: i2
-    };
-  }
   function __PRIVATE_convertQueryTargetToQuery(e2) {
     let t2 = __PRIVATE_fromQueryPath(e2.parent);
     const n2 = e2.structuredQuery, r2 = n2.from ? n2.from.length : 0;
@@ -20412,36 +19715,6 @@
       const t3 = !e3.before, n3 = e3.values || [];
       return new Bound(n3, t3);
     }(n2.endAt)), __PRIVATE_newQuery(t2, i2, _, s2, o2, "F", a, u2);
-  }
-  function __PRIVATE_toListenRequestLabels(e2, t2) {
-    const n2 = function __PRIVATE_toLabel(e3) {
-      switch (e3) {
-        case "TargetPurposeListen":
-          return null;
-        case "TargetPurposeExistenceFilterMismatch":
-          return "existence-filter-mismatch";
-        case "TargetPurposeExistenceFilterMismatchBloom":
-          return "existence-filter-mismatch-bloom";
-        case "TargetPurposeLimboResolution":
-          return "limbo-document";
-        default:
-          return l(28987, {
-            purpose: e3
-          });
-      }
-    }(t2.purpose);
-    return null == n2 ? null : {
-      "goog-listen-tags": n2
-    };
-  }
-  function __PRIVATE_toPipelineTarget(e2, t2) {
-    return {
-      structuredPipeline: {
-        pipeline: {
-          stages: t2.stages.map((t3) => t3._toProto(e2))
-        }
-      }
-    };
   }
   function __PRIVATE_fromFilter(e2) {
     return void 0 !== e2.unaryFilter ? function __PRIVATE_fromUnaryFilter(e3) {
@@ -20515,71 +19788,8 @@
       filter: e2
     });
   }
-  function __PRIVATE_toDirection(e2) {
-    return ct[e2];
-  }
-  function __PRIVATE_toOperatorName(e2) {
-    return lt[e2];
-  }
-  function __PRIVATE_toCompositeOperatorName(e2) {
-    return Et[e2];
-  }
-  function __PRIVATE_toFieldPathReference(e2) {
-    return {
-      fieldPath: e2.canonicalString()
-    };
-  }
   function __PRIVATE_fromFieldPathReference(e2) {
     return Oe.fromServerFormat(e2.fieldPath);
-  }
-  function __PRIVATE_toFilter(e2) {
-    return e2 instanceof FieldFilter ? function __PRIVATE_toUnaryOrFieldFilter(e3) {
-      if ("==" === e3.op) {
-        if (__PRIVATE_isNanValue(e3.value)) return {
-          unaryFilter: {
-            field: __PRIVATE_toFieldPathReference(e3.field),
-            op: "IS_NAN"
-          }
-        };
-        if (__PRIVATE_isNullValue(e3.value)) return {
-          unaryFilter: {
-            field: __PRIVATE_toFieldPathReference(e3.field),
-            op: "IS_NULL"
-          }
-        };
-      } else if ("!=" === e3.op) {
-        if (__PRIVATE_isNanValue(e3.value)) return {
-          unaryFilter: {
-            field: __PRIVATE_toFieldPathReference(e3.field),
-            op: "IS_NOT_NAN"
-          }
-        };
-        if (__PRIVATE_isNullValue(e3.value)) return {
-          unaryFilter: {
-            field: __PRIVATE_toFieldPathReference(e3.field),
-            op: "IS_NOT_NULL"
-          }
-        };
-      }
-      return {
-        fieldFilter: {
-          field: __PRIVATE_toFieldPathReference(e3.field),
-          op: __PRIVATE_toOperatorName(e3.op),
-          value: e3.value
-        }
-      };
-    }(e2) : e2 instanceof CompositeFilter ? function __PRIVATE_toCompositeFilter(e3) {
-      const t2 = e3.getFilters().map((e4) => __PRIVATE_toFilter(e4));
-      if (1 === t2.length) return t2[0];
-      return {
-        compositeFilter: {
-          op: __PRIVATE_toCompositeOperatorName(e3.op),
-          filters: t2
-        }
-      };
-    }(e2) : l(54877, {
-      filter: e2
-    });
   }
   function __PRIVATE_toDocumentMask(e2) {
     const t2 = [];
@@ -21591,65 +20801,6 @@
       };
     }
   };
-  var __PRIVATE_PersistentListenStream = class extends __PRIVATE_PersistentStream {
-    constructor(e2, t2, n2, r2, i2, s2) {
-      super(e2, "listen_stream_connection_backoff", "listen_stream_idle", "health_check_timeout", t2, n2, r2, s2), this.serializer = i2;
-    }
-    cn(e2, t2) {
-      return this.connection.vt("Listen", e2, t2);
-    }
-    En(e2) {
-      return this.onNext(e2);
-    }
-    onNext(e2) {
-      this.jt.reset();
-      const t2 = __PRIVATE_fromWatchChange(this.serializer, e2), n2 = function __PRIVATE_versionFromListenResponse(e3) {
-        if (!("targetChange" in e3)) return SnapshotVersion.min();
-        const t3 = e3.targetChange;
-        return t3.targetIds && t3.targetIds.length ? SnapshotVersion.min() : t3.readTime ? __PRIVATE_fromVersion(t3.readTime) : SnapshotVersion.min();
-      }(e2);
-      return this.listener.hn(t2, n2);
-    }
-    /**
-     * Registers interest in the results of the given target. If the target
-     * includes a resumeToken it will be included in the request. Results that
-     * affect the target will be streamed back as WatchChange messages that
-     * reference the targetId.
-     */
-    Tn(e2) {
-      const t2 = {};
-      t2.database = __PRIVATE_getEncodedDatabaseId(this.serializer), t2.addTarget = function __PRIVATE_toTarget(e3, t3) {
-        let n3;
-        const r2 = t3.target;
-        if (n3 = __PRIVATE_targetIsPipelineTarget(r2) ? {
-          pipelineQuery: __PRIVATE_toPipelineTarget(e3, r2)
-        } : __PRIVATE_targetIsDocumentTarget(r2) ? {
-          documents: __PRIVATE_toDocumentsTarget(e3, r2)
-        } : {
-          query: __PRIVATE_toQueryTarget(e3, r2).be
-        }, n3.targetId = t3.targetId, t3.resumeToken.approximateByteSize() > 0) {
-          n3.resumeToken = __PRIVATE_toBytes(e3, t3.resumeToken);
-          const r3 = __PRIVATE_toInt32Proto(e3, t3.expectedCount);
-          null !== r3 && (n3.expectedCount = r3);
-        } else if (t3.snapshotVersion.compareTo(SnapshotVersion.min()) > 0) {
-          n3.readTime = toTimestamp(e3, t3.snapshotVersion.toTimestamp());
-          const r3 = __PRIVATE_toInt32Proto(e3, t3.expectedCount);
-          null !== r3 && (n3.expectedCount = r3);
-        }
-        return n3;
-      }(this.serializer, e2);
-      const n2 = __PRIVATE_toListenRequestLabels(this.serializer, e2);
-      n2 && (t2.labels = n2), this.tn(t2);
-    }
-    /**
-     * Unregisters interest in the results of the target associated with the
-     * given targetId.
-     */
-    Pn(e2) {
-      const t2 = {};
-      t2.database = __PRIVATE_getEncodedDatabaseId(this.serializer), t2.removeTarget = e2, this.tn(t2);
-    }
-  };
   var __PRIVATE_PersistentWriteStream = class extends __PRIVATE_PersistentStream {
     constructor(e2, t2, n2, r2, i2, s2) {
       super(e2, "write_stream_connection_backoff", "write_stream_idle", "health_check_timeout", t2, n2, r2, s2), this.serializer = i2;
@@ -22456,6 +21607,31 @@ Total Duration: ${a - u2}ms`);
       return e2 instanceof ___PRIVATE_DeleteFieldValueImpl;
     }
   };
+  function __PRIVATE_createSentinelChildContext(e2, t2, n2) {
+    return new ParseContextImpl({
+      dataSource: 3,
+      targetDoc: t2.settings.targetDoc,
+      methodName: e2._methodName,
+      arrayElement: n2
+    }, t2.databaseId, t2.serializer, t2.ignoreUndefinedProperties);
+  }
+  var __PRIVATE_ArrayUnionFieldValueImpl = class ___PRIVATE_ArrayUnionFieldValueImpl extends FieldValue {
+    constructor(e2, t2) {
+      super(e2), this._r = t2;
+    }
+    _toFieldTransform(e2) {
+      const t2 = __PRIVATE_createSentinelChildContext(
+        this,
+        e2,
+        /*array=*/
+        true
+      ), n2 = this._r.map((e3) => __PRIVATE_parseData(e3, t2)), r2 = new __PRIVATE_ArrayUnionTransformOperation(n2);
+      return new FieldTransform(e2.path, r2);
+    }
+    isEqual(e2) {
+      return e2 instanceof ___PRIVATE_ArrayUnionFieldValueImpl && deepEqual(this._r, e2._r);
+    }
+  };
   function __PRIVATE_parseUpdateData(e2, t2, n2, r2) {
     const i2 = e2.createContext(1, t2, n2);
     __PRIVATE_validatePlainObject("Data must be an object, but it was:", i2, r2);
@@ -22722,6 +21898,9 @@ Total Duration: ${a - u2}ms`);
     }(e2.functionValue)) || "pipelineValue" in e2 && (null === e2.pipelineValue || function __PRIVATE_isIPipeline(e3) {
       return "object" == typeof e3 && null !== e3 && !(!("stages" in e3) || null !== e3.stages && !Array.isArray(e3.stages));
     }(e2.pipelineValue)));
+  }
+  function arrayUnion(...e2) {
+    return new __PRIVATE_ArrayUnionFieldValueImpl("arrayUnion", e2);
   }
   function r(e2) {
     return new n(e2);
@@ -26753,45 +25932,6 @@ Total Duration: ${a - u2}ms`);
     }`;
     }
   };
-  var TargetData = class _TargetData {
-    constructor(e2, t2, n2, r2, i2 = SnapshotVersion.min(), s2 = SnapshotVersion.min(), _ = ByteString.EMPTY_BYTE_STRING, o2 = null) {
-      this.target = e2, this.targetId = t2, this.purpose = n2, this.sequenceNumber = r2, this.snapshotVersion = i2, this.lastLimboFreeSnapshotVersion = s2, this.resumeToken = _, this.expectedCount = o2;
-    }
-    /** Creates a new target data instance with an updated sequence number. */
-    withSequenceNumber(e2) {
-      return new _TargetData(this.target, this.targetId, this.purpose, e2, this.snapshotVersion, this.lastLimboFreeSnapshotVersion, this.resumeToken, this.expectedCount);
-    }
-    /**
-     * Creates a new target data instance with an updated resume token and
-     * snapshot version.
-     */
-    withResumeToken(e2, t2) {
-      return new _TargetData(
-        this.target,
-        this.targetId,
-        this.purpose,
-        this.sequenceNumber,
-        t2,
-        this.lastLimboFreeSnapshotVersion,
-        e2,
-        /* expectedCount= */
-        null
-      );
-    }
-    /**
-     * Creates a new target data instance with an updated expected count.
-     */
-    withExpectedCount(e2) {
-      return new _TargetData(this.target, this.targetId, this.purpose, this.sequenceNumber, this.snapshotVersion, this.lastLimboFreeSnapshotVersion, this.resumeToken, e2);
-    }
-    /**
-     * Creates a new target data instance with an updated last limbo free
-     * snapshot version number.
-     */
-    withLastLimboFreeSnapshotVersion(e2) {
-      return new _TargetData(this.target, this.targetId, this.purpose, this.sequenceNumber, this.snapshotVersion, e2, this.resumeToken, this.expectedCount);
-    }
-  };
   var __PRIVATE_LocalSerializer = class {
     constructor(e2) {
       this.qr = e2;
@@ -26977,9 +26117,6 @@ Total Duration: ${a - u2}ms`);
   function __PRIVATE_pipelineMatches(e2, t2) {
     return __PRIVATE_runPipeline(e2, [t2]).length > 0;
   }
-  function __PRIVATE_queryOrPipelineMatches(e2, t2) {
-    return __PRIVATE_isPipeline(e2) ? __PRIVATE_pipelineMatches(e2, t2) : __PRIVATE_queryMatches(e2, t2);
-  }
   function evaluate(e2, t2, n2) {
     if (t2 instanceof H) return function __PRIVATE_evaluateCollection(e3, t3, n3) {
       return n3.filter((e4) => e4.isFoundDocument() && `/${e4.key.getCollectionPath().canonicalString()}` === t3.Er);
@@ -27037,14 +26174,6 @@ Total Duration: ${a - u2}ms`);
       }
       return 0;
     };
-  }
-  function __PRIVATE_getLastEffectiveLimit(e2) {
-    for (let t2 = e2.stages.length - 1; t2 >= 0; t2--) {
-      const n2 = e2.stages[t2];
-      if (n2 instanceof v) return {
-        limit: n2.limit
-      };
-    }
   }
   var RemoteDocumentChangeBuffer = class {
     constructor() {
@@ -28226,7 +27355,6 @@ Total Duration: ${a - u2}ms`);
     }
   };
   var lr = "LocalStore";
-  var Er = 3e8;
   var __PRIVATE_LocalStoreImpl = class {
     constructor(e2, t2, n2, r2) {
       this.persistence = e2, this.Mo = t2, this.serializer = r2, /**
@@ -28309,137 +27437,9 @@ Total Duration: ${a - u2}ms`);
     const t2 = __PRIVATE_debugCast(e2);
     return t2.persistence.runTransaction("Get last remote snapshot version", "readonly", (e3) => t2.A_.getLastRemoteSnapshotVersion(e3));
   }
-  function __PRIVATE_localStoreApplyRemoteEventToLocalCache(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2), r2 = t2.snapshotVersion;
-    let i2 = n2.No;
-    return n2.persistence.runTransaction("Apply remote event", "readwrite-primary", (e3) => {
-      const s2 = n2.Uo.newChangeBuffer({
-        trackRemovals: true
-      });
-      i2 = n2.No;
-      const _ = [];
-      t2.targetChanges.forEach((s3, o3) => {
-        const a2 = i2.get(o3);
-        if (!a2) return;
-        _.push(n2.A_.removeMatchingKeys(e3, s3.removedDocuments, o3).next(() => n2.A_.addMatchingKeys(e3, s3.addedDocuments, o3)));
-        let u2 = a2.withSequenceNumber(e3.currentSequenceNumber);
-        null !== t2.targetMismatches.get(o3) ? u2 = u2.withResumeToken(ByteString.EMPTY_BYTE_STRING, SnapshotVersion.min()).withLastLimboFreeSnapshotVersion(SnapshotVersion.min()) : s3.resumeToken.approximateByteSize() > 0 && (u2 = u2.withResumeToken(s3.resumeToken, r2)), i2 = i2.insert(o3, u2), // Update the target data if there are target changes (or if
-        // sufficient time has passed since the last update).
-        /**
-        * Returns true if the newTargetData should be persisted during an update of
-        * an active target. TargetData should always be persisted when a target is
-        * being released and should not call this function.
-        *
-        * While the target is active, TargetData updates can be omitted when nothing
-        * about the target has changed except metadata like the resume token or
-        * snapshot version. Occasionally it's worth the extra write to prevent these
-        * values from getting too stale after a crash, but this doesn't have to be
-        * too frequent.
-        */
-        function __PRIVATE_shouldPersistTargetData(e4, t3, n3) {
-          if (0 === e4.resumeToken.approximateByteSize()) return true;
-          const r3 = t3.snapshotVersion.toMicroseconds() - e4.snapshotVersion.toMicroseconds();
-          if (r3 >= Er) return true;
-          const i3 = n3.addedDocuments.size + n3.modifiedDocuments.size + n3.removedDocuments.size;
-          return i3 > 0;
-        }(a2, u2, s3) && _.push(n2.A_.updateTargetData(e3, u2));
-      });
-      let o2 = __PRIVATE_mutableDocumentMap(), a = __PRIVATE_documentKeySet();
-      if (t2.documentUpdates.forEach((r3) => {
-        t2.resolvedLimboDocuments.has(r3) && _.push(n2.persistence.referenceDelegate.updateLimboDocument(e3, r3));
-      }), // Each loop iteration only affects its "own" doc, so it's safe to get all
-      // the remote documents in advance in a single call.
-      _.push(__PRIVATE_populateDocumentChangeBuffer(e3, s2, t2.documentUpdates).next((e4) => {
-        o2 = e4.$o, a = e4.Ko;
-      })), !r2.isEqual(SnapshotVersion.min())) {
-        const t3 = n2.A_.getLastRemoteSnapshotVersion(e3).next((t4) => n2.A_.setTargetsMetadata(e3, e3.currentSequenceNumber, r2));
-        _.push(t3);
-      }
-      return PersistencePromise.waitFor(_).next(() => s2.apply(e3)).next(() => n2.localDocuments.getLocalViewOfDocuments(e3, o2, a)).next(() => o2);
-    }).then((e3) => (n2.No = i2, e3));
-  }
-  function __PRIVATE_populateDocumentChangeBuffer(e2, t2, n2) {
-    let r2 = __PRIVATE_documentKeySet(), i2 = __PRIVATE_documentKeySet();
-    return n2.forEach((e3) => r2 = r2.add(e3)), t2.getEntries(e2, r2).next((e3) => {
-      let r3 = __PRIVATE_mutableDocumentMap();
-      return n2.forEach((n3, s2) => {
-        const _ = e3.get(n3);
-        s2.isFoundDocument() !== _.isFoundDocument() && (i2 = i2.add(n3)), // Note: The order of the steps below is important, since we want
-        // to ensure that rejected limbo resolutions (which fabricate
-        // NoDocuments with SnapshotVersion.min()) never add documents to
-        // cache.
-        s2.isNoDocument() && s2.version.isEqual(SnapshotVersion.min()) ? (
-          // NoDocuments with SnapshotVersion.min() are used in manufactured
-          // events. We remove these documents from cache since we lost
-          // access.
-          (t2.removeEntry(n3, s2.readTime), r3 = r3.insert(n3, s2))
-        ) : !_.isValidDocument() || s2.version.compareTo(_.version) > 0 || 0 === s2.version.compareTo(_.version) && _.hasPendingWrites ? (t2.addEntry(s2), r3 = r3.insert(n3, s2)) : __PRIVATE_logDebug(lr, "Ignoring outdated watch update for ", n3, ". Current version:", _.version, " Watch version:", s2.version);
-      }), {
-        $o: r3,
-        Ko: i2
-      };
-    });
-  }
   function __PRIVATE_localStoreGetNextMutationBatch(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2);
     return n2.persistence.runTransaction("Get next mutation batch", "readonly", (e3) => (void 0 === t2 && (t2 = Ke), n2.mutationQueue.getNextMutationBatchAfterBatchId(e3, t2)));
-  }
-  function __PRIVATE_localStoreAllocateTarget(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2);
-    return n2.persistence.runTransaction("Allocate target", "readwrite", (e3) => {
-      let r2;
-      return n2.A_.getTargetData(e3, t2).next((i2) => i2 ? (
-        // This target has been listened to previously, so reuse the
-        // previous targetID.
-        // TODO(mcg): freshen last accessed date?
-        (r2 = i2, PersistencePromise.resolve(r2))
-      ) : n2.A_.allocateTargetId(e3).next((i3) => (r2 = new TargetData(t2, i3, "TargetPurposeListen", e3.currentSequenceNumber), n2.A_.addTargetData(e3, r2).next(() => r2))));
-    }).then((e3) => {
-      const r2 = n2.No.get(e3.targetId);
-      return (null === r2 || e3.snapshotVersion.compareTo(r2.snapshotVersion) > 0) && (n2.No = n2.No.insert(e3.targetId, e3), n2.Lo.set(t2, e3.targetId)), e3;
-    });
-  }
-  async function __PRIVATE_localStoreReleaseTarget(e2, t2, n2) {
-    const r2 = __PRIVATE_debugCast(e2), i2 = r2.No.get(t2), s2 = n2 ? "readwrite" : "readwrite-primary";
-    try {
-      n2 || await r2.persistence.runTransaction("Release target", s2, (e3) => r2.persistence.referenceDelegate.removeTarget(e3, i2));
-    } catch (e3) {
-      if (!__PRIVATE_isIndexedDbTransactionError(e3)) throw e3;
-      __PRIVATE_logDebug(lr, `Failed to update sequence numbers for target ${t2}: ${e3}`);
-    }
-    r2.No = r2.No.remove(t2), // TODO(pipeline): This needs to handle pipeline properly.
-    r2.Lo.delete(i2.target);
-  }
-  function __PRIVATE_localStoreExecuteQuery(e2, t2, n2) {
-    const r2 = __PRIVATE_debugCast(e2);
-    let i2 = SnapshotVersion.min(), s2 = __PRIVATE_documentKeySet();
-    return r2.persistence.runTransaction(
-      "Execute query",
-      "readwrite",
-      // Use readwrite instead of readonly so indexes can be created
-      // Use readwrite instead of readonly so indexes can be created
-      (e3) => function __PRIVATE_localStoreGetTargetData(e4, t3, n3) {
-        const r3 = __PRIVATE_debugCast(e4), i3 = r3.Lo.get(n3);
-        return void 0 !== i3 ? PersistencePromise.resolve(r3.No.get(i3)) : r3.A_.getTargetData(t3, n3);
-      }(r2, e3, __PRIVATE_isPipeline(t2) ? t2 : __PRIVATE_queryToTarget(t2)).next((t3) => {
-        if (t3) return i2 = t3.lastLimboFreeSnapshotVersion, r2.A_.getMatchingKeysForTargetId(e3, t3.targetId).next((e4) => {
-          s2 = e4;
-        });
-      }).next(() => r2.Mo.getDocumentsMatchingQuery(e3, t2, n2 ? i2 : SnapshotVersion.min(), n2 ? s2 : __PRIVATE_documentKeySet())).next((e4) => (
-        // TODO(pipeline): this needs to be adapted to support other pipeline flavors.
-        // For now, only 'exact' flavor is supported and it is enough.
-        (__PRIVATE_setMaxReadTime(r2, e4), {
-          documents: e4,
-          Wo: s2
-        })
-      ))
-    );
-  }
-  function __PRIVATE_setMaxReadTime(e2, t2) {
-    t2.forEach((t3, n2) => {
-      const r2 = n2.key.getCollectionGroup(), i2 = e2.Bo.get(r2) || SnapshotVersion.min();
-      n2.readTime.compareTo(i2) > 0 && e2.Bo.set(r2, n2.readTime);
-    });
   }
   var __PRIVATE_OnlineStateTracker = class {
     constructor(e2, t2) {
@@ -28587,183 +27587,8 @@ This typically indicates that your device does not have a healthy Internet conne
       false
     );
   }
-  function __PRIVATE_getRemoteTargetId(e2, t2) {
-    return e2._a.get(t2) || void 0;
-  }
-  function __PRIVATE_remoteStoreListen(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2), r2 = __PRIVATE_getRemoteTargetId(n2, t2.targetId);
-    if (void 0 !== r2 && n2.sa.has(r2)) return;
-    const i2 = (
-      /**
-      * Generate a new remote target ID for the given SDK target ID.
-      * Re-map the given SDK to the new remote ID.
-      * Delete any mapping of the old remote ID, if given.
-      * @param remoteStoreImpl
-      * @param sdkTargetId
-      * @return The new remote ID.
-      */
-      function __PRIVATE_allocateRemoteTargetId(e3, t3) {
-        const n3 = __PRIVATE_getRemoteTargetId(e3, t3);
-        void 0 !== n3 && // If there was an existing remote target ID mapped to that SDK target ID, forget about the old remote ID.
-        e3.oa.delete(n3);
-        const r3 = function __PRIVATE_generateRemoteTargetId(e4, t4) {
-          return t4 % 2 != 0 ? e4.ua.next() : e4.aa.next();
-        }(e3, t3);
-        return e3._a.set(t3, r3), e3.oa.set(r3, t3), r3;
-      }(n2, t2.targetId)
-    );
-    __PRIVATE_logDebug(hr, "remoteStoreListen mapping SDK target ID to remote", t2.targetId, i2);
-    const s2 = new TargetData(t2.target, i2, t2.purpose, t2.sequenceNumber, t2.snapshotVersion, t2.lastLimboFreeSnapshotVersion, t2.resumeToken);
-    n2.sa.set(i2, s2), __PRIVATE_shouldStartWatchStream(n2) ? (
-      // The listen will be sent in onWatchStreamOpen
-      __PRIVATE_startWatchStream(n2)
-    ) : __PRIVATE_ensureWatchStream(n2).Jt() && __PRIVATE_sendWatchRequest(n2, s2);
-  }
-  function __PRIVATE_remoteStoreUnlisten(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2), r2 = __PRIVATE_ensureWatchStream(n2), i2 = __PRIVATE_getRemoteTargetId(n2, t2);
-    __PRIVATE_logDebug(hr, "remoteStoreUnlisten removing mapping of SDK target ID to remote", t2, i2), n2.sa.delete(i2), n2._a.delete(t2), n2.oa.delete(i2), r2.Jt() && __PRIVATE_sendUnwatchRequest(n2, i2), 0 === n2.sa.size && (r2.Jt() ? r2.Xt() : __PRIVATE_canUseNetwork(n2) && // Revert to OnlineState.Unknown if the watch stream is not open and we
-    // have no listeners, since without any listens to send we cannot
-    // confirm if the stream is healthy and upgrade to OnlineState.Online.
-    n2.ha.set(
-      "Unknown"
-      /* OnlineState.Unknown */
-    ));
-  }
-  function __PRIVATE_sendWatchRequest(e2, t2) {
-    if (e2.Ta.H(t2.targetId), t2.resumeToken.approximateByteSize() > 0 || t2.snapshotVersion.compareTo(SnapshotVersion.min()) > 0) {
-      const n2 = e2.oa.get(t2.targetId);
-      if (void 0 === n2)
-        return void __PRIVATE_logDebug(hr, "SDK target ID not found for remote ID: " + t2.targetId);
-      const r2 = e2.remoteSyncer.getRemoteKeysForTarget(n2).size;
-      t2 = t2.withExpectedCount(r2);
-    }
-    __PRIVATE_ensureWatchStream(e2).Tn(t2);
-  }
-  function __PRIVATE_sendUnwatchRequest(e2, t2) {
-    e2.Ta.H(t2), __PRIVATE_ensureWatchStream(e2).Pn(t2);
-  }
-  function __PRIVATE_startWatchStream(e2) {
-    e2.Ta = new __PRIVATE_WatchChangeAggregator({
-      getRemoteKeysForTarget: (t2) => {
-        const n2 = e2.oa.get(t2);
-        return void 0 !== n2 ? e2.remoteSyncer.getRemoteKeysForTarget(n2) : __PRIVATE_documentKeySet();
-      },
-      ge: (t2) => e2.sa.get(t2) || null,
-      Ae: () => e2.datastore.serializer.databaseId
-    }), __PRIVATE_ensureWatchStream(e2).start(), e2.ha.Xo();
-  }
-  function __PRIVATE_shouldStartWatchStream(e2) {
-    return __PRIVATE_canUseNetwork(e2) && !__PRIVATE_ensureWatchStream(e2).Ht() && e2.sa.size > 0;
-  }
   function __PRIVATE_canUseNetwork(e2) {
     return 0 === __PRIVATE_debugCast(e2).ca.size;
-  }
-  function __PRIVATE_cleanUpWatchStreamState(e2) {
-    e2.Ta = void 0;
-  }
-  async function __PRIVATE_onWatchStreamConnected(e2) {
-    e2.ha.set(
-      "Online"
-      /* OnlineState.Online */
-    );
-  }
-  async function __PRIVATE_onWatchStreamOpen(e2) {
-    e2.sa.forEach((t2, n2) => {
-      __PRIVATE_sendWatchRequest(e2, t2);
-    });
-  }
-  async function __PRIVATE_onWatchStreamClose(e2, t2) {
-    __PRIVATE_cleanUpWatchStreamState(e2), // If we still need the watch stream, retry the connection.
-    __PRIVATE_shouldStartWatchStream(e2) ? (e2.ha.na(t2), __PRIVATE_startWatchStream(e2)) : (
-      // No need to restart watch stream because there are no active targets.
-      // The online state is set to unknown because there is no active attempt
-      // at establishing a connection
-      e2.ha.set(
-        "Unknown"
-        /* OnlineState.Unknown */
-      )
-    );
-  }
-  async function __PRIVATE_onWatchStreamChange(e2, t2, n2) {
-    if (
-      // Mark the client as online since we got a message from the server
-      e2.ha.set(
-        "Online"
-        /* OnlineState.Online */
-      ), t2 instanceof __PRIVATE_WatchTargetChange && 2 === t2.state && t2.cause
-    )
-      try {
-        await async function __PRIVATE_handleTargetError(e3, t3) {
-          const n3 = t3.cause;
-          for (const r2 of t3.targetIds) {
-            if (e3.sa.has(r2)) {
-              const t4 = e3.oa.get(r2);
-              void 0 !== t4 && (await e3.remoteSyncer.rejectListen(t4, n3), e3._a.delete(t4), e3.oa.delete(r2)), e3.sa.delete(r2);
-            }
-            e3.Ta.removeTarget(r2);
-          }
-        }(e2, t2);
-      } catch (n3) {
-        __PRIVATE_logDebug(hr, "Failed to remove targets %s: %s ", t2.targetIds.join(","), n3), await __PRIVATE_disableNetworkUntilRecovery(e2, n3);
-      }
-    else if (t2 instanceof __PRIVATE_DocumentWatchChange ? e2.Ta.se(t2) : t2 instanceof __PRIVATE_ExistenceFilterChange ? e2.Ta.Ee(t2) : e2.Ta.ae(t2), !n2.isEqual(SnapshotVersion.min())) try {
-      const t3 = await __PRIVATE_localStoreGetLastRemoteSnapshotVersion(e2.localStore);
-      n2.compareTo(t3) >= 0 && // We have received a target change with a global snapshot if the snapshot
-      // version is not equal to SnapshotVersion.min().
-      /**
-      * Takes a batch of changes from the Datastore, repackages them as a
-      * RemoteEvent, and passes that on to the listener, which is typically the
-      * SyncEngine.
-      */
-      await function __PRIVATE_raiseWatchSnapshot(e3, t4) {
-        const n3 = e3.Ta.de(t4);
-        n3.targetChanges.forEach((n4, r3) => {
-          if (n4.resumeToken.approximateByteSize() > 0) {
-            const i2 = e3.sa.get(r3);
-            i2 && e3.sa.set(r3, i2.withResumeToken(n4.resumeToken, t4));
-          }
-        }), // Re-establish listens for the targets that have been invalidated by
-        // existence filter mismatches.
-        // TODO ideally this would use a new remote target ID
-        n3.targetMismatches.forEach((t5, n4) => {
-          const r3 = e3.sa.get(t5);
-          if (!r3)
-            return;
-          e3.sa.set(t5, r3.withResumeToken(ByteString.EMPTY_BYTE_STRING, r3.snapshotVersion)), // Cause a hard reset by unwatching and rewatching immediately, but
-          // deliberately don't send a resume token so that we get a full update.
-          __PRIVATE_sendUnwatchRequest(e3, t5);
-          const i2 = new TargetData(r3.target, t5, n4, r3.sequenceNumber);
-          __PRIVATE_sendWatchRequest(e3, i2);
-        });
-        const r2 = (
-          /**
-          * Convert a RemoteEvent with remote IDs to a RemoteEvent with
-          * SDK IDs and dropped updates
-          * for any targets we no longer track.
-          *
-          * @param remoteStoreImpl
-          * @param remoteEvent
-          * @return a new RemoteEvent with SDK IDs and dropped updates
-          * for any targets we no longer track.
-          */
-          function __PRIVATE_toSdkRemoteEvent(e4, t5) {
-            const n4 = /* @__PURE__ */ new Map();
-            t5.targetChanges.forEach((t6, r4) => {
-              const i2 = e4.oa.get(r4);
-              void 0 !== i2 && n4.set(i2, t6);
-            });
-            let r3 = new SortedMap(__PRIVATE_primitiveComparator);
-            return t5.targetMismatches.forEach((t6, n5) => {
-              const i2 = e4.oa.get(t6);
-              void 0 !== i2 && (r3 = r3.insert(i2, n5));
-            }), new RemoteEvent(t5.snapshotVersion, n4, r3, t5.documentUpdates, t5.augmentedDocumentUpdates, t5.resolvedLimboDocuments);
-          }(e3, n3)
-        );
-        return e3.remoteSyncer.applyRemoteEvent(r2);
-      }(e2, n2);
-    } catch (t3) {
-      __PRIVATE_logDebug(hr, "Failed to raise snapshot:", t3), await __PRIVATE_disableNetworkUntilRecovery(e2, t3);
-    }
   }
   async function __PRIVATE_disableNetworkUntilRecovery(e2, t2, n2) {
     if (!__PRIVATE_isIndexedDbTransactionError(t2)) throw t2;
@@ -28874,23 +27699,6 @@ This typically indicates that your device does not have a healthy Internet conne
       /* OnlineState.Unknown */
     ));
   }
-  function __PRIVATE_ensureWatchStream(e2) {
-    return e2.Pa || // Create stream (but note that it is not started yet).
-    (e2.Pa = function __PRIVATE_newPersistentWatchStream(e3, t2, n2) {
-      const r2 = __PRIVATE_debugCast(e3);
-      return r2.mn(), new __PRIVATE_PersistentListenStream(t2, r2.connection, r2.authCredentials, r2.appCheckCredentials, r2.serializer, n2);
-    }(e2.datastore, e2.asyncQueue, {
-      ut: __PRIVATE_onWatchStreamConnected.bind(null, e2),
-      lt: __PRIVATE_onWatchStreamOpen.bind(null, e2),
-      ht: __PRIVATE_onWatchStreamClose.bind(null, e2),
-      hn: __PRIVATE_onWatchStreamChange.bind(null, e2)
-    }), e2.la.push(async (t2) => {
-      t2 ? (e2.Pa.Zt(), __PRIVATE_shouldStartWatchStream(e2) ? __PRIVATE_startWatchStream(e2) : e2.ha.set(
-        "Unknown"
-        /* OnlineState.Unknown */
-      )) : (await e2.Pa.stop(), __PRIVATE_cleanUpWatchStreamState(e2));
-    })), e2.Pa;
-  }
   function __PRIVATE_ensureWriteStream(e2) {
     return e2.Ra || // Create stream (but note that it is not started yet).
     (e2.Ra = function __PRIVATE_newPersistentWriteStream(e3, t2, n2) {
@@ -28907,29 +27715,6 @@ This typically indicates that your device does not have a healthy Internet conne
       await __PRIVATE_fillWritePipeline(e2)) : (await e2.Ra.stop(), e2.ia.length > 0 && (__PRIVATE_logDebug(hr, `Stopping write stream with ${e2.ia.length} pending writes`), e2.ia = []));
     })), e2.Ra;
   }
-  var __PRIVATE_AsyncObserver = class {
-    constructor(e2) {
-      this.observer = e2, /**
-       * When set to true, will not raise future events. Necessary to deal with
-       * async detachment of listener.
-       */
-      this.muted = false;
-    }
-    next(e2) {
-      this.muted || this.observer.next && this.Ia(this.observer.next, e2);
-    }
-    error(e2) {
-      this.muted || (this.observer.error ? this.Ia(this.observer.error, e2) : __PRIVATE_logError("Uncaught Error in snapshot listener:", e2.toString()));
-    }
-    Aa() {
-      this.muted = true;
-    }
-    Ia(e2, t2) {
-      setTimeout(() => {
-        this.muted || e2(t2);
-      }, 0);
-    }
-  };
   var DelayedOperation = class _DelayedOperation {
     constructor(e2, t2, n2, r2, i2) {
       this.asyncQueue = e2, this.timerId = t2, this.targetTimeMs = n2, this.op = r2, this.removalCallback = i2, this.deferred = new __PRIVATE_Deferred(), this.then = this.deferred.promise.then.bind(this.deferred.promise), // It's normal for the deferred promise to be canceled (due to cancellation)
@@ -29062,170 +27847,6 @@ This typically indicates that your device does not have a healthy Internet conne
   function getDocument() {
     return "undefined" != typeof document ? document : null;
   }
-  var DocumentSet = class _DocumentSet {
-    /**
-     * Returns an empty copy of the existing DocumentSet, using the same
-     * comparator.
-     */
-    static emptySet(e2) {
-      return new _DocumentSet(e2.comparator);
-    }
-    /** The default ordering is by key if the comparator is omitted */
-    constructor(e2) {
-      this.comparator = e2 ? (t2, n2) => e2(t2, n2) || DocumentKey.comparator(t2.key, n2.key) : (e3, t2) => DocumentKey.comparator(e3.key, t2.key), this.keyedMap = documentMap(), this.sortedSet = new SortedMap(this.comparator);
-    }
-    has(e2) {
-      return null != this.keyedMap.get(e2);
-    }
-    get(e2) {
-      return this.keyedMap.get(e2);
-    }
-    first() {
-      return this.sortedSet.minKey();
-    }
-    last() {
-      return this.sortedSet.maxKey();
-    }
-    isEmpty() {
-      return this.sortedSet.isEmpty();
-    }
-    /**
-     * Returns the index of the provided key in the document set, or -1 if the
-     * document key is not present in the set;
-     */
-    indexOf(e2) {
-      const t2 = this.keyedMap.get(e2);
-      return t2 ? this.sortedSet.indexOf(t2) : -1;
-    }
-    get size() {
-      return this.sortedSet.size;
-    }
-    /** Iterates documents in order defined by "comparator" */
-    forEach(e2) {
-      this.sortedSet.inorderTraversal((t2, n2) => (e2(t2), false));
-    }
-    /** Inserts or updates a document with the same key */
-    add(e2) {
-      const t2 = this.delete(e2.key);
-      return t2.copy(t2.keyedMap.insert(e2.key, e2), t2.sortedSet.insert(e2, null));
-    }
-    /** Deletes a document with a given key */
-    delete(e2) {
-      const t2 = this.get(e2);
-      return t2 ? this.copy(this.keyedMap.remove(e2), this.sortedSet.remove(t2)) : this;
-    }
-    isEqual(e2) {
-      if (!(e2 instanceof _DocumentSet)) return false;
-      if (this.size !== e2.size) return false;
-      const t2 = this.sortedSet.getIterator(), n2 = e2.sortedSet.getIterator();
-      for (; t2.hasNext(); ) {
-        const e3 = t2.getNext().key, r2 = n2.getNext().key;
-        if (!e3.isEqual(r2)) return false;
-      }
-      return true;
-    }
-    toString() {
-      const e2 = [];
-      return this.forEach((t2) => {
-        e2.push(t2.toString());
-      }), 0 === e2.length ? "DocumentSet ()" : "DocumentSet (\n  " + e2.join("  \n") + "\n)";
-    }
-    copy(e2, t2) {
-      const n2 = new _DocumentSet();
-      return n2.comparator = this.comparator, n2.keyedMap = e2, n2.sortedSet = t2, n2;
-    }
-  };
-  var __PRIVATE_DocumentChangeSet = class {
-    constructor() {
-      this.mu = new SortedMap(DocumentKey.comparator);
-    }
-    track(e2) {
-      const t2 = e2.doc.key, n2 = this.mu.get(t2);
-      n2 ? (
-        // Merge the new change with the existing change.
-        0 !== e2.type && 3 === n2.type ? this.mu = this.mu.insert(t2, e2) : 3 === e2.type && 1 !== n2.type ? this.mu = this.mu.insert(t2, {
-          type: n2.type,
-          doc: e2.doc
-        }) : 2 === e2.type && 2 === n2.type ? this.mu = this.mu.insert(t2, {
-          type: 2,
-          doc: e2.doc
-        }) : 2 === e2.type && 0 === n2.type ? this.mu = this.mu.insert(t2, {
-          type: 0,
-          doc: e2.doc
-        }) : 1 === e2.type && 0 === n2.type ? this.mu = this.mu.remove(t2) : 1 === e2.type && 2 === n2.type ? this.mu = this.mu.insert(t2, {
-          type: 1,
-          doc: n2.doc
-        }) : 0 === e2.type && 1 === n2.type ? this.mu = this.mu.insert(t2, {
-          type: 2,
-          doc: e2.doc
-        }) : (
-          // This includes these cases, which don't make sense:
-          // Added->Added
-          // Removed->Removed
-          // Modified->Added
-          // Removed->Modified
-          // Metadata->Added
-          // Removed->Metadata
-          l(63341, {
-            ye: e2,
-            pu: n2
-          })
-        )
-      ) : this.mu = this.mu.insert(t2, e2);
-    }
-    gu() {
-      const e2 = [];
-      return this.mu.inorderTraversal((t2, n2) => {
-        e2.push(n2);
-      }), e2;
-    }
-  };
-  var ViewSnapshot = class _ViewSnapshot {
-    constructor(e2, t2, n2, r2, i2, s2, _, o2, a) {
-      this.query = e2, this.docs = t2, this.oldDocs = n2, this.docChanges = r2, this.mutatedKeys = i2, this.fromCache = s2, this.syncStateChanged = _, this.excludesMetadataChanges = o2, this.hasCachedResults = a;
-    }
-    /** Returns a view snapshot as if all documents in the snapshot were added. */
-    static fromInitialDocuments(e2, t2, n2, r2, i2) {
-      const s2 = [];
-      return t2.forEach((e3) => {
-        s2.push({
-          type: 0,
-          doc: e3
-        });
-      }), new _ViewSnapshot(
-        e2,
-        t2,
-        DocumentSet.emptySet(t2),
-        s2,
-        n2,
-        r2,
-        /* syncStateChanged= */
-        true,
-        /* excludesMetadataChanges= */
-        false,
-        i2
-      );
-    }
-    get hasPendingWrites() {
-      return !this.mutatedKeys.isEmpty();
-    }
-    isEqual(e2) {
-      if (!(this.fromCache === e2.fromCache && this.hasCachedResults === e2.hasCachedResults && this.syncStateChanged === e2.syncStateChanged && this.mutatedKeys.isEqual(e2.mutatedKeys) && __PRIVATE_queryOrPipelineEqual(this.query, e2.query) && this.docs.isEqual(e2.docs) && this.oldDocs.isEqual(e2.oldDocs))) return false;
-      const t2 = this.docChanges, n2 = e2.docChanges;
-      if (t2.length !== n2.length) return false;
-      for (let e3 = 0; e3 < t2.length; e3++) if (t2[e3].type !== n2[e3].type || !t2[e3].doc.isEqual(n2[e3].doc)) return false;
-      return true;
-    }
-  };
-  var __PRIVATE_QueryListenersInfo = class {
-    constructor() {
-      this.yu = void 0, this.wu = [];
-    }
-    // Helper methods that checks if the query has listeners that listening to remote store
-    bu() {
-      return this.wu.some((e2) => e2.vu());
-    }
-  };
   var __PRIVATE_EventManagerImpl = class {
     constructor() {
       this.queries = __PRIVATE_newQueriesObjectMap(), this.onlineState = "Unknown", this.Su = /* @__PURE__ */ new Set();
@@ -29242,86 +27863,6 @@ This typically indicates that your device does not have a healthy Internet conne
   function __PRIVATE_newQueriesObjectMap() {
     return new ObjectMap((e2) => __PRIVATE_canonifyQueryOrPipeline(e2), __PRIVATE_queryOrPipelineEqual);
   }
-  async function __PRIVATE_eventManagerListen(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2);
-    let r2 = 3;
-    const i2 = t2.query;
-    let s2 = n2.queries.get(i2);
-    s2 ? !s2.bu() && t2.vu() && // Query has been listening to local cache, and tries to add a new listener sourced from watch.
-    (r2 = 2) : (s2 = new __PRIVATE_QueryListenersInfo(), r2 = t2.vu() ? 0 : 1);
-    try {
-      switch (r2) {
-        case 0:
-          s2.yu = await n2.onListen(
-            i2,
-            /** enableRemoteListen= */
-            true
-          );
-          break;
-        case 1:
-          s2.yu = await n2.onListen(
-            i2,
-            /** enableRemoteListen= */
-            false
-          );
-          break;
-        case 2:
-          await n2.onFirstRemoteStoreListen(i2);
-      }
-    } catch (e3) {
-      const n3 = __PRIVATE_wrapInUserErrorIfRecoverable(e3, `Initialization of query '${__PRIVATE_isPipeline(t2.query) ? __PRIVATE_canonifyPipeline(t2.query) : __PRIVATE_stringifyQuery(t2.query)}' failed`);
-      return void t2.onError(n3);
-    }
-    if (n2.queries.set(i2, s2), s2.wu.push(t2), // Run global snapshot listeners if a consistent snapshot has been emitted.
-    t2.Du(n2.onlineState), s2.yu) {
-      t2.xu(s2.yu) && __PRIVATE_raiseSnapshotsInSyncEvent(n2);
-    }
-  }
-  async function __PRIVATE_eventManagerUnlisten(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2), r2 = t2.query;
-    let i2 = 3;
-    const s2 = n2.queries.get(r2);
-    if (s2) {
-      const e3 = s2.wu.indexOf(t2);
-      e3 >= 0 && (s2.wu.splice(e3, 1), 0 === s2.wu.length ? i2 = t2.vu() ? 0 : 1 : !s2.bu() && t2.vu() && // The removed listener is the last one that sourced from watch.
-      (i2 = 2));
-    }
-    switch (i2) {
-      case 0:
-        return n2.queries.delete(r2), n2.onUnlisten(
-          r2,
-          /** disableRemoteListen= */
-          true
-        );
-      case 1:
-        return n2.queries.delete(r2), n2.onUnlisten(
-          r2,
-          /** disableRemoteListen= */
-          false
-        );
-      case 2:
-        return n2.onLastRemoteStoreUnlisten(r2);
-      default:
-        return;
-    }
-  }
-  function __PRIVATE_eventManagerOnWatchChange(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2);
-    let r2 = false;
-    for (const e3 of t2) {
-      const t3 = e3.query, i2 = n2.queries.get(t3);
-      if (i2) {
-        for (const t4 of i2.wu) t4.xu(e3) && (r2 = true);
-        i2.yu = e3;
-      }
-    }
-    r2 && __PRIVATE_raiseSnapshotsInSyncEvent(n2);
-  }
-  function __PRIVATE_eventManagerOnWatchError(e2, t2, n2) {
-    const r2 = __PRIVATE_debugCast(e2), i2 = r2.queries.get(t2);
-    if (i2) for (const e3 of i2.wu) e3.onError(n2);
-    r2.queries.delete(t2);
-  }
   function __PRIVATE_raiseSnapshotsInSyncEvent(e2) {
     e2.Su.forEach((e3) => {
       e3.next();
@@ -29332,354 +27873,7 @@ This typically indicates that your device does not have a healthy Internet conne
     e2.Default = "default", /** Listen to changes in cache only */
     e2.Cache = "cache";
   }(Vr || (Vr = {}));
-  var __PRIVATE_QueryListener = class {
-    constructor(e2, t2, n2) {
-      this.query = e2, this.Cu = t2, /**
-       * Initial snapshots (e.g. from cache) may not be propagated to the wrapped
-       * observer. This flag is set to true once we've actually raised an event.
-       */
-      this.Fu = false, this.Ou = null, this.onlineState = "Unknown", this.options = n2 || {};
-    }
-    /**
-     * Applies the new ViewSnapshot to this listener, raising a user-facing event
-     * if applicable (depending on what changed, whether the user has opted into
-     * metadata-only changes, etc.). Returns true if a user-facing event was
-     * indeed raised.
-     */
-    xu(e2) {
-      if (!this.options.includeMetadataChanges) {
-        const t3 = [];
-        for (const n2 of e2.docChanges) 3 !== n2.type && t3.push(n2);
-        e2 = new ViewSnapshot(
-          e2.query,
-          e2.docs,
-          e2.oldDocs,
-          t3,
-          e2.mutatedKeys,
-          e2.fromCache,
-          e2.syncStateChanged,
-          /* excludesMetadataChanges= */
-          true,
-          e2.hasCachedResults
-        );
-      }
-      let t2 = false;
-      return this.Fu ? this.Mu(e2) && (this.Cu.next(e2), t2 = true) : this.Nu(e2, this.onlineState) && (this.Lu(e2), t2 = true), this.Ou = e2, t2;
-    }
-    onError(e2) {
-      this.Cu.error(e2);
-    }
-    /** Returns whether a snapshot was raised. */
-    Du(e2) {
-      this.onlineState = e2;
-      let t2 = false;
-      return this.Ou && !this.Fu && this.Nu(this.Ou, e2) && (this.Lu(this.Ou), t2 = true), t2;
-    }
-    Nu(e2, t2) {
-      if (!e2.fromCache) return true;
-      if (!this.vu()) return true;
-      const n2 = "Offline" !== t2;
-      return (!this.options.waitForSyncWhenOnline || !n2) && (!e2.docs.isEmpty() || e2.hasCachedResults || "Offline" === t2);
-    }
-    Mu(e2) {
-      if (e2.docChanges.length > 0) return true;
-      const t2 = this.Ou && this.Ou.hasPendingWrites !== e2.hasPendingWrites;
-      return !(!e2.syncStateChanged && !t2) && true === this.options.includeMetadataChanges;
-    }
-    Lu(e2) {
-      e2 = ViewSnapshot.fromInitialDocuments(e2.query, e2.docs, e2.mutatedKeys, e2.fromCache, e2.hasCachedResults), this.Fu = true, this.Cu.next(e2);
-    }
-    vu() {
-      return this.options.source !== Vr.Cache;
-    }
-  };
-  var __PRIVATE_AddedLimboDocument = class {
-    constructor(e2) {
-      this.key = e2;
-    }
-  };
-  var __PRIVATE_RemovedLimboDocument = class {
-    constructor(e2) {
-      this.key = e2;
-    }
-  };
-  var __PRIVATE_View = class {
-    constructor(e2, t2) {
-      this.query = e2, this.Gu = t2, this.zu = null, this.hasCachedResults = false, /**
-       * A flag whether the view is current with the backend. A view is considered
-       * current after it has seen the current flag from the backend and did not
-       * lose consistency within the watch stream (e.g. because of an existence
-       * filter mismatch).
-       */
-      this.current = false, /** Documents in the view but not in the remote target */
-      this.ju = __PRIVATE_documentKeySet(), /** Document Keys that have local changes */
-      this.mutatedKeys = __PRIVATE_documentKeySet(), this.Hu = __PRIVATE_isPipeline(e2) ? __PRIVATE_newPipelineComparator(e2) : __PRIVATE_newQueryComparator(e2), this.Ju = new DocumentSet(this.Hu);
-    }
-    /**
-     * The set of remote documents that the server has told us belongs to the target associated with
-     * this view.
-     */
-    get Yu() {
-      return this.Gu;
-    }
-    /**
-     * Iterates over a set of doc changes, applies the query limit, and computes
-     * what the new results should be, what the changes were, and whether we may
-     * need to go back to the local cache for more results. Does not make any
-     * changes to the view.
-     * @param docChanges - The doc changes to apply to this view.
-     * @param previousChanges - If this is being called with a refill, then start
-     *        with this set of docs and changes instead of the current view.
-     * @returns a new set of docs, changes, and refill flag.
-     */
-    Zu(e2, t2) {
-      const n2 = t2 ? t2.Xu : new __PRIVATE_DocumentChangeSet(), r2 = t2 ? t2.Ju : this.Ju;
-      let i2 = t2 ? t2.mutatedKeys : this.mutatedKeys, s2 = r2, _ = false;
-      const [o2, a] = this.ec(this.query, r2);
-      e2.inorderTraversal((e3, t3) => {
-        const u3 = r2.get(e3), c2 = __PRIVATE_queryOrPipelineMatches(this.query, t3) ? t3 : null, l2 = !!u3 && this.mutatedKeys.has(u3.key), E = !!c2 && (c2.hasLocalMutations || // We only consider committed mutations for documents that were
-        // mutated during the lifetime of the view.
-        this.mutatedKeys.has(c2.key) && c2.hasCommittedMutations);
-        let h = false;
-        if (u3 && c2) {
-          u3.data.isEqual(c2.data) ? l2 !== E && (n2.track({
-            type: 3,
-            doc: c2
-          }), h = true) : this.tc(u3, c2) || (n2.track({
-            type: 2,
-            doc: c2
-          }), h = true, (o2 && this.Hu(c2, o2) > 0 || a && this.Hu(c2, a) < 0) && // This doc moved from inside the limit to outside the limit.
-          // That means there may be some other doc in the local cache
-          // that should be included instead.
-          (_ = true));
-        } else !u3 && c2 ? (n2.track({
-          type: 0,
-          doc: c2
-        }), h = true) : u3 && !c2 && (n2.track({
-          type: 1,
-          doc: u3
-        }), h = true, (o2 || a) && // A doc was removed from a full limit query. We'll need to
-        // requery from the local cache to see if we know about some other
-        // doc that should be in the results.
-        (_ = true));
-        h && (c2 ? (s2 = s2.add(c2), i2 = E ? i2.add(e3) : i2.delete(e3)) : (s2 = s2.delete(e3), i2 = i2.delete(e3)));
-      });
-      const u2 = this.nc(this.query);
-      if (u2) if (__PRIVATE_isPipeline(this.query)) {
-        const e3 = [];
-        s2.forEach((t4) => e3.push(t4));
-        const t3 = __PRIVATE_runPipeline(this.query, e3);
-        let r3 = new DocumentSet(__PRIVATE_newPipelineComparator(this.query));
-        for (const e4 of t3) r3 = r3.add(e4);
-        s2.forEach((e4) => {
-          r3.has(e4.key) || (i2 = i2.delete(e4.key), n2.track({
-            type: 1,
-            doc: e4
-          }));
-        }), s2 = r3;
-      } else {
-        const e3 = this.rc(this.query);
-        for (; s2.size > u2; ) {
-          const t3 = "F" === e3 ? s2.last() : s2.first();
-          s2 = s2.delete(t3.key), i2 = i2.delete(t3.key), n2.track({
-            type: 1,
-            doc: t3
-          });
-        }
-      }
-      return {
-        Ju: s2,
-        Xu: n2,
-        Fo: _,
-        mutatedKeys: i2
-      };
-    }
-    nc(e2) {
-      return __PRIVATE_isPipeline(e2) ? __PRIVATE_getLastEffectiveLimit(e2)?.limit : e2.limit || void 0;
-    }
-    rc(e2) {
-      if (__PRIVATE_isPipeline(e2)) {
-        const t2 = __PRIVATE_getLastEffectiveLimit(e2);
-        return t2 && t2.limit < 0 ? "L" : "F";
-      }
-      return e2.limitType;
-    }
-    ec(e2, t2) {
-      if (__PRIVATE_isPipeline(e2)) {
-        const n2 = __PRIVATE_getLastEffectiveLimit(e2)?.limit;
-        return [t2.size === n2 ? t2.last() : null, null];
-      }
-      return ["F" === e2.limitType && t2.size === this.nc(this.query) ? t2.last() : null, "L" === e2.limitType && t2.size === this.nc(this.query) ? t2.first() : null];
-    }
-    tc(e2, t2) {
-      return e2.hasLocalMutations && t2.hasCommittedMutations && !t2.hasLocalMutations;
-    }
-    /**
-     * Updates the view with the given ViewDocumentChanges and optionally updates
-     * limbo docs and sync state from the provided target change.
-     * @param docChanges - The set of changes to make to the view's docs.
-     * @param limboResolutionEnabled - Whether to update limbo documents based on
-     *        this change.
-     * @param targetChange - A target change to apply for computing limbo docs and
-     *        sync state.
-     * @param targetIsPendingReset - Whether the target is pending to reset due to
-     *        existence filter mismatch. If not explicitly specified, it is treated
-     *        equivalently to `false`.
-     * @returns A new ViewChange with the given docs, changes, and sync state.
-     */
-    // PORTING NOTE: The iOS/Android clients always compute limbo document changes.
-    applyChanges(e2, t2, n2, r2) {
-      const i2 = this.Ju;
-      this.Ju = e2.Ju, this.mutatedKeys = e2.mutatedKeys;
-      const s2 = e2.Xu.gu();
-      s2.sort((e3, t3) => function __PRIVATE_compareChangeType(e4, t4) {
-        const order = (e5) => {
-          switch (e5) {
-            case 0:
-              return 1;
-            case 2:
-            case 3:
-              return 2;
-            case 1:
-              return 0;
-            default:
-              return l(20277, {
-                ye: e5
-              });
-          }
-        };
-        return order(e4) - order(t4);
-      }(e3.type, t3.type) || this.Hu(e3.doc, t3.doc)), this.sc(n2), r2 = r2 ?? false;
-      const _ = t2 && !r2 ? this._c() : [], o2 = 0 === this.ju.size && this.current && !r2 ? 1 : 0, a = o2 !== this.zu;
-      if (this.zu = o2, 0 !== s2.length || a) {
-        return {
-          snapshot: new ViewSnapshot(
-            this.query,
-            e2.Ju,
-            i2,
-            s2,
-            e2.mutatedKeys,
-            0 === o2,
-            a,
-            /* excludesMetadataChanges= */
-            false,
-            !!n2 && n2.resumeToken.approximateByteSize() > 0
-          ),
-          oc: _
-        };
-      }
-      return {
-        oc: _
-      };
-    }
-    /**
-     * Applies an OnlineState change to the view, potentially generating a
-     * ViewChange if the view's syncState changes as a result.
-     */
-    Du(e2) {
-      return this.current && "Offline" === e2 ? (
-        // If we're offline, set `current` to false and then call applyChanges()
-        // to refresh our syncState and generate a ViewChange as appropriate. We
-        // are guaranteed to get a new TargetChange that sets `current` back to
-        // true once the client is back online.
-        (this.current = false, this.applyChanges(
-          {
-            Ju: this.Ju,
-            Xu: new __PRIVATE_DocumentChangeSet(),
-            mutatedKeys: this.mutatedKeys,
-            Fo: false
-          },
-          /* limboResolutionEnabled= */
-          false
-        ))
-      ) : {
-        oc: []
-      };
-    }
-    /**
-     * Returns whether the doc for the given key should be in limbo.
-     */
-    ac(e2) {
-      return !this.Gu.has(e2) && // The local store doesn't think it's a result, so it shouldn't be in limbo.
-      (!!this.Ju.has(e2) && !this.Ju.get(e2).hasLocalMutations);
-    }
-    /**
-     * Updates syncedDocuments, current, and limbo docs based on the given change.
-     * Returns the list of changes to which docs are in limbo.
-     */
-    sc(e2) {
-      e2 && (e2.addedDocuments.forEach((e3) => this.Gu = this.Gu.add(e3)), e2.modifiedDocuments.forEach((e3) => {
-      }), e2.removedDocuments.forEach((e3) => this.Gu = this.Gu.delete(e3)), this.current = e2.current);
-    }
-    _c() {
-      if (!this.current) return [];
-      const e2 = this.ju;
-      this.ju = __PRIVATE_documentKeySet(), this.Ju.forEach((e3) => {
-        this.ac(e3.key) && (this.ju = this.ju.add(e3.key));
-      });
-      const t2 = [];
-      return e2.forEach((e3) => {
-        this.ju.has(e3) || t2.push(new __PRIVATE_RemovedLimboDocument(e3));
-      }), this.ju.forEach((n2) => {
-        e2.has(n2) || t2.push(new __PRIVATE_AddedLimboDocument(n2));
-      }), t2;
-    }
-    /**
-     * Update the in-memory state of the current view with the state read from
-     * persistence.
-     *
-     * We update the query view whenever a client's primary status changes:
-     * - When a client transitions from primary to secondary, it can miss
-     *   LocalStorage updates and its query views may temporarily not be
-     *   synchronized with the state on disk.
-     * - For secondary to primary transitions, the client needs to update the list
-     *   of `syncedDocuments` since secondary clients update their query views
-     *   based purely on synthesized RemoteEvents.
-     *
-     * @param queryResult.documents - The documents that match the query according
-     * to the LocalStore.
-     * @param queryResult.remoteKeys - The keys of the documents that match the
-     * query according to the backend.
-     *
-     * @returns The ViewChange that resulted from this synchronization.
-     */
-    // PORTING NOTE: Multi-tab only.
-    uc(e2) {
-      this.Gu = e2.Wo, this.ju = __PRIVATE_documentKeySet();
-      const t2 = this.Zu(e2.documents);
-      return this.applyChanges(
-        t2,
-        /* limboResolutionEnabled= */
-        true
-      );
-    }
-    /**
-     * Returns a view snapshot as if this query was just listened to. Contains
-     * a document add for every existing document and the `fromCache` and
-     * `hasPendingWrites` status of the already established view.
-     */
-    // PORTING NOTE: Multi-tab only.
-    cc() {
-      return ViewSnapshot.fromInitialDocuments(this.query, this.Ju, this.mutatedKeys, 0 === this.zu, this.hasCachedResults);
-    }
-  };
   var dr = "SyncEngine";
-  var __PRIVATE_QueryView = class {
-    constructor(e2, t2, n2) {
-      this.query = e2, this.targetId = t2, this.view = n2;
-    }
-  };
-  var LimboResolution = class {
-    constructor(e2) {
-      this.key = e2, /**
-       * Set to true once we've received a document. This is used in
-       * getRemoteKeysForTarget() and ultimately used by WatchChangeAggregator to
-       * decide whether it needs to manufacture a delete event for the target once
-       * the target is CURRENT.
-       */
-      this.lc = false;
-    }
-  };
   var __PRIVATE_SyncEngineImpl = class {
     constructor(e2, t2, n2, r2, i2, s2) {
       this.localStore = e2, this.remoteStore = t2, this.eventManager = n2, this.sharedClientState = r2, this.currentUser = i2, this.maxConcurrentLimboResolutions = s2, this.Ec = {}, this.hc = new ObjectMap((e3) => __PRIVATE_canonifyQueryOrPipeline(e3), __PRIVATE_queryOrPipelineEqual), this.Tc = /* @__PURE__ */ new Map(), /**
@@ -29710,104 +27904,6 @@ This typically indicates that your device does not have a healthy Internet conne
       return true === this.mc;
     }
   };
-  async function __PRIVATE_syncEngineListen(e2, t2, n2 = true) {
-    const r2 = __PRIVATE_ensureWatchCallbacks(e2);
-    let i2;
-    const s2 = r2.hc.get(t2);
-    return s2 ? (
-      // PORTING NOTE: With Multi-Tab Web, it is possible that a query view
-      // already exists when EventManager calls us for the first time. This
-      // happens when the primary tab is already listening to this query on
-      // behalf of another tab and the user of the primary also starts listening
-      // to the query. EventManager will not have an assigned target ID in this
-      // case and calls `listen` to obtain this ID.
-      (r2.sharedClientState.addLocalQueryTarget(s2.targetId), i2 = s2.view.cc())
-    ) : i2 = await __PRIVATE_allocateTargetAndMaybeListen(
-      r2,
-      t2,
-      n2,
-      /** shouldInitializeView= */
-      true
-    ), i2;
-  }
-  async function __PRIVATE_triggerRemoteStoreListen(e2, t2) {
-    const n2 = __PRIVATE_ensureWatchCallbacks(e2);
-    await __PRIVATE_allocateTargetAndMaybeListen(
-      n2,
-      t2,
-      /** shouldListenToRemote= */
-      true,
-      /** shouldInitializeView= */
-      false
-    );
-  }
-  async function __PRIVATE_allocateTargetAndMaybeListen(e2, t2, n2, r2) {
-    const i2 = await __PRIVATE_localStoreAllocateTarget(e2.localStore, __PRIVATE_isPipeline(t2) ? t2 : __PRIVATE_queryToTarget(t2)), s2 = i2.targetId, _ = e2.sharedClientState.addLocalQueryTarget(s2, n2);
-    let o2;
-    return r2 && (o2 = await __PRIVATE_initializeViewAndComputeSnapshot(e2, t2, s2, "current" === _, i2.resumeToken)), e2.isPrimaryClient && n2 && __PRIVATE_remoteStoreListen(e2.remoteStore, i2), o2;
-  }
-  async function __PRIVATE_initializeViewAndComputeSnapshot(e2, t2, n2, r2, i2) {
-    e2.gc = (t3, n3, r3) => async function __PRIVATE_applyDocChanges(e3, t4, n4, r4) {
-      let i3 = t4.view.Zu(n4);
-      i3.Fo && // The query has a limit and some docs were removed, so we need
-      // to re-run the query against the local store to make sure we
-      // didn't lose any good docs that had been past the limit.
-      (i3 = await __PRIVATE_localStoreExecuteQuery(
-        e3.localStore,
-        t4.query,
-        /* usePreviousResults= */
-        false
-      ).then(({ documents: e4 }) => t4.view.Zu(e4, i3)));
-      const s3 = r4 && r4.targetChanges.get(t4.targetId), _2 = r4 && null != r4.targetMismatches.get(t4.targetId), o3 = t4.view.applyChanges(
-        i3,
-        /* limboResolutionEnabled= */
-        e3.isPrimaryClient,
-        s3,
-        _2
-      );
-      return __PRIVATE_updateTrackedLimbos(e3, t4.targetId, o3.oc), o3.snapshot;
-    }(e2, t3, n3, r3);
-    const s2 = await __PRIVATE_localStoreExecuteQuery(
-      e2.localStore,
-      t2,
-      /* usePreviousResults= */
-      true
-    ), _ = new __PRIVATE_View(t2, s2.Wo), o2 = _.Zu(s2.documents), a = TargetChange.createSynthesizedTargetChangeForCurrentChange(n2, r2 && "Offline" !== e2.onlineState, i2), u2 = _.applyChanges(
-      o2,
-      /* limboResolutionEnabled= */
-      e2.isPrimaryClient,
-      a
-    );
-    __PRIVATE_updateTrackedLimbos(e2, n2, u2.oc);
-    const c2 = new __PRIVATE_QueryView(t2, n2, _);
-    return e2.hc.set(t2, c2), e2.Tc.has(n2) ? e2.Tc.get(n2).push(t2) : e2.Tc.set(n2, [t2]), u2.snapshot;
-  }
-  async function __PRIVATE_syncEngineUnlisten(e2, t2, n2) {
-    const r2 = __PRIVATE_debugCast(e2), i2 = r2.hc.get(t2), s2 = r2.Tc.get(i2.targetId);
-    if (s2.length > 1) return r2.Tc.set(i2.targetId, s2.filter((e3) => !__PRIVATE_queryOrPipelineEqual(e3, t2))), void r2.hc.delete(t2);
-    if (r2.isPrimaryClient) {
-      r2.sharedClientState.removeLocalQueryTarget(i2.targetId);
-      r2.sharedClientState.isActiveQueryTarget(i2.targetId) || await __PRIVATE_localStoreReleaseTarget(
-        r2.localStore,
-        i2.targetId,
-        /*keepPersistedTargetData=*/
-        false
-      ).then(() => {
-        r2.sharedClientState.clearQueryState(i2.targetId), n2 && __PRIVATE_remoteStoreUnlisten(r2.remoteStore, i2.targetId), __PRIVATE_removeAndCleanupTarget(r2, i2.targetId);
-      }).catch(__PRIVATE_ignoreIfPrimaryLeaseLoss);
-    } else __PRIVATE_removeAndCleanupTarget(r2, i2.targetId), await __PRIVATE_localStoreReleaseTarget(
-      r2.localStore,
-      i2.targetId,
-      /*keepPersistedTargetData=*/
-      true
-    );
-  }
-  async function __PRIVATE_triggerRemoteStoreUnlisten(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2), r2 = n2.hc.get(t2), i2 = n2.Tc.get(r2.targetId);
-    n2.isPrimaryClient && 1 === i2.length && // PORTING NOTE: Unregister the target ID with local Firestore client as
-    // watch target.
-    (n2.sharedClientState.removeLocalQueryTarget(r2.targetId), __PRIVATE_remoteStoreUnlisten(n2.remoteStore, r2.targetId));
-  }
   async function __PRIVATE_syncEngineWrite(e2, t2, n2) {
     const r2 = __PRIVATE_syncEngineEnsureWriteCallbacks(e2);
     try {
@@ -29851,20 +27947,6 @@ This typically indicates that your device does not have a healthy Internet conne
       n2.reject(t3);
     }
   }
-  async function __PRIVATE_syncEngineApplyRemoteEvent(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2);
-    try {
-      const e3 = await __PRIVATE_localStoreApplyRemoteEventToLocalCache(n2.localStore, t2);
-      t2.targetChanges.forEach((e4, t3) => {
-        const r2 = n2.Ic.get(t3);
-        r2 && // Since this is a limbo resolution lookup, it's for a single document
-        // and it could be added, modified, or removed, but not a combination.
-        (__PRIVATE_hardAssert(e4.addedDocuments.size + e4.modifiedDocuments.size + e4.removedDocuments.size <= 1, 22616), e4.addedDocuments.size > 0 ? r2.lc = true : e4.modifiedDocuments.size > 0 ? __PRIVATE_hardAssert(r2.lc, 14607) : e4.removedDocuments.size > 0 && (__PRIVATE_hardAssert(r2.lc, 42227), r2.lc = false));
-      }), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(n2, e3, t2);
-    } catch (e3) {
-      await __PRIVATE_ignoreIfPrimaryLeaseLoss(e3);
-    }
-  }
   function __PRIVATE_syncEngineApplyOnlineStateChange(e2, t2, n2) {
     const r2 = __PRIVATE_debugCast(e2);
     if (r2.isPrimaryClient && 0 === n2 || !r2.isPrimaryClient && 1 === n2) {
@@ -29882,36 +27964,6 @@ This typically indicates that your device does not have a healthy Internet conne
         }), r3 && __PRIVATE_raiseSnapshotsInSyncEvent(n3);
       }(r2.eventManager, t2), e3.length && r2.Ec.hn(e3), r2.onlineState = t2, r2.isPrimaryClient && r2.sharedClientState.setOnlineState(t2);
     }
-  }
-  async function __PRIVATE_syncEngineRejectListen(e2, t2, n2) {
-    const r2 = __PRIVATE_debugCast(e2);
-    r2.sharedClientState.updateQueryState(t2, "rejected", n2);
-    const i2 = r2.Ic.get(t2), s2 = i2 && i2.key;
-    if (s2) {
-      let e3 = new SortedMap(DocumentKey.comparator);
-      e3 = e3.insert(s2, MutableDocument.newNoDocument(s2, SnapshotVersion.min()));
-      const n3 = __PRIVATE_documentKeySet().add(s2), i3 = new RemoteEvent(
-        SnapshotVersion.min(),
-        /* targetChanges= */
-        /* @__PURE__ */ new Map(),
-        /* targetMismatches= */
-        new SortedMap(__PRIVATE_primitiveComparator),
-        e3,
-        __PRIVATE_mutableDocumentMap(),
-        n3
-      );
-      await __PRIVATE_syncEngineApplyRemoteEvent(r2, i3), // Since this query failed, we won't want to manually unlisten to it.
-      // We only remove it from bookkeeping after we successfully applied the
-      // RemoteEvent. If `applyRemoteEvent()` throws, we want to re-listen to
-      // this query when the RemoteStore restarts the Watch stream, which should
-      // re-trigger the target failure.
-      r2.Rc = r2.Rc.remove(s2), r2.Ic.delete(t2), __PRIVATE_pumpEnqueuedLimboResolutions(r2);
-    } else await __PRIVATE_localStoreReleaseTarget(
-      r2.localStore,
-      t2,
-      /* keepPersistedTargetData */
-      false
-    ).then(() => __PRIVATE_removeAndCleanupTarget(r2, t2, n2)).catch(__PRIVATE_ignoreIfPrimaryLeaseLoss);
   }
   async function __PRIVATE_syncEngineApplySuccessfulWrite(e2, t2) {
     const n2 = __PRIVATE_debugCast(e2), r2 = t2.batch.batchId;
@@ -29953,43 +28005,6 @@ This typically indicates that your device does not have a healthy Internet conne
     if (i2) {
       const e3 = i2.get(t2);
       e3 && (n2 ? e3.reject(n2) : e3.resolve(), i2 = i2.remove(t2)), r2.Vc[r2.currentUser.toKey()] = i2;
-    }
-  }
-  function __PRIVATE_removeAndCleanupTarget(e2, t2, n2 = null) {
-    e2.sharedClientState.removeLocalQueryTarget(t2);
-    for (const r2 of e2.Tc.get(t2)) e2.hc.delete(r2), n2 && e2.Ec.yc(r2, n2);
-    if (e2.Tc.delete(t2), e2.isPrimaryClient) {
-      e2.Ac.Xs(t2).forEach((t3) => {
-        e2.Ac.containsKey(t3) || // We removed the last reference for this key
-        __PRIVATE_removeLimboTarget(e2, t3);
-      });
-    }
-  }
-  function __PRIVATE_removeLimboTarget(e2, t2) {
-    e2.Pc.delete(t2.path.canonicalString());
-    const n2 = e2.Rc.get(t2);
-    null !== n2 && (__PRIVATE_remoteStoreUnlisten(e2.remoteStore, n2), e2.Rc = e2.Rc.remove(t2), e2.Ic.delete(n2), __PRIVATE_pumpEnqueuedLimboResolutions(e2));
-  }
-  function __PRIVATE_updateTrackedLimbos(e2, t2, n2) {
-    for (const r2 of n2) if (r2 instanceof __PRIVATE_AddedLimboDocument) e2.Ac.addReference(r2.key, t2), __PRIVATE_trackLimboChange(e2, r2);
-    else if (r2 instanceof __PRIVATE_RemovedLimboDocument) {
-      __PRIVATE_logDebug(dr, "Document no longer in limbo: " + r2.key), e2.Ac.removeReference(r2.key, t2);
-      e2.Ac.containsKey(r2.key) || // We removed the last reference for this key
-      __PRIVATE_removeLimboTarget(e2, r2.key);
-    } else l(19791, {
-      wc: r2
-    });
-  }
-  function __PRIVATE_trackLimboChange(e2, t2) {
-    const n2 = t2.key, r2 = n2.path.canonicalString();
-    e2.Rc.get(n2) || e2.Pc.has(r2) || (__PRIVATE_logDebug(dr, "New document in limbo: " + n2), e2.Pc.add(r2), __PRIVATE_pumpEnqueuedLimboResolutions(e2));
-  }
-  function __PRIVATE_pumpEnqueuedLimboResolutions(e2) {
-    for (; e2.Pc.size > 0 && e2.Rc.size < e2.maxConcurrentLimboResolutions; ) {
-      const t2 = e2.Pc.values().next().value;
-      e2.Pc.delete(t2);
-      const n2 = new DocumentKey(ResourcePath.fromString(t2)), r2 = e2.fc.next();
-      e2.Ic.set(r2, new LimboResolution(n2)), e2.Rc = e2.Rc.insert(n2, r2), __PRIVATE_remoteStoreListen(e2.remoteStore, new TargetData(__PRIVATE_queryToTarget(__PRIVATE_newQueryForPath(n2.path)), r2, "TargetPurposeLimboResolution", __PRIVATE_ListenSequence.yn));
     }
   }
   async function __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(e2, t2, n2) {
@@ -30038,24 +28053,6 @@ This typically indicates that your device does not have a healthy Internet conne
       }(n2, "'waitForPendingWrites' promise is rejected due to a user change."), // TODO(b/114226417): Consider calling this only in the primary tab.
       n2.sharedClientState.handleUserChange(t2, e3.removedBatchIds, e3.addedBatchIds), await __PRIVATE_syncEngineEmitNewSnapsAndNotifyLocalStore(n2, e3.qo);
     }
-  }
-  function __PRIVATE_syncEngineGetRemoteKeysForTarget(e2, t2) {
-    const n2 = __PRIVATE_debugCast(e2), r2 = n2.Ic.get(t2);
-    if (r2 && r2.lc) return __PRIVATE_documentKeySet().add(r2.key);
-    {
-      let e3 = __PRIVATE_documentKeySet();
-      const r3 = n2.Tc.get(t2);
-      if (!r3) return e3;
-      for (const t3 of r3 ?? []) {
-        const r4 = n2.hc.get(t3);
-        e3 = e3.unionWith(r4.view.Yu);
-      }
-      return e3;
-    }
-  }
-  function __PRIVATE_ensureWatchCallbacks(e2) {
-    const t2 = __PRIVATE_debugCast(e2);
-    return t2.remoteStore.remoteSyncer.applyRemoteEvent = __PRIVATE_syncEngineApplyRemoteEvent.bind(null, t2), t2.remoteStore.remoteSyncer.getRemoteKeysForTarget = __PRIVATE_syncEngineGetRemoteKeysForTarget.bind(null, t2), t2.remoteStore.remoteSyncer.rejectListen = __PRIVATE_syncEngineRejectListen.bind(null, t2), t2.Ec.hn = __PRIVATE_eventManagerOnWatchChange.bind(null, t2.eventManager), t2.Ec.yc = __PRIVATE_eventManagerOnWatchError.bind(null, t2.eventManager), t2;
   }
   function __PRIVATE_syncEngineEnsureWriteCallbacks(e2) {
     const t2 = __PRIVATE_debugCast(e2);
@@ -30245,36 +28242,6 @@ This typically indicates that your device does not have a healthy Internet conne
   }
   function __PRIVATE_getSyncEngine(e2) {
     return __PRIVATE_ensureOnlineComponents(e2).then((e3) => e3.syncEngine);
-  }
-  async function __PRIVATE_getEventManager(e2) {
-    const t2 = await __PRIVATE_ensureOnlineComponents(e2), n2 = t2.eventManager;
-    return n2.onListen = __PRIVATE_syncEngineListen.bind(null, t2.syncEngine), n2.onUnlisten = __PRIVATE_syncEngineUnlisten.bind(null, t2.syncEngine), n2.onFirstRemoteStoreListen = __PRIVATE_triggerRemoteStoreListen.bind(null, t2.syncEngine), n2.onLastRemoteStoreUnlisten = __PRIVATE_triggerRemoteStoreUnlisten.bind(null, t2.syncEngine), n2;
-  }
-  function __PRIVATE_firestoreClientGetDocumentViaSnapshotListener(e2, t2, n2 = {}) {
-    const r2 = new __PRIVATE_Deferred();
-    return e2.asyncQueue.enqueueAndForget(async () => function __PRIVATE_readDocumentViaSnapshotListener(e3, t3, n3, r3, i2) {
-      const _ = new __PRIVATE_AsyncObserver({
-        next: (a) => {
-          _.Aa(), t3.enqueueAndForget(() => __PRIVATE_eventManagerUnlisten(e3, o2));
-          const u2 = a.docs.has(n3);
-          !u2 && a.fromCache ? (
-            // TODO(dimond): If we're online and the document doesn't
-            // exist then we resolve with a doc.exists set to false. If
-            // we're offline however, we reject the Promise in this
-            // case. Two options: 1) Cache the negative response from
-            // the server so we can deliver that even when you're
-            // offline 2) Actually reject the Promise in the online case
-            // if the document doesn't exist.
-            i2.reject(new s(aa.UNAVAILABLE, "Failed to get document because the client is offline."))
-          ) : u2 && a.fromCache && r3 && "server" === r3.source ? i2.reject(new s(aa.UNAVAILABLE, 'Failed to get document from server. (However, this document does exist in the local cache. Run again without setting source to "server" to retrieve the cached document.)')) : i2.resolve(a);
-        },
-        error: (e4) => i2.reject(e4)
-      }), o2 = new __PRIVATE_QueryListener(__PRIVATE_newQueryForPath(n3.path), _, {
-        includeMetadataChanges: true,
-        waitForSyncWhenOnline: true
-      });
-      return __PRIVATE_eventManagerListen(e3, o2);
-    }(await __PRIVATE_getEventManager(e2), e2.asyncQueue, t2, n2, r2)), r2.promise;
   }
   function __PRIVATE_firestoreClientWrite(e2, t2) {
     const n2 = new __PRIVATE_Deferred();
@@ -30473,106 +28440,6 @@ This typically indicates that your device does not have a healthy Internet conne
       };
     }(e2._componentsProvider));
   }
-  var AbstractUserDataWriter = class {
-    convertValue(e2, t2 = "none") {
-      switch (__PRIVATE_typeOrder(e2)) {
-        case 0:
-          return null;
-        case 1:
-          return e2.booleanValue;
-        case 2:
-          return __PRIVATE_normalizeNumber(e2.integerValue || e2.doubleValue);
-        case 3:
-          return this.convertTimestamp(e2.timestampValue);
-        case 4:
-          return this.convertServerTimestamp(e2, t2);
-        case 5:
-          return e2.stringValue;
-        case 6:
-          return this.convertBytes(__PRIVATE_normalizeByteString(e2.bytesValue));
-        case 7:
-          return this.convertReference(e2.referenceValue);
-        case 8:
-          return this.convertGeoPoint(e2.geoPointValue);
-        case 9:
-          return this.convertArray(e2.arrayValue, t2);
-        case 11:
-          return this.convertObject(e2.mapValue, t2);
-        case 10:
-          return this.convertVectorValue(e2.mapValue);
-        default:
-          throw l(62114, {
-            value: e2
-          });
-      }
-    }
-    convertObject(e2, t2) {
-      return this.convertObjectMap(e2.fields, t2);
-    }
-    /**
-     * @internal
-     */
-    convertObjectMap(e2, t2 = "none") {
-      const n2 = {};
-      return forEach(e2, (e3, r2) => {
-        n2[e3] = this.convertValue(r2, t2);
-      }), n2;
-    }
-    /**
-     * @internal
-     */
-    convertVectorValue(e2) {
-      const t2 = e2.fields?.[je].arrayValue?.values?.map((e3) => __PRIVATE_normalizeNumber(e3.doubleValue));
-      return new n(t2);
-    }
-    convertGeoPoint(e2) {
-      return new GeoPoint(__PRIVATE_normalizeNumber(e2.latitude), __PRIVATE_normalizeNumber(e2.longitude));
-    }
-    convertArray(e2, t2) {
-      return (e2.values || []).map((e3) => this.convertValue(e3, t2));
-    }
-    convertServerTimestamp(e2, t2) {
-      switch (t2) {
-        case "previous":
-          const n2 = __PRIVATE_getPreviousValue(e2);
-          return null == n2 ? null : this.convertValue(n2, t2);
-        case "estimate":
-          return this.convertTimestamp(__PRIVATE_getLocalWriteTime(e2));
-        default:
-          return null;
-      }
-    }
-    convertTimestamp(e2) {
-      const t2 = __PRIVATE_normalizeTimestamp(e2);
-      return new Timestamp(t2.seconds, t2.nanos);
-    }
-    convertDocumentKey(e2, t2) {
-      const n2 = ResourcePath.fromString(e2);
-      __PRIVATE_hardAssert(__PRIVATE_isValidResourceName(n2), 9688, {
-        name: e2
-      });
-      const r2 = new DatabaseId(n2.get(1), n2.get(3)), i2 = new DocumentKey(n2.popFirst(5));
-      return r2.isEqual(t2) || // TODO(b/64130202): Somehow support foreign references.
-      __PRIVATE_logError(`Document ${i2} contains a document reference within a different database (${r2.projectId}/${r2.database}) which is not supported. It will be treated as a reference in the current database (${t2.projectId}/${t2.database}) instead.`), i2;
-    }
-  };
-  var ua = class extends AbstractUserDataWriter {
-    constructor(e2) {
-      super(), this.firestore = e2;
-    }
-    convertBytes(e2) {
-      return new Bytes(e2);
-    }
-    convertReference(e2) {
-      const t2 = this.convertDocumentKey(e2, this.firestore._databaseId);
-      return new X(
-        this.firestore,
-        /* converter= */
-        null,
-        t2
-      );
-    }
-  };
 
   // node_modules/@firebase/firestore/dist/index.esm.js
   var Wt2 = "@firebase/firestore";
@@ -30897,11 +28764,6 @@ This typically indicates that your device does not have a healthy Internet conne
     bundleName: property("string"),
     bundle: property("string")
   };
-  function getDoc(t2) {
-    t2 = ra(t2, X);
-    const e2 = ra(t2.firestore, da), n2 = oa(e2);
-    return __PRIVATE_firestoreClientGetDocumentViaSnapshotListener(n2, t2._key).then((n3) => __PRIVATE_convertToDocSnapshot(e2, t2, n3));
-  }
   function updateDoc(t2, e2, n2, ...r2) {
     t2 = ra(t2, X);
     const o2 = ra(t2.firestore, da), i2 = la(o2);
@@ -30914,10 +28776,6 @@ This typically indicates that your device does not have a healthy Internet conne
   function executeWrite(t2, e2) {
     const n2 = oa(t2);
     return __PRIVATE_firestoreClientWrite(n2, e2);
-  }
-  function __PRIVATE_convertToDocSnapshot(t2, e2, n2) {
-    const r2 = n2.docs.get(e2._key), s2 = new ua(t2);
-    return new DocumentSnapshot2(t2, s2, e2._key, r2, new SnapshotMetadata(n2.hasPendingWrites, n2.fromCache), e2.converter);
   }
   !/**
    * @license
@@ -31017,8 +28875,6 @@ This typically indicates that your device does not have a healthy Internet conne
     setStatus("Salvataggio...");
     try {
       const ref = doc(db, "users", "flavio");
-      const snap = await getDoc(ref);
-      const tasks = snap.data()?.tasks || [];
       const newTask = {
         id: `task_${Date.now().toString(36)}`,
         title,
@@ -31034,7 +28890,7 @@ This typically indicates that your device does not have a healthy Internet conne
         rewardApplied: false,
         penaltyApplied: false
       };
-      await updateDoc(ref, { tasks: [...tasks, newTask] });
+      await updateDoc(ref, { tasks: arrayUnion(newTask) });
       setStatus("\u2705 Aggiunta!");
       titleInput.value = "";
       descriptionInput.value = "";
@@ -32865,8 +30721,6 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
-
-@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2023 Google LLC
@@ -33005,6 +30859,24 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
   (**
    * @license
    * Copyright 2023 Google LLC
@@ -33039,6 +30911,8 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2022 Google LLC
@@ -33055,6 +30929,26 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2017 Google LLC
@@ -33158,6 +31052,40 @@ re2js/build/index.js:
   (**
    * @license
    * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+  (**
+   * @license
+   * Copyright 2020 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
    * you may not use this file except in compliance with the License.
@@ -33474,6 +31402,24 @@ re2js/build/index.js:
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
    * Copyright 2020 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33651,6 +31597,8 @@ re2js/build/index.js:
 
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (* Copyright 2024 Google LLC* @license *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2017 Google LLC
@@ -33873,6 +31821,58 @@ re2js/build/index.js:
 @firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+  (**
+   * @license
+   * Copyright 2020 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
    * Copyright 2025 Google LLC
    *
    * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33959,6 +31959,44 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
+  (**
+   * @license
+   * Copyright 2017 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2020 Google LLC
@@ -34119,6 +32157,8 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2024 Google LLC
@@ -34135,6 +32175,8 @@ re2js/build/index.js:
    * See the License for the specific language governing permissions and
    * limitations under the License.
    *)
+
+@firebase/firestore/dist/common-DugxmK6F.esm.js:
   (**
    * @license
    * Copyright 2017 Google LLC

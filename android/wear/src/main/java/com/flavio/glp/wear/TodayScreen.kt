@@ -32,7 +32,7 @@ fun TodayScreen(score: Double, loading: Boolean) {
                 modifier = Modifier.padding(top = 6.dp),
             )
             Text(
-                text = "punti totali",
+                text = "punti oggi",
                 style = MaterialTheme.typography.caption2,
                 modifier = Modifier.padding(top = 2.dp),
             )

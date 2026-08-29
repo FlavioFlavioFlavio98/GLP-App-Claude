@@ -756,16 +756,23 @@ exports.backupUserData = onSchedule(
       backedUpAt: admin.firestore.FieldValue.serverTimestamp(),
     })
 
-    // Retention: elimina i backup più vecchi di 14 giorni
+    // Retention: elimina i backup più vecchi di 14 giorni. Un batch Firestore
+    // sopporta al massimo 500 operazioni — se la funzione restasse ferma
+    // abbastanza a lungo (deploy fermo, quota esaurita) da accumulare più di
+    // 500 backup scaduti, un batch unico fallirebbe con INVALID_ARGUMENT e la
+    // pulizia non si riprenderebbe mai da sola nei run successivi. Spezzata
+    // in blocchi da 400 per restare ben sotto il limite.
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - 14)
     const cutoffId = `${cutoff.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })}-00`
     const oldBackups = await flavioRef.collection('backups')
       .where(admin.firestore.FieldPath.documentId(), '<', cutoffId)
       .get()
-    if (!oldBackups.empty) {
+    const BATCH_SIZE = 400
+    for (let i = 0; i < oldBackups.docs.length; i += BATCH_SIZE) {
+      const chunk = oldBackups.docs.slice(i, i + BATCH_SIZE)
       const batch = db.batch()
-      oldBackups.docs.forEach(d => batch.delete(d.ref))
+      chunk.forEach(d => batch.delete(d.ref))
       await batch.commit()
     }
   }

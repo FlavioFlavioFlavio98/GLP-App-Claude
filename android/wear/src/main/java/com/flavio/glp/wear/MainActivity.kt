@@ -202,7 +202,6 @@ private fun MainPager() {
                         tasks = tasks.filter { it.id != task.id }
                         GlpRepository.completeTask(
                             taskId = task.id,
-                            reward = task.reward,
                             onDone = { refreshScore() },
                             onError = { refreshTasks() },
                         )

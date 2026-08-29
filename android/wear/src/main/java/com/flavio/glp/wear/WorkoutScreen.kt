@@ -45,6 +45,12 @@ fun WorkoutScreen(
     var selectedExercise by remember { mutableStateOf<WearExercise?>(null) }
     var reps by remember { mutableIntStateOf(10) }
     var effort by remember { mutableIntStateOf(1) }
+    // Il cambio di "step" a "main" nello stesso click che chiama onLogSet
+    // smonta subito il Chip "Aggiungi", ma un doppio tap molto ravvicinato
+    // può comunque far arrivare entrambi gli eventi prima che la ricomposizione
+    // rimuova il Chip dallo schermo — guardia esplicita per evitare due serie
+    // duplicate (due arrayUnion con id diversi) dallo stesso tocco.
+    var submitting by remember { mutableStateOf(false) }
 
     val recentExercises = recentIds.mapNotNull { id -> exercises.find { it.id == id } }
 
@@ -52,6 +58,7 @@ fun WorkoutScreen(
         selectedExercise = ex
         reps = 10
         effort = 1
+        submitting = false
         step = "reps"
     }
 
@@ -66,8 +73,11 @@ fun WorkoutScreen(
                     onEffortChange = { effort = it },
                     onBack = { step = "main" },
                     onConfirm = {
-                        onLogSet(ex, reps, effort)
-                        step = "main"
+                        if (!submitting) {
+                            submitting = true
+                            onLogSet(ex, reps, effort)
+                            step = "main"
+                        }
                     },
                 )
             }

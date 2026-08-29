@@ -5,7 +5,7 @@ import FoodIcon from '../components/FoodIcon'
 
 export default function ProteinEntryModal() {
   const { state, actions } = useApp()
-  const { modal, authUserId } = state
+  const { modal, modalPayload, authUserId } = state
 
   // step: 'food' | 'grams'
   const [step, setStep] = useState('food')
@@ -34,10 +34,14 @@ export default function ProteinEntryModal() {
       setQuery('')
       setSelId(null)
       setGrams('')
-      setEntryDate(toDateString(new Date()))
+      // Data del giorno che si sta visualizzando in Nutrizione, non sempre
+      // oggi — altrimenti aggiungere un alimento mentre si naviga su un
+      // giorno passato lo salvava silenziosamente su oggi, facendolo
+      // "sparire" dalla vista di quel giorno (bug segnalato da Flavio).
+      setEntryDate(modalPayload?.date || toDateString(new Date()))
       setAddingNew(false)
     }
-  }, [modal])
+  }, [modal, modalPayload])
 
   if (modal !== 'proteinEntry') return null
   if (authUserId !== 'flavio') return null
@@ -56,17 +60,27 @@ export default function ProteinEntryModal() {
     const name = query.trim()
     if (!name) return
     setAddingNew(true)
-    const newFood = await actions.addProteinFoodAI(name)
-    setAddingNew(false)
-    if (newFood) pickFood(newFood)
+    try {
+      const newFood = await actions.addProteinFoodAI(name)
+      if (newFood) pickFood(newFood)
+    } finally {
+      // finally, non dopo l'await: se addProteinFoodAI lancia (Cloud Function
+      // in timeout/errore) il pulsante restava bloccato su "Stima..." per
+      // sempre, senza nessun messaggio — bug segnalato da Flavio.
+      setAddingNew(false)
+    }
   }
 
   async function handleSave() {
     if (!food || numGrams <= 0) return
     setSaving(true)
-    await actions.addProteinEntry(food, numGrams, entryDate)
-    setSaving(false)
-    actions.closeModal()
+    try {
+      await actions.addProteinEntry(food, numGrams, entryDate)
+      actions.closeModal()
+    } finally {
+      // Stesso motivo di handleAddNewFood qui sopra.
+      setSaving(false)
+    }
   }
 
   return (
@@ -190,6 +204,11 @@ export default function ProteinEntryModal() {
                 onChange={e => setEntryDate(e.target.value)}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
               />
+              {entryDate !== toDateString(new Date()) && (
+                <div style={{ fontSize: '0.65em', color: '#EF9F27', marginTop: 6 }}>
+                  ⚠️ Stai aggiungendo a una data diversa da oggi
+                </div>
+              )}
             </div>
 
             <button

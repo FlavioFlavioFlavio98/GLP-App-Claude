@@ -1287,72 +1287,104 @@ export function AppProvider({ children }) {
       const gd = state.allUsersData?.flavio
       if (gd?.proteinFoods?.length > 0) return
 
-      const functions = getFunctions(app, 'europe-west1')
-      const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 60000 })
-      const result = await fn({ foods: SEED_FOODS.map(f => f.name) })
-      const estimates = result.data?.results || []
+      try {
+        const functions = getFunctions(app, 'europe-west1')
+        const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 60000 })
+        const result = await fn({ foods: SEED_FOODS.map(f => f.name) })
+        const estimates = result.data?.results || []
 
-      const foods = SEED_FOODS.map((seed, i) => ({
-        id: `food_${Date.now().toString(36)}_${i}`,
-        name: seed.name,
-        emoji: seed.emoji,
-        proteinPer100g: estimates[i]?.proteinPer100g || 0,
-      }))
+        const foods = SEED_FOODS.map((seed, i) => ({
+          id: `food_${Date.now().toString(36)}_${i}`,
+          name: seed.name,
+          emoji: seed.emoji,
+          proteinPer100g: estimates[i]?.proteinPer100g || 0,
+        }))
 
-      const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { proteinFoods: foods })
+        const ref = doc(db, 'users', 'flavio')
+        await updateDoc(ref, { proteinFoods: foods })
+      } catch (e) {
+        // Non critico — riprova al prossimo apertura della tab, nessun toast
+        // per non disturbare al primo avvio se la rete è lenta.
+        console.error('[ensureDefaultProteinFoods error]', e)
+      }
     },
 
     // Aggiunge un alimento nuovo stimando le proteine per 100g via AI —
     // usato sia dal picker (quando cerchi un alimento non ancora presente) sia
-    // dalla gestione manuale degli alimenti.
+    // dalla gestione manuale degli alimenti. Ritorna null sia per input non
+    // valido sia per errore, ma SOLO l'errore mostra un toast (prima non
+    // c'era nessun try/catch: un timeout della Cloud Function lasciava il
+    // pulsante "Stima proteine con AI..." bloccato per sempre, senza nessun
+    // messaggio — bug segnalato da Flavio).
     async addProteinFoodAI(name) {
       if (state.authUserId !== 'flavio') return null
       const trimmed = (name || '').trim().slice(0, 60)
       if (!trimmed) { actions.showToast('Nome alimento mancante', '⚠️'); return null }
 
-      const functions = getFunctions(app, 'europe-west1')
-      const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 30000 })
-      const result = await fn({ foods: [trimmed] })
-      const proteinPer100g = result.data?.results?.[0]?.proteinPer100g || 0
+      try {
+        const functions = getFunctions(app, 'europe-west1')
+        const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 30000 })
+        const result = await fn({ foods: [trimmed] })
+        const proteinPer100g = result.data?.results?.[0]?.proteinPer100g || 0
 
-      const food = {
-        id: `food_${Date.now().toString(36)}`,
-        name: trimmed,
-        emoji: '🍽️',
-        proteinPer100g,
+        const food = {
+          id: `food_${Date.now().toString(36)}`,
+          name: trimmed,
+          emoji: '🍽️',
+          proteinPer100g,
+        }
+        const ref = doc(db, 'users', 'flavio')
+        await updateDoc(ref, { proteinFoods: arrayUnion(food) })
+        actions.showToast(`${trimmed}: ${proteinPer100g}g proteine/100g`, '🤖')
+        return food
+      } catch (e) {
+        console.error('[addProteinFoodAI error]', e)
+        actions.showToast('Stima AI non riuscita — riprova', '❌')
+        return null
       }
-      const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { proteinFoods: arrayUnion(food) })
-      actions.showToast(`${trimmed}: ${proteinPer100g}g proteine/100g`, '🤖')
-      return food
     },
 
     // Modifica manuale (nome/emoji/proteine per 100g) — serve a correggere
     // stime AI imprecise, richiesto esplicitamente dall'utente.
     async updateProteinFood(foodId, updates) {
       if (state.authUserId !== 'flavio') return
-      const gd = state.allUsersData?.flavio
-      const foods = gd?.proteinFoods || []
-      const newFoods = foods.map(f => f.id === foodId ? { ...f, ...updates } : f)
-      const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { proteinFoods: newFoods })
-      actions.showToast('Alimento modificato ✏️', '✏️')
+      try {
+        const gd = state.allUsersData?.flavio
+        const foods = gd?.proteinFoods || []
+        const newFoods = foods.map(f => f.id === foodId ? { ...f, ...updates } : f)
+        const ref = doc(db, 'users', 'flavio')
+        await updateDoc(ref, { proteinFoods: newFoods })
+        actions.showToast('Alimento modificato ✏️', '✏️')
+      } catch (e) {
+        console.error('[updateProteinFood error]', e)
+        actions.showToast('Errore — riprova', '❌')
+      }
     },
 
     async deleteProteinFood(foodId) {
       if (state.authUserId !== 'flavio') return
-      const gd = state.allUsersData?.flavio
-      const foods = (gd?.proteinFoods || []).filter(f => f.id !== foodId)
-      const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { proteinFoods: foods })
-      actions.showToast('Alimento eliminato', '🗑️')
+      try {
+        const gd = state.allUsersData?.flavio
+        const foods = (gd?.proteinFoods || []).filter(f => f.id !== foodId)
+        const ref = doc(db, 'users', 'flavio')
+        await updateDoc(ref, { proteinFoods: foods })
+        actions.showToast('Alimento eliminato', '🗑️')
+      } catch (e) {
+        console.error('[deleteProteinFood error]', e)
+        actions.showToast('Errore — riprova', '❌')
+      }
     },
 
+    // Ritorna true/false (non solo undefined) così la UI può distinguere
+    // successo da fallimento — prima non c'era alcun try/catch: un errore di
+    // rete durante il salvataggio spariva nel nulla, il pulsante "Salvataggio…"
+    // restava bloccato per sempre e l'alimento non veniva mai salvato, senza
+    // nessun messaggio (bug segnalato da Flavio: "a volte aggiungo alimenti…
+    // ma non vengono salvati").
     async addProteinEntry(food, grams, dateStr) {
-      if (state.authUserId !== 'flavio') return
+      if (state.authUserId !== 'flavio') return false
       const numGrams = parseFloat(grams) || 0
-      if (numGrams <= 0) { actions.showToast('Grammi non validi', '⚠️'); return }
+      if (numGrams <= 0) { actions.showToast('Grammi non validi', '⚠️'); return false }
       const proteinGrams = Math.round(numGrams * (food.proteinPer100g / 100) * 10) / 10
       const logDate = dateStr || toDateString(new Date())
       const logEntry = {
@@ -1364,21 +1396,31 @@ export function AppProvider({ children }) {
         proteinGrams,
         time: new Date().toTimeString().slice(0, 8),
       }
-      const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { [`proteinLog.${logDate}`]: arrayUnion(logEntry) })
-      actions.vibrate('light')
-      actions.showToast(`+${proteinGrams}g proteine`, food.emoji || '🍽️')
+      try {
+        const ref = doc(db, 'users', 'flavio')
+        await updateDoc(ref, { [`proteinLog.${logDate}`]: arrayUnion(logEntry) })
+        actions.vibrate('light')
+        actions.showToast(`+${proteinGrams}g proteine`, food.emoji || '🍽️')
+        return true
+      } catch (e) {
+        console.error('[addProteinEntry error]', e)
+        actions.showToast('Errore salvataggio — riprova', '❌')
+        return false
+      }
     },
 
-    async deleteProteinEntry(dateStr, entryId) {
+    // arrayRemove invece di leggere+filtrare+riscrivere l'intero giorno:
+    // niente lettura, niente race con scritture concorrenti.
+    async deleteProteinEntry(dateStr, entry) {
       if (state.authUserId !== 'flavio') return
-      const gd = state.allUsersData?.flavio
-      if (!gd) return
-      const dayLog = (gd.proteinLog?.[dateStr] || [])
-      const newLog = dayLog.filter(e => e.id !== entryId)
-      const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { [`proteinLog.${dateStr}`]: newLog })
-      actions.showToast('Voce eliminata', '↩️')
+      try {
+        const ref = doc(db, 'users', 'flavio')
+        await updateDoc(ref, { [`proteinLog.${dateStr}`]: arrayRemove(entry) })
+        actions.showToast('Voce eliminata', '↩️')
+      } catch (e) {
+        console.error('[deleteProteinEntry error]', e)
+        actions.showToast('Errore eliminazione — riprova', '❌')
+      }
     },
 
     // ─── Barefoot ── stesso pattern di Mobility, tab Body invece che Workout.

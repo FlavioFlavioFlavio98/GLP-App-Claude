@@ -71,7 +71,7 @@ export default function NutritionTab({ actions, authUserId, isReadOnly, globalDa
         )}
 
         <button
-          onClick={() => actions.openModal('proteinEntry')}
+          onClick={() => actions.openModal('proteinEntry', { date: viewDate })}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             padding: '12px 14px', marginTop: 14,
@@ -129,7 +129,7 @@ export default function NutritionTab({ actions, authUserId, isReadOnly, globalDa
                   style={{ padding: 2 }}
                   onClick={async () => {
                     if (!window.confirm(`Eliminare "${e.name}"?`)) return
-                    await actions.deleteProteinEntry(viewDate, e.id)
+                    await actions.deleteProteinEntry(viewDate, e)
                   }}
                 >
                   <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>

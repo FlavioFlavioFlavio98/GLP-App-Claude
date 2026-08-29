@@ -41,6 +41,14 @@ class AddTaskActivity : Activity() {
     // (aperto dal tap sul nome nel widget) invece che creazione — stesso layout,
     // cambia solo cosa fa il bottone "salva" e i valori pre-selezionati.
     private var editTaskId: String? = null
+    // Guardia anti-doppio-invio: bug reale segnalato da Flavio sul widget
+    // "gemello" QuickAddTaskActivity — offline, Firestore mette la scrittura
+    // in coda locale senza chiamare né onSuccess né onFailure fino alla
+    // riconnessione, quindi aspettare qui prima di chiudere lasciava la
+    // finestra bloccata a tempo indeterminato, e ogni tap ripetuto su
+    // "Crea"/"Salva" creava un'altra scrittura in coda — alla riconnessione
+    // tutte arrivavano, duplicando la task N volte.
+    private var submitting = false
 
     // Chip TextViews — inizializzati in setupViews
     private lateinit var deadlineOggi: TextView
@@ -210,10 +218,12 @@ class AddTaskActivity : Activity() {
         // ─── Bottoni ───
         findViewById<View>(R.id.btn_annulla).setOnClickListener { finish() }
         btnCrea.setOnClickListener {
+            if (submitting) return@setOnClickListener
             val name = findViewById<EditText>(R.id.task_name_input).text.toString().trim()
             if (name.isEmpty()) {
                 Toast.makeText(this, "Inserisci un nome per la task", Toast.LENGTH_SHORT).show()
             } else {
+                submitting = true
                 val id = editTaskId
                 if (id != null) updateTask(id, name) else saveTask(name)
             }
@@ -363,23 +373,30 @@ class AddTaskActivity : Activity() {
         // "tasks" fatta da web/telefono/altro widget nella finestra tra le due
         // chiamate (stessa classe di bug della perdita dati del 28/8/2026,
         // anche se più circoscritta) — e in più evita del tutto la lettura.
+        // Niente più scrittura sul campo "score" per il caso "già fatta":
+        // non esiste più da nessun'altra parte dell'app (vedi CLAUDE.md, il
+        // punteggio si ricalcola sempre da tasks/habits/log, mai da un
+        // contatore separato) — incrementarlo qui lo rendeva solo
+        // disallineato, stesso bug trovato oggi anche sul modulo Wear OS.
         val updates = hashMapOf<String, Any>("tasks" to com.google.firebase.firestore.FieldValue.arrayUnion(task))
-        if (isAlreadyDone) {
-            updates["score"] = com.google.firebase.firestore.FieldValue.increment(reward.toLong())
+
+        // Ottimistico: chiude subito invece di aspettare la conferma di
+        // Firestore. Offline la scrittura resta comunque in coda localmente e
+        // si sincronizza da sola alla riconnessione — aspettare qui lasciava
+        // la finestra bloccata a tempo indeterminato senza rete, invitando a
+        // premere "Crea" più volte e duplicando la task alla riconnessione
+        // (bug reale riscontrato da Flavio sul widget "Aggiungi task" rapido).
+        if (isAlreadyDone && selectedDeadline == today) {
+            DayWidgetProvider.applyDelta(this, earnedDelta = reward, taskEarnedDelta = reward)
         }
+        vibrate()
+        val msg = if (isAlreadyDone) "Task già fatta registrata! +${reward}pt" else "Task creata!"
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        finish()
+
         userRef.update(updates)
-            .addOnSuccessListener {
-                if (isAlreadyDone && selectedDeadline == today) {
-                    DayWidgetProvider.applyDelta(this, earnedDelta = reward, taskEarnedDelta = reward)
-                }
-                vibrate()
-                val msg = if (isAlreadyDone) "Task già fatta registrata! +${reward}pt" else "Task creata!"
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                finish()
-            }
             .addOnFailureListener { e ->
                 Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
-                finish()
             }
     }
 
@@ -421,18 +438,19 @@ class AddTaskActivity : Activity() {
 
         // arrayUnion su entrambi i campi, niente più get()+update() (stesso
         // motivo della race in saveTask qui sopra).
+        // Ottimistico, stesso motivo di saveTask qui sopra: chiude subito
+        // invece di rischiare di restare bloccato a tempo indeterminato offline.
+        vibrate()
+        Toast.makeText(this, "🔁 Task ricorrente creata!", Toast.LENGTH_SHORT).show()
+        finish()
+
         userRef.update(
             mapOf(
                 "tasks" to com.google.firebase.firestore.FieldValue.arrayUnion(firstInstance),
                 "recurringTasks" to com.google.firebase.firestore.FieldValue.arrayUnion(template),
             )
-        ).addOnSuccessListener {
-            vibrate()
-            Toast.makeText(this, "🔁 Task ricorrente creata!", Toast.LENGTH_SHORT).show()
-            finish()
-        }.addOnFailureListener { e ->
+        ).addOnFailureListener { e ->
             Toast.makeText(this, "Errore: ${e.message}", Toast.LENGTH_LONG).show()
-            finish()
         }
     }
 

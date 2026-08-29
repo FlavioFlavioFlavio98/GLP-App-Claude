@@ -213,7 +213,6 @@ class MainActivity : BridgeActivity() {
             .addOnSuccessListener { doc ->
                 android.util.Log.d("GLPWidget", "=== saveWidgetData START ===")
                 android.util.Log.d("GLPWidget", "Today: $today")
-                android.util.Log.d("GLPWidget", "Score: ${doc.getDouble("score")}")
                 android.util.Log.d("GLPWidget", "DailyLogs keys: ${(doc.get("dailyLogs") as? Map<*, *>)?.keys}")
                 android.util.Log.d("GLPWidget", "Habits count: ${(doc.get("habits") as? List<*>)?.size}")
 
@@ -223,7 +222,6 @@ class MainActivity : BridgeActivity() {
                 val rewards = doc.get("rewards") as? List<Map<String, Any>> ?: emptyList()
                 val dailyLogs = doc.get("dailyLogs") as? Map<String, Any> ?: emptyMap()
                 val todayLog = dailyLogs[today] as? Map<String, Any> ?: emptyMap()
-                val score = (doc.getDouble("score") ?: 0.0).toFloat()
 
                 android.util.Log.d("GLPWidget", "TodayLog: $todayLog")
                 todayLog.forEach { (key, value) ->
@@ -353,7 +351,6 @@ class MainActivity : BridgeActivity() {
                 val net = earned - spent
                 android.util.Log.d("GLPWidget", "=== SAVE WIDGET DATA ===")
                 android.util.Log.d("GLPWidget", "Today: $today")
-                android.util.Log.d("GLPWidget", "RAW score: ${doc.getDouble("score")}")
                 android.util.Log.d("GLPWidget", "RAW tasks: ${(doc.get("tasks") as? List<*>)?.size}")
                 android.util.Log.d("GLPWidget", "DailyLogs keys: ${dailyLogs.keys}")
                 android.util.Log.d("GLPWidget", "RAW dailyLogs today: $todayLog")
@@ -400,7 +397,6 @@ class MainActivity : BridgeActivity() {
                     .putInt("habits_completed", doneHabits.size)
                     .putInt("habits_total", activeHabits.size)
                     .putInt("streak", streak)
-                    .putInt("total_score_int", score.toInt())
                     .putInt("meditation_count_today", meditationCountToday)
                     .putString("pending_habits", Gson().toJson(pendingHabits.take(5)))
                     // Counter per le notifiche locali

@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth'
 import { getFirestore, doc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { toDateString } from '../../src/lib/habitLogic'
 
 // Stessa config del progetto Firebase della web app (src/lib/firebase.js) —
 // apiKey pubblica lato client, non è un segreto.
@@ -37,13 +38,18 @@ const priorityInput = document.getElementById('priority')
 const rewardInput = document.getElementById('reward')
 const penaltyInput = document.getElementById('penalty')
 
+// toDateString usa la data locale, non UTC: alle 00:xx ora italiana
+// new Date().toISOString().slice(0,10) restituisce ancora il giorno UTC
+// precedente — lo stesso bug che habitLogic.js documenta di aver già
+// corretto una volta nel resto dell'app (vedi il commento su toDateString).
+function todayLocal() { return toDateString(new Date()) }
 function tomorrow() {
   const d = new Date()
   d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
+  return toDateString(d)
 }
 deadlineInput.value = tomorrow()
-deadlineInput.min = new Date().toISOString().slice(0, 10)
+deadlineInput.min = todayLocal()
 
 function setStatus(msg) { statusEl.textContent = msg }
 
@@ -74,17 +80,28 @@ passwordInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('loginBtn').click()
 })
 
+let saving = false
 document.getElementById('saveBtn').addEventListener('click', async () => {
+  // Guardia anti-doppio-invio: senza, un doppio click/doppio Enter prima che
+  // l'await sotto si risolva creava due task identiche (stesso bug reale
+  // riscontrato sui widget nativi Android per lo stesso motivo).
+  if (saving) return
   const title = titleInput.value.trim()
   if (!title) { setStatus('Scrivi cosa devi fare'); return }
+  // .checkValidity() non basta da solo (l'utente può scrivere una data
+  // passata a mano nonostante il min sul campo) — controllata esplicitamente
+  // qui sotto, stessa logica di addTask in store.jsx.
   const deadline = deadlineInput.value || tomorrow()
   const priority = priorityInput.value
-  const reward = parseInt(rewardInput.value) || 0
-  const penalty = parseInt(penaltyInput.value) || 0
+  const reward = Math.max(0, parseInt(rewardInput.value) || 0)
+  const penalty = Math.max(0, parseInt(penaltyInput.value) || 0)
 
+  saving = true
   setStatus('Salvataggio...')
   try {
     const ref = doc(db, 'users', 'flavio')
+    const today = todayLocal()
+    const isPast = deadline < today
     const newTask = {
       id: `task_${Date.now().toString(36)}`,
       title,
@@ -93,12 +110,12 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       reward,
       penalty,
       priority,
-      status: 'active',
+      status: isPast ? 'expired' : 'active',
       createdAt: new Date().toISOString(),
       completedAt: null,
-      expiredAt: null,
+      expiredAt: isPast ? new Date().toISOString() : null,
       rewardApplied: false,
-      penaltyApplied: false,
+      penaltyApplied: isPast,
     }
     // arrayUnion invece di get()+update(): niente lettura, niente race con
     // scritture concorrenti da web/telefono nella stessa finestra (stessa
@@ -113,6 +130,8 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     setTimeout(() => window.close(), 700)
   } catch (e) {
     setStatus('Errore: ' + e.message)
+  } finally {
+    saving = false
   }
 })
 titleInput.addEventListener('keydown', e => {

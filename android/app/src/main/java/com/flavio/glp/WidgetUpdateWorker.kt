@@ -36,7 +36,6 @@ class WidgetUpdateWorker(
             val rewards   = doc.get("rewards")  as? List<Map<String, Any>> ?: emptyList()
             val dailyLogs = doc.get("dailyLogs") as? Map<String, Any> ?: emptyMap()
             val todayLog  = dailyLogs[today] as? Map<String, Any> ?: emptyMap()
-            val score     = (doc.getDouble("score") ?: 0.0).toFloat()
 
             // ── Task attive per la data selezionata nel widget (oggi = include
             // anche le scadute), più le completate quel giorno per lo stesso ──
@@ -149,7 +148,6 @@ class WidgetUpdateWorker(
                 .putInt("habits_completed",  doneList.size)
                 .putInt("habits_total",      activeHabits.size)
                 .putInt("streak",            streak)
-                .putInt("total_score_int",   score.toInt())
                 .putInt("meditation_count_today", meditationCountToday)
                 // Cache locale per i dialog di aggiunta rapida (AddWorkoutActivity,
                 // AddProteinActivity) — vedi commento nello stesso punto in MainActivity.

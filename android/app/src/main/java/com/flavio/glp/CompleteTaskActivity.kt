@@ -105,22 +105,26 @@ class CompleteTaskActivity : Activity() {
                 }
             }
 
-            transaction.update(
-                userRef,
-                mapOf(
-                    "tasks" to updated,
-                    "score" to com.google.firebase.firestore.FieldValue.increment(reward)
-                )
-            )
-        }.addOnSuccessListener {
-            android.util.Log.d("GLPWidget", "Task $taskId completed +${reward}pt")
-            vibrate()
-            Toast.makeText(this, "+${reward.toInt()}pt Task completata!", Toast.LENGTH_SHORT).show()
-            finish()
+            // Niente più scrittura sul campo "score": non esiste più da
+            // nessun'altra parte dell'app (vedi CLAUDE.md, punteggio sempre
+            // ricalcolato lato client) — incrementarlo qui lo rendeva solo
+            // disallineato, stesso bug trovato anche sul modulo Wear OS e
+            // sul widget "Aggiungi task".
+            transaction.update(userRef, "tasks", updated)
         }.addOnFailureListener { e ->
             android.util.Log.e("GLPWidget", "Error completing task: ${e.message}")
-            finish()
+            Toast.makeText(this, "Errore, riprova", Toast.LENGTH_SHORT).show()
         }
+
+        // Ottimistico: non aspetta la transazione per chiudere (già aggiornato
+        // localmente sopra) — a differenza degli altri widget qui una
+        // transazione fallisce rapidamente offline invece di restare in coda
+        // a tempo indeterminato, ma restare in attesa non serve comunque a
+        // nulla per l'utente, che ha già visto l'esito nel widget.
+        android.util.Log.d("GLPWidget", "Task $taskId completing +${reward}pt")
+        vibrate()
+        Toast.makeText(this, "+${reward.toInt()}pt Task completata!", Toast.LENGTH_SHORT).show()
+        finish()
     }
 
     private fun markTaskCompletedOptimistic(taskId: String, title: String, reward: Double, priority: String) {

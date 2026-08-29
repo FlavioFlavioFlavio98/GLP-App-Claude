@@ -26,6 +26,15 @@ import java.util.*
 // poi dall'app se serve, aprendo la task in modifica (tap sul nome nel widget).
 class QuickAddTaskActivity : Activity() {
 
+    // Guardia anti-doppio-invio: bug reale segnalato da Flavio — offline (es.
+    // modalità aereo), Firestore mette la scrittura in coda locale e la invia
+    // da sola alla riconnessione, senza mai chiamare né onSuccess né
+    // onFailure nel frattempo. Prima questo lasciava la finestra aperta
+    // indefinitamente "sembrando bloccata", e ogni tap ripetuto sull'invio
+    // (Enter/Fatto) creava un'altra task con id diverso — alla riconnessione
+    // tutte le scritture in coda arrivavano, duplicando la task N volte.
+    private var submitting = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -64,8 +73,10 @@ class QuickAddTaskActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun submit(rawTitle: String) {
+        if (submitting) return
         val title = rawTitle.trim()
         if (title.isEmpty()) { finish(); return }
+        submitting = true
 
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val widgetPrefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
@@ -91,15 +102,19 @@ class QuickAddTaskActivity : Activity() {
         // anche se più circoscritta).
         val db = FirebaseFirestore.getInstance()
         val userRef = db.collection("users").document("flavio")
+
+        // Ottimistico: chiude subito invece di aspettare la conferma di
+        // Firestore. Offline la scrittura resta comunque in coda localmente e
+        // si sincronizza da sola alla riconnessione (comportamento normale
+        // dell'SDK) — aspettare qui lasciava la finestra aperta a tempo
+        // indeterminato senza rete, invitando a premere invio più volte.
+        Toast.makeText(this, "Task creata", Toast.LENGTH_SHORT).show()
+        addTaskToWidgetPrefs(task)
+        finish()
+
         userRef.update("tasks", FieldValue.arrayUnion(task))
-            .addOnSuccessListener {
-                Toast.makeText(this, "Task creata", Toast.LENGTH_SHORT).show()
-                addTaskToWidgetPrefs(task)
-                finish()
-            }
             .addOnFailureListener {
                 Toast.makeText(this, "Errore: ${it.message}", Toast.LENGTH_LONG).show()
-                finish()
             }
     }
 

@@ -28804,6 +28804,14 @@ This typically indicates that your device does not have a healthy Internet conne
     registerVersion(Wt2, $t2, "esm2020");
   }();
 
+  // src/lib/habitLogic.js
+  function toDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   // chrome-extension/src/popup.js
   var firebaseConfig = {
     apiKey: "AIzaSyA001klzJou17djB76Q-t2eRTKbU9NZoQs",
@@ -28827,13 +28835,16 @@ This typically indicates that your device does not have a healthy Internet conne
   var priorityInput = document.getElementById("priority");
   var rewardInput = document.getElementById("reward");
   var penaltyInput = document.getElementById("penalty");
+  function todayLocal() {
+    return toDateString(/* @__PURE__ */ new Date());
+  }
   function tomorrow() {
     const d = /* @__PURE__ */ new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    return toDateString(d);
   }
   deadlineInput.value = tomorrow();
-  deadlineInput.min = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  deadlineInput.min = todayLocal();
   function setStatus(msg) {
     statusEl.textContent = msg;
   }
@@ -28862,7 +28873,9 @@ This typically indicates that your device does not have a healthy Internet conne
   passwordInput.addEventListener("keydown", (e2) => {
     if (e2.key === "Enter") document.getElementById("loginBtn").click();
   });
+  var saving = false;
   document.getElementById("saveBtn").addEventListener("click", async () => {
+    if (saving) return;
     const title = titleInput.value.trim();
     if (!title) {
       setStatus("Scrivi cosa devi fare");
@@ -28870,11 +28883,14 @@ This typically indicates that your device does not have a healthy Internet conne
     }
     const deadline = deadlineInput.value || tomorrow();
     const priority = priorityInput.value;
-    const reward = parseInt(rewardInput.value) || 0;
-    const penalty = parseInt(penaltyInput.value) || 0;
+    const reward = Math.max(0, parseInt(rewardInput.value) || 0);
+    const penalty = Math.max(0, parseInt(penaltyInput.value) || 0);
+    saving = true;
     setStatus("Salvataggio...");
     try {
       const ref = doc(db, "users", "flavio");
+      const today = todayLocal();
+      const isPast = deadline < today;
       const newTask = {
         id: `task_${Date.now().toString(36)}`,
         title,
@@ -28883,12 +28899,12 @@ This typically indicates that your device does not have a healthy Internet conne
         reward,
         penalty,
         priority,
-        status: "active",
+        status: isPast ? "expired" : "active",
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         completedAt: null,
-        expiredAt: null,
+        expiredAt: isPast ? (/* @__PURE__ */ new Date()).toISOString() : null,
         rewardApplied: false,
-        penaltyApplied: false
+        penaltyApplied: isPast
       };
       await updateDoc(ref, { tasks: arrayUnion(newTask) });
       setStatus("\u2705 Aggiunta!");
@@ -28900,6 +28916,8 @@ This typically indicates that your device does not have a healthy Internet conne
       setTimeout(() => window.close(), 700);
     } catch (e2) {
       setStatus("Errore: " + e2.message);
+    } finally {
+      saving = false;
     }
   });
   titleInput.addEventListener("keydown", (e2) => {

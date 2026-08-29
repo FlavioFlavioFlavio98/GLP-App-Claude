@@ -90,15 +90,20 @@ class VoiceAddTaskActivity : Activity() {
         // anche se più circoscritta).
         val db = FirebaseFirestore.getInstance()
         val userRef = db.collection("users").document("flavio")
+
+        // Ottimistico: chiude subito invece di aspettare la conferma di
+        // Firestore. Offline la scrittura resta comunque in coda localmente e
+        // si sincronizza da sola alla riconnessione — aspettare qui lasciava
+        // l'activity (invisibile, senza UI propria) bloccata a tempo
+        // indeterminato senza rete (bug reale riscontrato sul widget "gemello"
+        // QuickAddTaskActivity).
+        Toast.makeText(this, "✅ Task creata: $title", Toast.LENGTH_LONG).show()
+        addTaskToWidgetPrefs(task)
+        finish()
+
         userRef.update("tasks", FieldValue.arrayUnion(task))
-            .addOnSuccessListener {
-                Toast.makeText(this, "✅ Task creata: $title", Toast.LENGTH_LONG).show()
-                addTaskToWidgetPrefs(task)
-                finish()
-            }
             .addOnFailureListener {
                 Toast.makeText(this, "Errore: ${it.message}", Toast.LENGTH_LONG).show()
-                finish()
             }
     }
 

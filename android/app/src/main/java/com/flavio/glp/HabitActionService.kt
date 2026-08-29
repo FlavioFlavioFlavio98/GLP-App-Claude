@@ -44,14 +44,17 @@ class HabitActionService : Service() {
         val penalty = intent.getDoubleExtra("penalty", 0.0)
         val userRef = FirebaseFirestore.getInstance().collection("users").document("flavio")
 
+        // Niente più scrittura sul campo "score": non esiste più da
+        // nessun'altra parte dell'app (vedi CLAUDE.md, il punteggio si
+        // ricalcola sempre lato client da tasks/habits/log) — incrementarlo
+        // qui lo rendeva solo disallineato, stesso bug trovato oggi anche sul
+        // modulo Wear OS e sui widget task.
         when (action) {
             "done" -> userRef.update(
-                "dailyLogs.$today.habits", FieldValue.arrayUnion(habitId),
-                "score", FieldValue.increment(reward)
+                "dailyLogs.$today.habits", FieldValue.arrayUnion(habitId)
             ).addOnCompleteListener { updateWidgetData() }
             "fail" -> userRef.update(
-                "dailyLogs.$today.failedHabits", FieldValue.arrayUnion(habitId),
-                "score", FieldValue.increment(-penalty)
+                "dailyLogs.$today.failedHabits", FieldValue.arrayUnion(habitId)
             ).addOnCompleteListener { updateWidgetData() }
             "refresh" -> updateWidgetData()
             else -> stopSelf()

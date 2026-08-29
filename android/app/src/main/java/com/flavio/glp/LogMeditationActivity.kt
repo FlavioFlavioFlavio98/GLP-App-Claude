@@ -27,6 +27,7 @@ class LogMeditationActivity : Activity() {
 
     private val presets = listOf(1, 2, 5, 10)
     private var selectedMinutes: Int = 1
+    private var submitting = false
     private lateinit var chipsRow: LinearLayout
     private lateinit var customInput: EditText
     private lateinit var saveBtn: TextView
@@ -152,6 +153,9 @@ class LogMeditationActivity : Activity() {
     }
 
     private fun save() {
+        if (submitting) return
+        submitting = true
+
         val minutes = selectedMinutes.coerceAtLeast(1)
         val rate = 1.0 // vedi DEFAULT_MEDITATION_RATE in meditationStats.js — il tasso
         // personalizzabile vive solo in localStorage della web app.
@@ -163,34 +167,32 @@ class LogMeditationActivity : Activity() {
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         )
 
+        // Ottimistico + niente più scritture sul campo "score": non esiste più
+        // da nessun'altra parte dell'app (vedi CLAUDE.md, punteggio sempre
+        // ricalcolato lato client) — incrementarlo qui lo rendeva solo
+        // disallineato. Chiude subito invece di aspettare la conferma di
+        // Firestore (offline la scrittura resta in coda e si sincronizza da
+        // sola: aspettare qui lasciava la finestra bloccata a tempo
+        // indeterminato senza rete, lo stesso bug reale riscontrato sul
+        // widget "Aggiungi task").
+        Toast.makeText(this, "🧘 Sessione da $minutes min registrata! +${rate.toInt()}pt", Toast.LENGTH_SHORT).show()
+        bumpWidgetCountOptimistic()
+        finish()
+
         val userRef = FirebaseFirestore.getInstance().collection("users").document("flavio")
-        userRef.update(
-            "meditationLog.$today", FieldValue.arrayUnion(entry),
-            "score", FieldValue.increment(rate)
-        ).addOnCompleteListener {
-            Toast.makeText(this, "🧘 Sessione da $minutes min registrata! +${rate.toInt()}pt", Toast.LENGTH_SHORT).show()
-            refreshWidgetCount(today)
-        }.addOnFailureListener {
-            Toast.makeText(this, "Errore, riprova", Toast.LENGTH_SHORT).show()
-            finish()
-        }
+        userRef.update("meditationLog.$today", FieldValue.arrayUnion(entry))
+            .addOnFailureListener {
+                Toast.makeText(this, "Errore, riprova", Toast.LENGTH_SHORT).show()
+            }
     }
 
-    private fun refreshWidgetCount(today: String) {
-        FirebaseFirestore.getInstance().collection("users").document("flavio").get()
-            .addOnSuccessListener { doc ->
-                @Suppress("UNCHECKED_CAST")
-                val meditationLog = doc.get("meditationLog") as? Map<String, Any> ?: emptyMap()
-                val todayEntries = meditationLog[today] as? List<*> ?: emptyList<Any>()
+    private fun bumpWidgetCountOptimistic() {
+        val prefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
+        val newCount = prefs.getInt("meditation_count_today", 0) + 1
+        prefs.edit().putInt("meditation_count_today", newCount).apply()
 
-                getSharedPreferences("glp_widget", Context.MODE_PRIVATE).edit()
-                    .putInt("meditation_count_today", todayEntries.size)
-                    .apply()
-
-                val manager = AppWidgetManager.getInstance(this)
-                val ids = manager.getAppWidgetIds(ComponentName(this, MeditationWidgetProvider::class.java))
-                ids.forEach { MeditationWidgetProvider.updateWidget(this, manager, it) }
-            }
-            .addOnCompleteListener { finish() }
+        val manager = AppWidgetManager.getInstance(this)
+        val ids = manager.getAppWidgetIds(ComponentName(this, MeditationWidgetProvider::class.java))
+        ids.forEach { MeditationWidgetProvider.updateWidget(this, manager, it) }
     }
 }

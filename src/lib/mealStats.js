@@ -87,7 +87,11 @@ function computeStreak(sortedEntries) {
   if (cursor) {
     while (dateSet.has(cursor)) {
       streak++
-      const d = new Date(cursor); d.setDate(d.getDate() - 1)
+      // 'T00:00:00' forza il parsing in locale invece che UTC — altrimenti in
+      // fusi orari indietro rispetto a UTC (offset negativo) la data risultante
+      // sarebbe quella locale del giorno prima (stesso bug che toDateString
+      // esiste apposta per evitare, vedi habitLogic.js).
+      const d = new Date(cursor + 'T00:00:00'); d.setDate(d.getDate() - 1)
       cursor = toDateString(d)
     }
   }
@@ -100,7 +104,7 @@ function computeStreak(sortedEntries) {
   let prevDate = null
   dates.forEach(dateStr => {
     if (prevDate) {
-      const expected = new Date(prevDate); expected.setDate(expected.getDate() + 1)
+      const expected = new Date(prevDate + 'T00:00:00'); expected.setDate(expected.getDate() + 1)
       running = (toDateString(expected) === dateStr) ? running + 1 : 1
     } else {
       running = 1

@@ -317,6 +317,11 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
           {postponeOpen ? (
             <div style={{ display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
               <button
+                onClick={closeMenus}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9em', padding: '4px 2px', color: '#666' }}
+                title="Annulla"
+              >✕</button>
+              <button
                 onClick={() => { onPostpone(1); closeMenus() }}
                 style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
                 title="Posticipa a domani"

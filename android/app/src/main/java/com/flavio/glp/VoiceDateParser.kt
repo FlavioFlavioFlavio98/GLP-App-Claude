@@ -28,30 +28,37 @@ object VoiceDateParser {
         "sabato" to Calendar.SATURDAY
     )
 
-    data class Result(val title: String, val deadline: String, val dateWasSpoken: Boolean)
+    // deadline == null significa "nessuna frase di data riconosciuta" — il
+    // chiamante decide il fallback (es. la data selezionata nel widget),
+    // invece di questa classe deciderlo per lui. title può essere vuoto se
+    // la frase dettata era solo una data ("domani") senza nient'altro: il
+    // chiamante deve trattarlo come "non ho capito", non come titolo valido.
+    data class Result(val title: String, val deadline: String?)
+
+    // Ordine importante: "dopodomani" va controllato prima di "domani" nel
+    // caso venga dettato con uno spazio ("dopo domani") — la frase scadenza
+    // va rimossa dal titolo appena trovata, quindi al massimo una sola
+    // espressione di data viene riconosciuta per task. Costruita una sola
+    // volta (non ad ogni parse()): nessuna delle regex/lambda cattura stato
+    // per chiamata, ricompilarle ogni volta sarebbe lavoro sprecato.
+    private val patterns = listOf<Pair<Regex, (MatchResult) -> String>>(
+        Regex("(?i)\\bdopo\\s*domani\\b") to { _ -> addDays(2) },
+        Regex("(?i)\\bdomani\\b") to { _ -> addDays(1) },
+        Regex("(?i)\\boggi\\b") to { _ -> addDays(0) },
+        Regex("(?i)\\b(?:tra|fra)\\s+(un|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|\\d+)\\s+settiman[ae]\\b") to { m ->
+            addDays(wordToNumber(m.groupValues[1]) * 7)
+        },
+        Regex("(?i)\\b(?:tra|fra)\\s+(un|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|\\d+)\\s+giorn[oi]\\b") to { m ->
+            addDays(wordToNumber(m.groupValues[1]))
+        },
+        Regex("(?i)\\b(lunedi|lunedì|martedi|martedì|mercoledi|mercoledì|giovedi|giovedì|venerdi|venerdì|sabato|domenica)\\b") to { m ->
+            nextWeekday(weekdays[m.groupValues[1].lowercase()]!!)
+        }
+    )
 
     fun parse(rawText: String): Result {
         var text = rawText.trim()
         var deadline: String? = null
-
-        // Ordine importante: "dopodomani" va controllato prima di "domani"
-        // nel caso venga dettato con uno spazio ("dopo domani") — la frase
-        // scadenza va rimossa dal titolo appena trovata, quindi al massimo
-        // una sola espressione di data viene riconosciuta per task.
-        val patterns = listOf<Pair<Regex, (MatchResult) -> String>>(
-            Regex("(?i)\\bdopo\\s*domani\\b") to { _ -> addDays(2) },
-            Regex("(?i)\\bdomani\\b") to { _ -> addDays(1) },
-            Regex("(?i)\\boggi\\b") to { _ -> addDays(0) },
-            Regex("(?i)\\b(?:tra|fra)\\s+(un|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|\\d+)\\s+settiman[ae]\\b") to { m ->
-                addDays(wordToNumber(m.groupValues[1]) * 7)
-            },
-            Regex("(?i)\\b(?:tra|fra)\\s+(un|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|\\d+)\\s+giorn[oi]\\b") to { m ->
-                addDays(wordToNumber(m.groupValues[1]))
-            },
-            Regex("(?i)\\b(lunedi|lunedì|martedi|martedì|mercoledi|mercoledì|giovedi|giovedì|venerdi|venerdì|sabato|domenica)\\b") to { m ->
-                nextWeekday(weekdays[m.groupValues[1].lowercase()]!!)
-            }
-        )
 
         for ((regex, resolve) in patterns) {
             val match = regex.find(text)
@@ -66,12 +73,7 @@ object VoiceDateParser {
         text = text.replace(Regex("\\s{2,}"), " ").replace(Regex("\\s+([,.;])"), "$1").trim(' ', ',', '.', ';')
         if (text.isNotEmpty()) text = text.replaceFirstChar { it.uppercase() }
 
-        val today = sdf.format(Date())
-        return Result(
-            title = text.ifEmpty { rawText },
-            deadline = deadline ?: today,
-            dateWasSpoken = deadline != null,
-        )
+        return Result(title = text, deadline = deadline)
     }
 
     // Per il dialog di conferma: "oggi"/"domani"/"dopodomani" restano parole,

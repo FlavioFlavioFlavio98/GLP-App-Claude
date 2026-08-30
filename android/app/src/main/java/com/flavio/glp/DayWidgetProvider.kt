@@ -38,6 +38,7 @@ class DayWidgetProvider : AppWidgetProvider() {
             context: Context,
             earnedDelta: Int = 0,
             spentDelta: Int = 0,
+            habitsEarnedDelta: Int = 0,
             extraEarnedDelta: Int = 0,
             taskEarnedDelta: Int = 0,
             penaltyDelta: Int = 0,
@@ -50,6 +51,7 @@ class DayWidgetProvider : AppWidgetProvider() {
                 .putInt("day_earned_int",    newEarned)
                 .putInt("day_spent_int",     newSpent)
                 .putInt("day_net_int",       newEarned - newSpent)
+                .putInt("day_habits_earned", (prefs.getInt("day_habits_earned", 0) + habitsEarnedDelta).coerceAtLeast(0))
                 .putInt("day_extra_earned",  (prefs.getInt("day_extra_earned", 0)  + extraEarnedDelta).coerceAtLeast(0))
                 .putInt("day_tasks_earned",  (prefs.getInt("day_tasks_earned", 0)  + taskEarnedDelta).coerceAtLeast(0))
                 .putInt("day_penalty_spent", (prefs.getInt("day_penalty_spent", 0) + penaltyDelta).coerceAtLeast(0))
@@ -64,9 +66,12 @@ class DayWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_day)
             val prefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
 
-            val earned = prefs.getInt("day_earned_int", -999)
-            val spent = prefs.getInt("day_spent_int", -999)
-            val net = prefs.getInt("day_net_int", -999)
+            // Default 0 (non un sentinel come -999): un widget appena
+            // piazzato, prima che WidgetUpdateWorker/l'apertura app scrivano
+            // il primo valore reale, deve mostrare "+0pt" e non "+-999pt".
+            val earned = prefs.getInt("day_earned_int", 0)
+            val spent = prefs.getInt("day_spent_int", 0)
+            val net = prefs.getInt("day_net_int", 0)
             val habitsEarned = prefs.getInt("day_habits_earned", 0)
             val extraEarned = prefs.getInt("day_extra_earned", 0)
             val tasksEarned = prefs.getInt("day_tasks_earned", 0)

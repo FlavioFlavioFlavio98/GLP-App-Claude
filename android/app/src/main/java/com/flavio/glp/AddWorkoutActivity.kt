@@ -19,6 +19,22 @@ class AddWorkoutActivity : Activity() {
     private var selectedIndex = 0
     private var reps = 10
     private var effort = 1
+    // Guardia anti-doppio-invio: stesso pattern di AddTaskActivity/
+    // QuickAddTaskActivity — senza, un doppio tap veloce su "Aggiungi" prima
+    // che finish() chiuda la finestra crea due voci duplicate in exerciseLog.
+    private var submitting = false
+
+    // Firestore restituisce i numeri interi come Long, non Double — un cast
+    // "as? Double" nudo su un pointsPerRep configurato a un valore intero
+    // (es. "1" invece di "1.0") falliva silenziosamente e faceva ripiegare
+    // sul default 0.1, sottostimando i punti di 10x rispetto al resto
+    // dell'app (bug reale trovato in audit).
+    private fun asDouble(v: Any?): Double = when (v) {
+        is Double -> v
+        is Long -> v.toDouble()
+        is Int -> v.toDouble()
+        else -> 0.1
+    }
 
     private lateinit var repsView: TextView
     private lateinit var ptsResult: TextView
@@ -34,7 +50,7 @@ class AddWorkoutActivity : Activity() {
     }
 
     private fun currentPts(): Double {
-        val ppr = (exercises.getOrNull(selectedIndex)?.get("pointsPerRep") as? Double) ?: 0.1
+        val ppr = asDouble(exercises.getOrNull(selectedIndex)?.get("pointsPerRep"))
         return (reps * ppr * effortMultiplier(effort) * 100).toLong() / 100.0
     }
 
@@ -193,7 +209,9 @@ class AddWorkoutActivity : Activity() {
                 dp(46)
             )
             setOnClickListener {
+                if (submitting) return@setOnClickListener
                 val ex = exercises.getOrNull(selectedIndex) ?: return@setOnClickListener
+                submitting = true
                 saveWorkout(ex, reps, currentPts(), effort)
                 finish()
             }
@@ -328,7 +346,7 @@ class AddWorkoutActivity : Activity() {
         val ex = exercises.getOrNull(selectedIndex) ?: return
         val emoji = ex["emoji"] as? String ?: "💪"
         val name = ex["name"] as? String ?: ""
-        val pts = (ex["pointsPerRep"] as? Double) ?: 0.1
+        val pts = asDouble(ex["pointsPerRep"])
 
         exerciseName.text = "$emoji $name"
         ptsLabel.text = "${pts}pt / rep"
@@ -352,8 +370,12 @@ class AddWorkoutActivity : Activity() {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
-        // Aggiornamento ottimistico: aggiorna subito DayWidget senza aspettare Firestore
-        DayWidgetProvider.applyDelta(this, earnedDelta = pts.toInt(), extraEarnedDelta = pts.toInt())
+        // Aggiornamento ottimistico: aggiorna subito DayWidget senza aspettare Firestore.
+        // Math.round invece di .toInt() (che tronca): con pointsPerRep tipicamente
+        // sotto 1pt, più voci consecutive troncate a 0 facevano derivare silenziosamente
+        // il totale ottimistico da quello reale finché non arrivava il prossimo resync.
+        val ptsRounded = Math.round(pts).toInt()
+        DayWidgetProvider.applyDelta(this, earnedDelta = ptsRounded, extraEarnedDelta = ptsRounded)
 
         val logEntry = hashMapOf(
             "id" to System.currentTimeMillis().toString(),

@@ -1929,20 +1929,31 @@ export function AppProvider({ children }) {
       actions.showToast('Task aggiornata!', '✏️')
     },
 
-    // Scorciatoia rapida dal menu ⋮ per posticipare — evita di dover aprire
-    // l'editor completo solo per spostare la scadenza di qualche giorno.
-    // "days" è sempre relativo a oggi (non alla vecchia scadenza), così
-    // "domani"/"dopodomani"/"+3gg" hanno sempre lo stesso significato anche
-    // per task già scadute da tempo.
-    async postponeTask(task, days) {
-      if (isReadOnly()) return
+    // Scrittura condivisa tra reopenTask e postponeTask (stesso reset di
+    // stato, solo la scadenza cambia) — un'unica implementazione evita che le
+    // due azioni possano andare fuori sincrono a un futuro fix.
+    async _setTaskDeadline(task, newDeadline) {
       const { authUserId, globalData } = state
-      const newDeadline = addDays(toDateString(new Date()), days)
       const tasks = (globalData.tasks || []).map(t => {
         if (t.id !== task.id) return t
-        return { ...t, deadline: newDeadline, status: 'active', expiredAt: null, penaltyApplied: false }
+        return { ...t, status: 'active', expiredAt: null, deadline: newDeadline, penaltyApplied: false }
       })
       await updateDoc(doc(db, 'users', authUserId), { tasks })
+    },
+
+    // Scorciatoia rapida dal menu ⋮ per posticipare — evita di dover aprire
+    // l'editor completo solo per spostare la scadenza di qualche giorno.
+    // "days" è relativo alla vecchia scadenza se questa è ancora nel futuro
+    // (così "+1gg" sposta sempre avanti di un giorno, coerente con
+    // l'etichetta, invece di avvicinare una task già lontana nel tempo) — o
+    // relativo a oggi se la task è scaduta/di oggi (altrimenti "+1gg" su una
+    // task scaduta da settimane resterebbe comunque nel passato).
+    async postponeTask(task, days) {
+      if (isReadOnly()) return
+      const todayStr = toDateString(new Date())
+      const base = task.deadline > todayStr ? task.deadline : todayStr
+      const newDeadline = addDays(base, days)
+      await actions._setTaskDeadline(task, newDeadline)
       const [, m, d] = newDeadline.split('-')
       actions.showToast(`Posticipata al ${parseInt(d)}/${parseInt(m)}`, '📅')
     },
@@ -2357,12 +2368,7 @@ export function AppProvider({ children }) {
 
     async reopenTask(task, newDeadline) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
-      const tasks = (globalData.tasks || []).map(t => {
-        if (t.id !== task.id) return t
-        return { ...t, status: 'active', expiredAt: null, deadline: newDeadline, penaltyApplied: false }
-      })
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      await actions._setTaskDeadline(task, newDeadline)
       actions.showToast('Task riaperta!', '↩️')
     },
 

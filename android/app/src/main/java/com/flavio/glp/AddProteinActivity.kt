@@ -22,6 +22,10 @@ class AddProteinActivity : Activity() {
     private var foods = listOf<Map<String, Any>>()
     private var selectedIndex = 0
     private var grams = 100
+    // Guardia anti-doppio-invio: stesso pattern di AddTaskActivity/
+    // QuickAddTaskActivity — senza, un doppio tap veloce su "Aggiungi" prima
+    // che finish() chiuda la finestra crea due voci duplicate in proteinLog.
+    private var submitting = false
 
     private lateinit var gramsView: TextView
     private lateinit var proteinResult: TextView
@@ -156,7 +160,9 @@ class AddProteinActivity : Activity() {
                 dp(46)
             )
             setOnClickListener {
+                if (submitting) return@setOnClickListener
                 val food = foods.getOrNull(selectedIndex) ?: return@setOnClickListener
+                submitting = true
                 saveProtein(food, grams, currentProtein())
                 finish()
             }

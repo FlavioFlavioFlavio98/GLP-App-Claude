@@ -16,6 +16,11 @@ import com.google.gson.reflect.TypeToken
 
 class CompleteTaskActivity : Activity() {
 
+    // Guardia anti-doppio-invio: un tap molto veloce e ripetuto sul bottone
+    // del dialog può registrarsi due volte prima che la chiusura del dialog
+    // diventi effettiva — stesso pattern anti-duplicati usato altrove.
+    private var submitting = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -28,7 +33,10 @@ class CompleteTaskActivity : Activity() {
             .setTitle("Task completata?")
             .setMessage("\"$taskTitle\"")
             .setPositiveButton("Si, completata!") { _, _ ->
-                completeTask(taskId, taskTitle, taskReward, taskPriority)
+                if (!submitting) {
+                    submitting = true
+                    completeTask(taskId, taskTitle, taskReward, taskPriority)
+                }
             }
             .setNegativeButton("Annulla") { _, _ -> finish() }
             .setOnCancelListener { finish() }

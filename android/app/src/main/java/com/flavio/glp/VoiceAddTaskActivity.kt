@@ -28,6 +28,10 @@ import java.util.*
 class VoiceAddTaskActivity : Activity() {
 
     private val REQUEST_CODE_SPEECH = 1001
+    // Guardia anti-doppio-invio: mancava su questo file — un doppio tap su
+    // "OK, crea" prima che il dialog si chiudesse creava due task duplicate
+    // (stesso bug per cui è stata aggiunta ovunque altrove in questa sessione).
+    private var submitting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,17 +78,36 @@ class VoiceAddTaskActivity : Activity() {
             finish()
             return
         }
-        showConfirmDialog(parsed)
+
+        // Nessuna frase di data riconosciuta → stessa scelta di fallback di
+        // QuickAddTaskActivity/AddTaskActivity: la data attualmente
+        // selezionata nel widget lista, non sempre "oggi" a prescindere.
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val widgetPrefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
+        val deadline = parsed.deadline ?: (widgetPrefs.getString("selected_date", null) ?: today)
+
+        showConfirmDialog(parsed.title, deadline)
     }
 
     // "Deve mostrarmi la task già impostata, io devo solo cliccare su OK" —
     // niente editor completo, solo titolo + data interpretati e due bottoni.
-    private fun showConfirmDialog(parsed: VoiceDateParser.Result) {
-        val dateLabel = VoiceDateParser.formatDisplay(parsed.deadline)
+    private fun showConfirmDialog(title: String, deadline: String) {
+        // Guardia anti-crash: il riconoscimento vocale è asincrono (activity
+        // di sistema separata) — se nel frattempo l'utente ha premuto Home o
+        // l'activity non è più in primo piano quando arriva il risultato,
+        // aprire un AlertDialog qui lancerebbe BadTokenException ("token is
+        // not valid; is your activity running?").
+        if (isFinishing || isDestroyed) return
+        val dateLabel = VoiceDateParser.formatDisplay(deadline)
         AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
             .setTitle("Conferma task")
-            .setMessage("\"${parsed.title}\"\n\n📅 Scadenza: $dateLabel")
-            .setPositiveButton("OK, crea") { _, _ -> saveTask(parsed.title, parsed.deadline) }
+            .setMessage("\"$title\"\n\n📅 Scadenza: $dateLabel")
+            .setPositiveButton("OK, crea") { _, _ ->
+                if (!submitting) {
+                    submitting = true
+                    saveTask(title, deadline)
+                }
+            }
             .setNegativeButton("Annulla") { _, _ -> finish() }
             .setOnCancelListener { finish() }
             .show()

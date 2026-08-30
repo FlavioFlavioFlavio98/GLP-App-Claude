@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { computeMealWeekStats, getMealHistory, getMealRate, setMealRate, MEAL_LEVELS, getMealQuote } from '../lib/mealStats'
 import { toDateString } from '../lib/habitLogic'
 import ActivityRateEditor from './ActivityRateEditor'
@@ -107,9 +107,10 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
   const stats = computeMealWeekStats(mealLog)
   const history = getMealHistory(mealLog)
   const today = toDateString(new Date())
-  // useMemo cablato sui minuti trascorsi: la citazione ruota ogni minuto
-  // (vedi getMealQuote) senza rigenerarsi ad ogni singolo render.
-  const quote = useMemo(() => getMealQuote(), [Math.floor(Date.now() / 60000)])
+  // Chiamata diretta, non un hook: ruota da sola ogni minuto (vedi
+  // getMealQuote) semplicemente perché il componente si ri-renderizza spesso
+  // durante una sessione attiva (il timer aggiorna lo stato ogni secondo).
+  const quote = getMealQuote()
 
   return (
     <div style={{ paddingTop: 8 }}>
@@ -193,7 +194,7 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 14 }}>
           <StatCell label="Ultimi 7gg" value={stats.total} />
           <StatCell label="Streak" value={`${stats.streak}g`} color={stats.streak > 0 ? 'var(--success, #4caf50)' : undefined} />
           <StatCell label="Record streak" value={`${stats.bestStreak}g`} />
@@ -201,7 +202,7 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
             label="Media min."
             value={stats.avgDuration || '–'}
             sub={stats.durationTrend != null && stats.durationTrend !== 0
-              ? (stats.durationTrend > 0 ? `▲ +${stats.durationTrend}` : `▼ ${stats.durationTrend}`)
+              ? (stats.durationTrend > 0 ? `▲ +${stats.durationTrend}` : `▼ ${Math.abs(stats.durationTrend)}`)
               : null}
             subColor={stats.durationTrend > 0 ? '#4caf50' : (stats.durationTrend < 0 ? '#e53935' : undefined)}
           />

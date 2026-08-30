@@ -241,9 +241,17 @@ class TaskWidgetProvider : AppWidgetProvider() {
                         putExtra("task_reward", reward.toDouble())
                         putExtra("task_priority", priority)
                     }
+                    // *100 (non *10): con index fino a 11 (MAX_ROWS=12), *10
+                    // non lascia spazio sufficiente e appWidgetId=5,index=11
+                    // (→61) collideva con appWidgetId=6,index=1 (→61) — stesso
+                    // requestCode sullo stesso target (CompleteTaskActivity)
+                    // con FLAG_UPDATE_CURRENT sovrascriveva gli extra
+                    // (task_id/title/reward) del primo con quelli del secondo,
+                    // completando/premiando la task sbagliata (bug reale
+                    // trovato in audit, riproducibile con 2+ widget piazzati).
                     val completePi = PendingIntent.getActivity(
                         context,
-                        appWidgetId * 10 + index,
+                        appWidgetId * 100 + index,
                         completeIntent,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )

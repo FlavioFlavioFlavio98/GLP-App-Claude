@@ -49,13 +49,25 @@ class HabitActionService : Service() {
         // ricalcola sempre lato client da tasks/habits/log) — incrementarlo
         // qui lo rendeva solo disallineato, stesso bug trovato oggi anche sul
         // modulo Wear OS e sui widget task.
+        //
+        // Aggiornamento ottimistico del widget Day: prima mancava del tutto,
+        // quindi completare/fallire un'abitudine dal widget (l'azione più
+        // frequente in assoluto) non si rifletteva sul widget punti finché
+        // non arrivava il prossimo refresh periodico (fino a 15 minuti) —
+        // stesso pattern già usato da CompleteTaskActivity/AddWorkoutActivity.
         when (action) {
-            "done" -> userRef.update(
-                "dailyLogs.$today.habits", FieldValue.arrayUnion(habitId)
-            ).addOnCompleteListener { updateWidgetData() }
-            "fail" -> userRef.update(
-                "dailyLogs.$today.failedHabits", FieldValue.arrayUnion(habitId)
-            ).addOnCompleteListener { updateWidgetData() }
+            "done" -> {
+                DayWidgetProvider.applyDelta(this, earnedDelta = reward.toInt(), habitsEarnedDelta = reward.toInt())
+                userRef.update(
+                    "dailyLogs.$today.habits", FieldValue.arrayUnion(habitId)
+                ).addOnCompleteListener { updateWidgetData() }
+            }
+            "fail" -> {
+                DayWidgetProvider.applyDelta(this, spentDelta = penalty.toInt(), penaltyDelta = penalty.toInt())
+                userRef.update(
+                    "dailyLogs.$today.failedHabits", FieldValue.arrayUnion(habitId)
+                ).addOnCompleteListener { updateWidgetData() }
+            }
             "refresh" -> updateWidgetData()
             else -> stopSelf()
         }

@@ -30,13 +30,21 @@ class SelectDateActivity : Activity() {
                 .addOnSuccessListener { doc ->
                     @Suppress("UNCHECKED_CAST")
                     val tasks = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
-                    val filtered = tasks
-                        .filter { it["status"] == "active" && it["deadline"] as? String == selected }
-                        .sortedBy { it["deadline"] as? String ?: "" }
+                    val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                    // Stesso filtro condiviso di TaskWidgetProvider/WidgetUpdateWorker
+                    // (TaskWidgetUtils) invece di reimplementarlo qui in modo
+                    // incompleto — la versione precedente non includeva le task
+                    // scadute su "oggi", non ordinava per priorità, limitava a 5
+                    // righe invece di MAX_ROWS e non scriveva mai il riepilogo
+                    // "completate", lasciando quello del giorno precedente in
+                    // cache dopo aver cambiato data dal selettore.
+                    val active = TaskWidgetUtils.activeTasksForDate(tasks, selected, today)
+                    val completed = TaskWidgetUtils.completedTasksForDate(tasks, selected)
 
                     getSharedPreferences("glp_widget", MODE_PRIVATE)
                         .edit()
-                        .putString("active_tasks", com.google.gson.Gson().toJson(filtered.take(5)))
+                        .putString("active_tasks", com.google.gson.Gson().toJson(active.take(TaskWidgetProvider.MAX_ROWS)))
+                        .putString("completed_tasks_widget", com.google.gson.Gson().toJson(completed.take(TaskWidgetProvider.MAX_ROWS)))
                         .apply()
 
                     val manager = AppWidgetManager.getInstance(this)

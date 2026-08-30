@@ -24,6 +24,10 @@ class WidgetUpdateWorker(
 
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val today = sdf.format(Date())
+        // completedAt/expiredAt sono in UTC, "today" è la data locale del
+        // device: con un fuso avanti rispetto a UTC un evento delle prime ore
+        // del mattino locale ha ancora la data UTC di ieri.
+        val yesterday = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
         val db = FirebaseFirestore.getInstance()
 
         return try {
@@ -62,12 +66,15 @@ class WidgetUpdateWorker(
             val todayExercises = exerciseLog[today] as? List<Map<String, Any>> ?: emptyList()
             todayExercises.forEach { ex -> extraEarned += (ex["pts"] as? Double) ?: 0.0 }
 
-            // ── Guadagni task completate oggi ──────────────────────────────────
+            // ── Guadagni task completate oggi (anche "yesterday" per lo stesso
+            // motivo di tasksSpent qui sotto: completedAt in UTC può restare
+            // datato ieri per un evento delle prime ore del mattino locale) ──
             var taskEarned = 0.0
             tasks.filter { task ->
                 task["status"] == "completed" &&
                 (task["rewardApplied"] == true || task["rewardApplied"] == "true") &&
-                (task["completedAt"] as? String)?.startsWith(today) == true
+                ((task["completedAt"] as? String)?.startsWith(today) == true ||
+                 (task["completedAt"] as? String)?.startsWith(yesterday) == true)
             }.forEach { task ->
                 taskEarned += (task["reward"] as? Double) ?: (task["reward"] as? Long)?.toDouble() ?: 0.0
             }
@@ -89,7 +96,6 @@ class WidgetUpdateWorker(
             }
 
             // ── Costi task scadute ────────────────────────────────────────────
-            val yesterday = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
             val tasksSpent = tasks
                 .filter { task ->
                     task["status"] == "expired" &&

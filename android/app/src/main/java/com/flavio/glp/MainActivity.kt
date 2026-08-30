@@ -207,6 +207,16 @@ class MainActivity : BridgeActivity() {
         }
 
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        // completedAt/expiredAt sono salvati in UTC, "today" è la data locale
+        // del device: con un fuso avanti rispetto a UTC (es. Italia/Bulgaria),
+        // un evento delle prime ore del mattino locale ha ancora la data UTC
+        // di ieri — "today" da solo lo escluderebbe. Confrontare anche con
+        // "yesterday" copre questo caso qualunque sia l'offset positivo.
+        val yesterday = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).let { sdf ->
+            val cal = Calendar.getInstance()
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+            sdf.format(cal.time)
+        }
 
         FirebaseFirestore.getInstance()
             .collection("users").document("flavio")
@@ -264,12 +274,17 @@ class MainActivity : BridgeActivity() {
                 val todayExercises = exerciseLog[today] as? List<Map<String, Any>> ?: emptyList()
                 todayExercises.forEach { ex -> extraEarned += (ex["pts"] as? Double) ?: 0.0 }
 
-                // Guadagni: task completate oggi
+                // Guadagni: task completate oggi. Controlla anche "yesterday"
+                // (stesso motivo per cui expiredTasksCost qui sotto lo fa già):
+                // completedAt è in UTC, quindi una task completata nelle prime
+                // ore del mattino locale ha ancora la data UTC di ieri e
+                // "today" da solo la escluderebbe silenziosamente dal widget.
                 var taskEarned = 0.0
                 tasks.filter { task ->
                     task["status"] == "completed" &&
                     (task["rewardApplied"] == true || task["rewardApplied"] == "true") &&
-                    (task["completedAt"] as? String)?.startsWith(today) == true
+                    ((task["completedAt"] as? String)?.startsWith(today) == true ||
+                     (task["completedAt"] as? String)?.startsWith(yesterday) == true)
                 }.forEach { task ->
                     taskEarned += (task["reward"] as? Double)
                         ?: (task["reward"] as? Long)?.toDouble() ?: 0.0

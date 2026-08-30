@@ -16,6 +16,10 @@ class AddWillpowerActivity : Activity() {
 
     private var succeeded: Boolean? = null
     private var points: Int = 0
+    // Guardia anti-doppio-invio: stesso pattern di AddTaskActivity/
+    // QuickAddTaskActivity — senza, un doppio tap veloce su "Salva" prima
+    // che finish() chiuda la finestra crea due voci duplicate in willpowerLog.
+    private var submitting = false
 
     private lateinit var textInput: EditText
     private lateinit var pointsRow: LinearLayout
@@ -188,9 +192,11 @@ class AddWillpowerActivity : Activity() {
     }
 
     private fun save() {
+        if (submitting) return
         val text = textInput.text.toString().trim()
         val isSuccess = succeeded ?: return
         if (text.isEmpty() || points <= 0) return
+        submitting = true
 
         val pts = if (isSuccess) points.toDouble() else -points.toDouble()
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())

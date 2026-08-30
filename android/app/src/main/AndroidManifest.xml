@@ -242,6 +242,9 @@
         <receiver android:name=".NotificationReceiver"
             android:exported="false"/>
 
+        <receiver android:name=".WidgetRefreshReceiver"
+            android:exported="false"/>
+
         <!-- Receiver per riprogrammare gli allarmi al riavvio del dispositivo -->
         <receiver android:name=".BootReceiver"
             android:exported="true">

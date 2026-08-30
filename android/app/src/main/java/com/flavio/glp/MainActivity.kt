@@ -51,6 +51,7 @@ class MainActivity : BridgeActivity() {
         android.util.Log.d("GLPWidget", "=== MainActivity onCreate ===")
         android.webkit.WebView.setWebContentsDebuggingEnabled(true)
         WidgetUpdateWorker.schedule(this)
+        WidgetRefreshScheduler.scheduleNext(this)
         NotificationReceiver.createChannel(this)
 
         // Inietta il build timestamp nella WebView non appena il bridge è pronto

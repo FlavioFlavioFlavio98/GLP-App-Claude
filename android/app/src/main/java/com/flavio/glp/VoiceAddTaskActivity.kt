@@ -1,6 +1,7 @@
 package com.flavio.glp
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
@@ -15,10 +16,15 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 // Tap sul widget 1x1 "detta task" → apre subito il riconoscimento vocale di
-// sistema (stessa UI di Google usata per la ricerca vocale, "Parla ora") e
-// appena finisci di parlare salva la task in automatico col testo dettato
-// come titolo — nessun tocco extra, pensata per quando hai le mani occupate.
-// Nessun layout proprio: l'unica UI visibile è quella di sistema.
+// sistema (stessa UI di Google usata per la ricerca vocale, "Parla ora").
+// Il testo dettato viene passato a VoiceDateParser per riconoscere una
+// scadenza in linguaggio naturale ("...domani", "...tra 3 giorni", nome di
+// un giorno della settimana) e ripulire il titolo dalla frase temporale.
+// A differenza della versione precedente NON salva più in automatico: mostra
+// un dialog di conferma con titolo e data già interpretati, così puoi
+// controllare che il riconoscimento abbia capito bene prima di creare la
+// task — un errore di trascrizione qui creerebbe una task sbagliata senza
+// che te ne accorga finché non la rivedi nell'app.
 class VoiceAddTaskActivity : Activity() {
 
     private val REQUEST_CODE_SPEECH = 1001
@@ -55,33 +61,58 @@ class VoiceAddTaskActivity : Activity() {
         }
 
         val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-        val title = results?.firstOrNull()?.trim()
-        if (title.isNullOrEmpty()) {
+        val rawTitle = results?.firstOrNull()?.trim()
+        if (rawTitle.isNullOrEmpty()) {
             Toast.makeText(this, "Non ho capito, riprova", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
-        saveTask(title)
+        val parsed = VoiceDateParser.parse(rawTitle)
+        if (parsed.title.isEmpty()) {
+            Toast.makeText(this, "Non ho capito il titolo, riprova", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+        showConfirmDialog(parsed)
     }
 
-    private fun saveTask(title: String) {
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val widgetPrefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
-        val deadline = widgetPrefs.getString("selected_date", null) ?: today
+    // "Deve mostrarmi la task già impostata, io devo solo cliccare su OK" —
+    // niente editor completo, solo titolo + data interpretati e due bottoni.
+    private fun showConfirmDialog(parsed: VoiceDateParser.Result) {
+        val dateLabel = VoiceDateParser.formatDisplay(parsed.deadline)
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Conferma task")
+            .setMessage("\"${parsed.title}\"\n\n📅 Scadenza: $dateLabel")
+            .setPositiveButton("OK, crea") { _, _ -> saveTask(parsed.title, parsed.deadline) }
+            .setNegativeButton("Annulla") { _, _ -> finish() }
+            .setOnCancelListener { finish() }
+            .show()
+    }
 
-        val task = hashMapOf(
+    private fun saveTask(title: String, deadline: String) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        // Scadenza già passata (di norma non capita con le frasi riconosciute,
+        // sempre relative a oggi in avanti, ma può succedere se non viene
+        // riconosciuta nessuna data e si ricade sulla data selezionata nel
+        // widget) → segnata scaduta subito, stessa logica di AddTaskActivity.
+        val isPast = deadline < today
+        val task = hashMapOf<String, Any>(
             "id" to "task_${System.currentTimeMillis()}",
             "title" to title,
             "deadline" to deadline,
             "reward" to 0.0,
             "penalty" to 0.0,
             "priority" to "medium",
-            "status" to "active",
+            "status" to if (isPast) "expired" else "active",
             "rewardApplied" to false,
-            "penaltyApplied" to false,
+            "penaltyApplied" to isPast,
             "createdAt" to com.google.firebase.Timestamp.now()
         )
+        if (isPast) {
+            task["expiredAt"] = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+                .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
+        }
 
         // arrayUnion invece di get()+update(): un read-modify-write non atomico
         // qui perderebbe silenziosamente qualunque modifica concorrente a
@@ -94,11 +125,15 @@ class VoiceAddTaskActivity : Activity() {
         // Ottimistico: chiude subito invece di aspettare la conferma di
         // Firestore. Offline la scrittura resta comunque in coda localmente e
         // si sincronizza da sola alla riconnessione — aspettare qui lasciava
-        // l'activity (invisibile, senza UI propria) bloccata a tempo
-        // indeterminato senza rete (bug reale riscontrato sul widget "gemello"
-        // QuickAddTaskActivity).
+        // l'activity bloccata a tempo indeterminato senza rete (bug reale
+        // riscontrato sul widget "gemello" QuickAddTaskActivity).
         Toast.makeText(this, "✅ Task creata: $title", Toast.LENGTH_LONG).show()
-        addTaskToWidgetPrefs(task)
+        // Cache ottimistica del widget lista: solo se la scadenza coincide con
+        // il giorno attualmente mostrato nel widget, altrimenti comparirebbe
+        // nella lista sbagliata finché non arriva il prossimo refresh reale.
+        val widgetPrefs = getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
+        val selectedWidgetDate = widgetPrefs.getString("selected_date", null) ?: today
+        if (!isPast && deadline == selectedWidgetDate) addTaskToWidgetPrefs(task)
         finish()
 
         userRef.update("tasks", FieldValue.arrayUnion(task))

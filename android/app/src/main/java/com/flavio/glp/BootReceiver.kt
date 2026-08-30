@@ -10,6 +10,7 @@ class BootReceiver : BroadcastReceiver() {
             intent.action == "android.intent.action.QUICKBOOT_POWERON") {
             android.util.Log.d("GLP_Notif", "Boot completed — rescheduling notification alarms")
             NotificationScheduler.scheduleAll(context)
+            WidgetRefreshScheduler.scheduleNext(context)
         }
     }
 }

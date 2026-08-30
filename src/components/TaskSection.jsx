@@ -124,6 +124,7 @@ export default function TaskSection({ minimalMode }) {
                 onComplete={() => actions.confirmCompleteTask(task)}
                 onEdit={() => actions.openModal('taskEdit', { task })}
                 onDelete={() => actions.deleteTask(task.id)}
+                onPostpone={days => actions.postponeTask(task, days)}
               />
             ))}
 
@@ -160,6 +161,7 @@ export default function TaskSection({ minimalMode }) {
                       }}
                       onEdit={() => actions.openModal('taskEdit', { task })}
                       onDelete={() => actions.deleteTask(task.id)}
+                      onPostpone={days => actions.postponeTask(task, days)}
                     />
                   )
                 })}
@@ -183,7 +185,7 @@ export default function TaskSection({ minimalMode }) {
   )
 }
 
-function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
+function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPostpone }) {
   const isCompleted = variant === 'completed'
   const isExpired   = variant === 'expired'
   const isActive    = variant === 'active'
@@ -200,6 +202,9 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
   const pLabel = PRIORITY_LABELS[task.priority] || 'MEDIA'
   const deadline = formatDeadline(task.deadline)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [postponeOpen, setPostponeOpen] = useState(false)
+
+  function closeMenus() { setMenuOpen(false); setPostponeOpen(false) }
 
   const longPressTimer = useRef(null)
   const didLong = useRef(false)
@@ -295,8 +300,8 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
       </div>
 
       {/* Azioni destra */}
-      {isActive && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+      {(isActive || isExpired) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, alignItems: 'flex-end' }}>
           <button
             onClick={e => { e.stopPropagation(); onComplete() }}
             onPointerDown={e => e.stopPropagation()}
@@ -307,61 +312,42 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete }) {
               cursor: 'pointer', display: 'flex', alignItems: 'center',
               justifyContent: 'center', fontSize: '1em',
             }}
-            title="Completa task"
+            title={isExpired ? 'Segna come completata (nessun punto)' : 'Completa task'}
           >✓</button>
-          {menuOpen ? (
+          {postponeOpen ? (
+            <div style={{ display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+              <button
+                onClick={() => { onPostpone(1); closeMenus() }}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
+                title="Posticipa a domani"
+              >+1gg</button>
+              <button
+                onClick={() => { onPostpone(2); closeMenus() }}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
+                title="Posticipa a dopodomani"
+              >+2gg</button>
+              <button
+                onClick={() => { onPostpone(3); closeMenus() }}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
+                title="Posticipa di 3 giorni"
+              >+3gg</button>
+            </div>
+          ) : menuOpen ? (
             <div style={{ display: 'flex', gap: 4 }}>
               <button
-                onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit() }}
+                onClick={e => { e.stopPropagation(); setMenuOpen(false); setPostponeOpen(true) }}
+                onPointerDown={e => e.stopPropagation()}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                title="Posticipa"
+              >📅</button>
+              <button
+                onClick={e => { e.stopPropagation(); closeMenus(); onEdit() }}
                 onPointerDown={e => e.stopPropagation()}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
                 title="Modifica"
               >✏️</button>
               <button
-                onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
-                onPointerDown={e => e.stopPropagation()}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
-                title="Elimina"
-              >🗑️</button>
-            </div>
-          ) : (
-            <button
-              onClick={e => { e.stopPropagation(); setMenuOpen(true) }}
-              onPointerDown={e => e.stopPropagation()}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: '#555', fontSize: '1.1em', padding: 2, lineHeight: 1,
-              }}
-              title="Azioni"
-            >⋮</button>
-          )}
-        </div>
-      )}
-
-      {isExpired && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
-          <button
-            onClick={e => { e.stopPropagation(); onComplete() }}
-            onPointerDown={e => e.stopPropagation()}
-            style={{
-              width: 36, height: 36, borderRadius: '50%',
-              border: '2px solid rgba(255,255,255,0.15)',
-              background: 'rgba(255,255,255,0.05)', color: '#888',
-              cursor: 'pointer', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: '1em',
-            }}
-            title="Segna come completata (nessun punto)"
-          >✓</button>
-          {menuOpen ? (
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button
-                onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit() }}
-                onPointerDown={e => e.stopPropagation()}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
-                title="Modifica (es. sposta a un'altra data)"
-              >✏️</button>
-              <button
-                onClick={e => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
+                onClick={e => { e.stopPropagation(); closeMenus(); onDelete() }}
                 onPointerDown={e => e.stopPropagation()}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
                 title="Elimina"

@@ -1929,6 +1929,24 @@ export function AppProvider({ children }) {
       actions.showToast('Task aggiornata!', '✏️')
     },
 
+    // Scorciatoia rapida dal menu ⋮ per posticipare — evita di dover aprire
+    // l'editor completo solo per spostare la scadenza di qualche giorno.
+    // "days" è sempre relativo a oggi (non alla vecchia scadenza), così
+    // "domani"/"dopodomani"/"+3gg" hanno sempre lo stesso significato anche
+    // per task già scadute da tempo.
+    async postponeTask(task, days) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const newDeadline = addDays(toDateString(new Date()), days)
+      const tasks = (globalData.tasks || []).map(t => {
+        if (t.id !== task.id) return t
+        return { ...t, deadline: newDeadline, status: 'active', expiredAt: null, penaltyApplied: false }
+      })
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const [, m, d] = newDeadline.split('-')
+      actions.showToast(`Posticipata al ${parseInt(d)}/${parseInt(m)}`, '📅')
+    },
+
     // Nome del template ricorrente collegato a una task, o null se non lo è —
     // usato per mostrare "ogni N giorni" prima di completare e il messaggio
     // giusto dopo.

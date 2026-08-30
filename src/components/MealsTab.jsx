@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { computeMealWeekStats, getMealHistory, getMealRate, setMealRate, MEAL_LEVELS } from '../lib/mealStats'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { computeMealWeekStats, getMealHistory, getMealRate, setMealRate, MEAL_LEVELS, getMealQuote } from '../lib/mealStats'
 import { toDateString } from '../lib/habitLogic'
 import ActivityRateEditor from './ActivityRateEditor'
 
@@ -21,10 +21,12 @@ function fmtElapsed(totalSeconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function StatCell({ label, value, color }) {
+function StatCell({ label, value, color, sub, subColor }) {
   return (
     <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-      <div style={{ fontSize: '1.15em', fontWeight: 800, color: color || 'var(--theme-color)' }}>{value}</div>
+      <div style={{ fontSize: '1.15em', fontWeight: 800, color: color || 'var(--theme-color)' }}>
+        {value}{sub && <span style={{ fontSize: '0.5em', fontWeight: 700, color: subColor || '#888', marginLeft: 4 }}>{sub}</span>}
+      </div>
       <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>{label}</div>
     </div>
   )
@@ -105,6 +107,9 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
   const stats = computeMealWeekStats(mealLog)
   const history = getMealHistory(mealLog)
   const today = toDateString(new Date())
+  // useMemo cablato sui minuti trascorsi: la citazione ruota ogni minuto
+  // (vedi getMealQuote) senza rigenerarsi ad ogni singolo render.
+  const quote = useMemo(() => getMealQuote(), [Math.floor(Date.now() / 60000)])
 
   return (
     <div style={{ paddingTop: 8 }}>
@@ -117,6 +122,14 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
             🍽️ Pasti consapevoli
           </div>
           <ActivityRateEditor getRate={getMealRate} setRate={setMealRate} unit="pt/min" label="Punti base al minuto" />
+        </div>
+
+        <div style={{
+          fontSize: '0.78em', color: 'var(--text-sec)', fontStyle: 'italic', lineHeight: 1.4,
+          padding: '10px 12px', marginBottom: 12, borderRadius: 10,
+          background: 'rgba(255,255,255,0.03)', borderLeft: '3px solid var(--theme-color)',
+        }}>
+          "{quote}"
         </div>
 
         {!sessionActive && !showLevelPicker && (
@@ -183,10 +196,19 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 14 }}>
           <StatCell label="Ultimi 7gg" value={stats.total} />
           <StatCell label="Streak" value={`${stats.streak}g`} color={stats.streak > 0 ? 'var(--success, #4caf50)' : undefined} />
-          <StatCell label="Media min." value={stats.avgDuration || '–'} />
-          <StatCell label="Con calma" value={stats.calmCount} color="#4caf50" />
+          <StatCell label="Record streak" value={`${stats.bestStreak}g`} />
+          <StatCell
+            label="Media min."
+            value={stats.avgDuration || '–'}
+            sub={stats.durationTrend != null && stats.durationTrend !== 0
+              ? (stats.durationTrend > 0 ? `▲ +${stats.durationTrend}` : `▼ ${stats.durationTrend}`)
+              : null}
+            subColor={stats.durationTrend > 0 ? '#4caf50' : (stats.durationTrend < 0 ? '#e53935' : undefined)}
+          />
+          <StatCell label="Con calma" value={`${stats.calmPct}%`} color="#4caf50" />
+          <StatCell label="Pasto più lungo" value={stats.longestMeal ? `${stats.longestMeal}m` : '–'} />
           <StatCell label="Punti 7gg" value={`+${stats.netPts}`} />
-          <StatCell label="Totale" value={stats.lifetimeTotal} />
+          <StatCell label="Totale pasti" value={stats.lifetimeTotal} />
         </div>
 
         {history.length > 0 && (

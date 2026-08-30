@@ -54,28 +54,84 @@ export function getMealHistory(mealLog) {
 
 export function computeMealWeekStats(mealLog) {
   const weekCutoff = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return toDateString(d) })()
+  const prevWeekCutoff = (() => { const d = new Date(); d.setDate(d.getDate() - 13); return toDateString(d) })()
   const all = flattenEntries(mealLog)
   const entries = all.filter(e => e.date >= weekCutoff)
+  const prevEntries = all.filter(e => e.date >= prevWeekCutoff && e.date < weekCutoff)
   const netPts = Math.round(entries.reduce((s, e) => s + (parseFloat(e.pts) || 0), 0) * 10) / 10
   const avgDuration = entries.length > 0
     ? Math.round(entries.reduce((s, e) => s + (e.durationMin || 0), 0) / entries.length)
     : 0
+  const prevAvgDuration = prevEntries.length > 0
+    ? Math.round(prevEntries.reduce((s, e) => s + (e.durationMin || 0), 0) / prevEntries.length)
+    : 0
   const calmCount = entries.filter(e => e.level === 3).length
-  return { entries, total: entries.length, netPts, avgDuration, calmCount, lifetimeTotal: all.length, ...computeStreak(all) }
+  const calmPct = entries.length > 0 ? Math.round((calmCount / entries.length) * 100) : 0
+  const longestMeal = all.reduce((max, e) => Math.max(max, e.durationMin || 0), 0)
+  return {
+    entries, total: entries.length, netPts, avgDuration, calmCount, calmPct,
+    lifetimeTotal: all.length, longestMeal,
+    durationTrend: (entries.length > 0 && prevEntries.length > 0) ? avgDuration - prevAvgDuration : null,
+    ...computeStreak(all),
+  }
 }
 
 function computeStreak(sortedEntries) {
-  const dates = new Set(sortedEntries.map(e => e.date))
+  const dates = [...new Set(sortedEntries.map(e => e.date))].sort()
   const todayStr = toDateString(new Date())
   const yesterdayStr = toDateString(new Date(Date.now() - 86400000))
-  let cursor = dates.has(todayStr) ? todayStr : (dates.has(yesterdayStr) ? yesterdayStr : null)
+  const dateSet = new Set(dates)
+
+  let cursor = dateSet.has(todayStr) ? todayStr : (dateSet.has(yesterdayStr) ? yesterdayStr : null)
   let streak = 0
   if (cursor) {
-    while (dates.has(cursor)) {
+    while (dateSet.has(cursor)) {
       streak++
       const d = new Date(cursor); d.setDate(d.getDate() - 1)
       cursor = toDateString(d)
     }
   }
-  return { streak }
+
+  // Record storico: la striscia consecutiva più lunga mai fatta, non solo
+  // quella attuale — dà un traguardo motivante anche dopo aver saltato dei
+  // giorni.
+  let bestStreak = 0
+  let running = 0
+  let prevDate = null
+  dates.forEach(dateStr => {
+    if (prevDate) {
+      const expected = new Date(prevDate); expected.setDate(expected.getDate() + 1)
+      running = (toDateString(expected) === dateStr) ? running + 1 : 1
+    } else {
+      running = 1
+    }
+    bestStreak = Math.max(bestStreak, running)
+    prevDate = dateStr
+  })
+
+  return { streak, bestStreak }
+}
+
+// ─── Aforismi ───────────────────────────────────────────────────────────────
+// Un promemoria diverso ogni volta che si apre la tab, per rinforzare
+// l'obiettivo (mangiare lentamente, masticare) senza diventare ripetitivo.
+export const MEAL_QUOTES = [
+  'Chi mangia in fretta, mangia due volte: una con la bocca, una con lo stomaco che soffre dopo.',
+  'La digestione comincia in bocca: ogni boccone masticato bene è un favore che fai al tuo stomaco.',
+  'Posa le posate tra un boccone e l\'altro: il corpo impiega 20 minuti a sentirsi sazio.',
+  'Non stai solo mangiando: stai dando al tuo corpo il tempo di dirti quando basta.',
+  'Un pasto lento è un pasto che ricordi. Uno veloce è solo carburante ingoiato.',
+  'Mastica finché il cibo non ha più forma: è lì che inizia davvero la digestione.',
+  'La fretta a tavola si paga dopo, in stomaco pesante. Rallentare oggi è prevenire domani.',
+  'Ogni boccone masticato con calma è un piccolo atto di cura verso te stesso.',
+  'Non è una gara. Il piatto non scappa.',
+  'Respira, posa la forchetta, mastica. Ripeti.',
+]
+
+export function getMealQuote() {
+  // Cambia ogni volta che l'app viene aperta in un nuovo minuto — stabile
+  // durante la sessione ma vario tra un pasto e l'altro, senza dover
+  // salvare uno stato dedicato.
+  const idx = Math.floor(Date.now() / 60000) % MEAL_QUOTES.length
+  return MEAL_QUOTES[idx]
 }

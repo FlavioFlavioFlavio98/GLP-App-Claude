@@ -17,7 +17,7 @@ import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFOR
 import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
 import { getMeditationRate } from './meditationStats'
-import { computeMealPoints, getMealLevelInfo } from './mealStats'
+import { computeMealPoints, getMealLevelInfo, getUntrackedMealPenalty } from './mealStats'
 import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
@@ -1168,7 +1168,7 @@ export function AppProvider({ children }) {
     // Pasti consapevoli: sessione stile workout (inizio/fine dal componente),
     // qui si registra solo il risultato finale — durata + autovalutazione di
     // quanto sei stato calmo (non rileviamo le masticazioni senza sensori).
-    async logMeal(durationMin, level) {
+    async logMeal(durationMin, level, target) {
       if (state.authUserId !== 'flavio') return
       const mins = Math.max(1, Math.round(durationMin))
       const pts = computeMealPoints(mins, level)
@@ -1179,12 +1179,20 @@ export function AppProvider({ children }) {
         level,
         pts,
         time: new Date().toTimeString().slice(0, 8),
+        // Facoltativo: solo se è stato impostato un obiettivo prima di
+        // iniziare — permette allo storico di mostrare "🎯 raggiunto" e alle
+        // statistiche di calcolare quante volte l'obiettivo è stato centrato.
+        ...(target ? { target: Math.round(target) } : {}),
       }
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`mealLog.${logDate}`]: arrayUnion(logEntry) })
       actions.vibrate('light')
       const levelInfo = getMealLevelInfo(level)
-      actions.showToast(`Pasto registrato: ${mins} min ${levelInfo.emoji} — +${pts}pt`, '🍽️')
+      const hitTarget = target && mins >= target
+      actions.showToast(
+        hitTarget ? `🎯 Obiettivo centrato! ${mins} min ${levelInfo.emoji} — +${pts}pt` : `Pasto registrato: ${mins} min ${levelInfo.emoji} — +${pts}pt`,
+        '🍽️'
+      )
     },
 
     // arrayRemove invece di leggere+filtrare+riscrivere l'intero giorno:
@@ -1195,6 +1203,30 @@ export function AppProvider({ children }) {
       if (state.authUserId !== 'flavio') return
       await updateDoc(doc(db, 'users', 'flavio'), { [`mealLog.${dateStr}`]: arrayRemove(entry) })
       actions.showToast('Voce eliminata', '🗑️')
+    },
+
+    // Pasto mangiato ma non cronometrato: costa punti (motivazione a
+    // tracciare tutto, non punizione per aver mangiato in fretta — di quel
+    // pasto non sappiamo nulla, non essendo stato cronometrato). "count"
+    // può essere più di 1 se ci si accorge a fine giornata di aver saltato
+    // più di un pasto in una volta sola, con lo stesso motivo per tutti.
+    async logUntrackedMeals(count, reason) {
+      if (state.authUserId !== 'flavio') return
+      const n = Math.max(1, Math.round(count))
+      const pts = -Math.round(getUntrackedMealPenalty() * n * 10) / 10
+      const logDate = toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        untracked: true,
+        count: n,
+        reason: (reason || '').trim(),
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`mealLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('heavy')
+      actions.showToast(`${n} past${n === 1 ? 'o' : 'i'} non tracciat${n === 1 ? 'o' : 'i'} — ${pts}pt`, '⚠️')
     },
 
     // arrayRemove invece di leggere+filtrare+riscrivere l'intero giorno:

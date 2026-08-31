@@ -47,6 +47,7 @@ class MainActivity : BridgeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         registerPlugin(NotificationPlugin::class.java)
+        registerPlugin(MealSessionPlugin::class.java)
         super.onCreate(savedInstanceState)
         android.util.Log.d("GLPWidget", "=== MainActivity onCreate ===")
         android.webkit.WebView.setWebContentsDebuggingEnabled(true)

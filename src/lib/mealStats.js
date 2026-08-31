@@ -51,7 +51,7 @@ export function setUntrackedMealPenalty(value) {
 // così il prossimo pasto riparte già con l'ultimo obiettivo scelto.
 const MEAL_TARGET_KEY = 'glp_meal_target_min'
 export const DEFAULT_MEAL_TARGET = 15
-export const MEAL_TARGET_OPTIONS = [10, 15, 20, 25, 30]
+export const MEAL_TARGET_OPTIONS = [5, 10, 15, 20, 25, 30]
 
 export function getMealTarget() {
   try {
@@ -91,6 +91,25 @@ function flattenEntries(mealLog) {
 
 export function getMealHistory(mealLog) {
   return flattenEntries(mealLog).reverse()
+}
+
+// Raggruppa lo storico (già ordinato dal più recente) per giornata, con il
+// totale minuti/pasti di quel giorno — per mostrarlo visivamente diviso
+// invece di un'unica lista piatta indistinguibile giorno da giorno.
+export function groupMealHistoryByDay(history) {
+  const groups = []
+  const byDate = new Map()
+  history.forEach(e => {
+    let group = byDate.get(e.date)
+    if (!group) {
+      group = { date: e.date, entries: [], totalMin: 0 }
+      byDate.set(e.date, group)
+      groups.push(group)
+    }
+    group.entries.push(e)
+    if (!e.untracked) group.totalMin += (e.durationMin || 0)
+  })
+  return groups
 }
 
 // Totale minuti mangiati per giorno (somma di tutti i pasti di quel giorno,
@@ -142,6 +161,31 @@ export function computeMealWeekStats(mealLog) {
   const calmCount = trackedEntries.filter(e => e.level === 3).length
   const calmPct = trackedEntries.length > 0 ? Math.round((calmCount / trackedEntries.length) * 100) : 0
   const longestMeal = trackedAll.reduce((max, e) => Math.max(max, e.durationMin || 0), 0)
+  // "e.durationMin != null" invece di "e.durationMin || Infinity": con
+  // l'operatore || un pasto legittimo da 0 minuti verrebbe scambiato per
+  // "nessun valore" e ignorato, facendo risultare il più breve più lungo di
+  // quanto sia davvero (o "Infinity" se fosse l'unico pasto tracciato).
+  const shortestMealRaw = trackedAll.reduce((min, e) => {
+    const d = e.durationMin
+    return (d != null && d < min) ? d : min
+  }, Infinity)
+  const shortestMeal = shortestMealRaw === Infinity ? 0 : shortestMealRaw
+  const lifetimeTotalMin = trackedAll.reduce((s, e) => s + (e.durationMin || 0), 0)
+
+  // Distribuzione veloce/normale/con calma sulla settimana — non solo la
+  // % "con calma" isolata, ma il quadro completo di come si distribuiscono
+  // i tre livelli.
+  const levelCounts = { 1: 0, 2: 0, 3: 0 }
+  trackedEntries.forEach(e => { if (levelCounts[e.level] != null) levelCounts[e.level]++ })
+  const levelDistribution = trackedEntries.length > 0
+    ? { 1: Math.round((levelCounts[1] / trackedEntries.length) * 100), 2: Math.round((levelCounts[2] / trackedEntries.length) * 100), 3: Math.round((levelCounts[3] / trackedEntries.length) * 100) }
+    : { 1: 0, 2: 0, 3: 0 }
+
+  // Media pasti/giorno sui soli giorni in cui è stato tracciato almeno un
+  // pasto (non su 7 fissi: altrimenti un utente nuovo con 2 giorni di dati
+  // vedrebbe una media artificialmente bassa).
+  const trackedDaysThisWeek = new Set(trackedEntries.map(e => e.date)).size
+  const avgMealsPerDay = trackedDaysThisWeek > 0 ? Math.round((trackedEntries.length / trackedDaysThisWeek) * 10) / 10 : 0
 
   // Tempo totale oggi (somma pasti tracciati di oggi) e trend settimanale
   // dello stesso aggregato — il numero che Flavio vuole vedere salire nel
@@ -164,14 +208,25 @@ export function computeMealWeekStats(mealLog) {
     ? Math.round((trackedCount7d / (trackedCount7d + untrackedCount7d)) * 100)
     : null
 
+  // Record giornaliero (da sempre, non solo ultimi 14gg): il giorno con più
+  // minuti totali mangiati — un traguardo motivante indipendente dalla
+  // finestra del grafico.
+  const totalsByDate = {}
+  trackedAll.forEach(e => { totalsByDate[e.date] = (totalsByDate[e.date] || 0) + (e.durationMin || 0) })
+  let bestDay = null
+  Object.entries(totalsByDate).forEach(([date, totalMin]) => {
+    if (!bestDay || totalMin > bestDay.totalMin) bestDay = { date, totalMin }
+  })
+
   return {
     entries, netPts, avgDuration, calmCount, calmPct,
-    lifetimeTotal: trackedAll.length, longestMeal,
+    lifetimeTotal: trackedAll.length, longestMeal, shortestMeal, lifetimeTotalMin,
     durationTrend: (trackedEntries.length > 0 && trackedPrevEntries.length > 0) ? avgDuration - prevAvgDuration : null,
     todayTotalMin, todayMealCount: todayTrackedEntries.length, todayUntrackedCount,
     weekTotalTrend: prevWeekTotalMin > 0 ? weekTotalMin - prevWeekTotalMin : null,
     targetHitPct: targetedEntries > 0 ? Math.round((targetHits / targetedEntries) * 100) : null,
     untrackedCount7d, trackingCoveragePct,
+    levelDistribution, avgMealsPerDay, bestDay,
     dailyTotals: computeDailyTotals(mealLog, 14),
     ...computeStreak(trackedAll),
   }
@@ -231,14 +286,140 @@ export const MEAL_QUOTES = [
   'Ogni boccone masticato con calma è un piccolo atto di cura verso te stesso.',
   'Non è una gara. Il piatto non scappa.',
   'Respira, posa la forchetta, mastica. Ripeti.',
+  'Lo stomaco non ha i denti: il lavoro che non fai in bocca lo paga lui dopo.',
+  'Mangiare piano non è un lusso, è manutenzione del corpo.',
+  'Il primo boccone lento dà il tono a tutto il pasto.',
+  'Chi divora non assapora: stai perdendo il gusto insieme alla calma.',
+  'Il corpo digerisce meglio quando la mente si è seduta a tavola con te.',
+  'Ogni volta che rallenti, insegni al tuo stomaco a fidarsi di nuovo di te.',
+  'Non è quanto mangi, è quanto tempo dai al tuo corpo per gestirlo.',
+  'La fame vera aspetta. Quella nervosa no — per questo va rallentata apposta.',
+  'Un pasto masticato bene è metà del lavoro già fatto per il tuo stomaco.',
+  'Rallentare a tavola è uno dei pochi momenti in cui puoi solo guadagnarci.',
+  'Il boccone perfetto non è quello più grande, è quello masticato di più.',
+  'Se finisci per primo, probabilmente hai anche masticato per ultimo.',
+  'Ogni pausa tra un boccone e l\'altro è un messaggio di calma al tuo sistema nervoso.',
+  'Mangiare in fretta è un\'abitudine. Rallentare, con pratica, può diventarlo altrettanto.',
+  'Il cibo non scappa, ma la tua attenzione sì se non la alleni a restare a tavola.',
+  'Più mastichi, meno lavoro chiedi al resto dell\'apparato digerente.',
+  'Un pasto consapevole comincia dall\'odore, prima ancora che dal sapore.',
+  'Rallentare non ti fa perdere tempo: te lo restituisce dopo, in meno gonfiore.',
+  'La velocità con cui mangi oggi è un\'abitudine che deciderai domattina come sarà.',
+  'Tra un boccone e l\'altro, il corpo aspetta solo un segnale: che tu rallenti.',
 ]
 
-export function getMealQuote() {
-  // Cambia ogni volta che l'app viene aperta in un nuovo minuto — stabile
-  // durante la sessione ma vario tra un pasto e l'altro, senza dover
-  // salvare uno stato dedicato.
-  const idx = Math.floor(Date.now() / 60000) % MEAL_QUOTES.length
-  return MEAL_QUOTES[idx]
+// Benefici scientifici del mangiare lentamente, riassunti da una lista di
+// ricerche fornita da Flavio — un beneficio per riga invece del testo esteso,
+// stesso tono diretto delle citazioni sopra, da mostrare a rotazione insieme
+// a loro durante il pasto per motivare a continuare.
+export const MEAL_BENEFITS = [
+  'Il cervello impiega 15-20 minuti a registrare la sazietà: mangiare lento gli dà il tempo di dirti basta prima che tu esageri.',
+  'Mangiare lentamente alza gli ormoni della sazietà (PYY, GLP-1) e abbassa la grelina: la fame diminuisce da sola.',
+  'Chi mangia piano assume meno calorie nello stesso pasto — e anche in quelli dopo.',
+  'Un ritmo lento è associato a un rischio più che dimezzato di diabete di tipo 2: niente picchi glicemici che stressano il pancreas.',
+  'Mangiare lentamente migliora la risposta insulinica e protegge dall\'insulino-resistenza.',
+  'Un ritmo lento riduce il girovita e alza il colesterolo buono (HDL) — protegge dalla sindrome metabolica.',
+  'Masticare a lungo produce più saliva: protegge lo stomaco, regola il pH e comincia già a scomporre i carboidrati.',
+  'Masticare bene rallenta lo svuotamento gastrico in modo protettivo, evitando di inondare l\'intestino di cibo non digerito.',
+  'Mangiare veloce è collegato a più gastriti erosive — masticare è la prima difesa dello stomaco.',
+  'Particelle di cibo più piccole significano più superficie per i batteri buoni dell\'intestino: meglio mastichi, meglio li nutri.',
+  'Masticare bene aiuta l\'intestino a produrre SCFA (acidi grassi a catena corta) che nutrono e proteggono le pareti intestinali.',
+  'Una buona masticazione protegge la barriera intestinale e riduce l\'infiammazione in tutto il corpo, fegato compreso.',
+  'Cibo inghiottito a pezzi grandi fermenta male nel colon: gonfiore, stipsi e disbiosi spesso partono da lì.',
+  'Masticare lentamente calma il sistema nervoso: meno stress, anche solo per come mangi.',
+  'Masticare più a lungo ogni boccone è collegato a più soddisfazione verso il cibo e miglior qualità di vita.',
+  'Rallentare ti fa notare colori, profumi e consistenze che a velocità doppia semplicemente non percepisci.',
+  'Mangiare con consapevolezza aiuta a distinguere la fame vera da quella emotiva — meno abbuffate, più controllo.',
+]
+
+// Contro del mangiare troppo velocemente, stesso criterio di MEAL_BENEFITS —
+// mostrati alla pari nella stessa libreria, come richiesto ("trattali al
+// pari di aforismi e benefici").
+export const MEAL_CONS = [
+  'Mangiare veloce salta la finestra di 15-20 minuti in cui il cervello registra la sazietà: finisci per mangiare più di quanto ti serva.',
+  'Chi mangia in fretta ha livelli più bassi di GLP-1 e PYY dopo il pasto — gli ormoni che dovrebbero dirti "basta così".',
+  'Mangiare veloce è collegato ad aumento di peso nel tempo, in particolare grasso addominale.',
+  'I picchi glicemici da pasto veloce costringono il pancreas a produrre insulina a raffica: nel tempo si esaurisce.',
+  'Chi mangia veloce ha più del doppio del rischio di sviluppare diabete di tipo 2.',
+  'Mangiare in fretta alza la resistenza all\'insulina indipendentemente dal peso corporeo.',
+  'Il mangiare veloce è associato quasi al doppio del rischio di sindrome metabolica.',
+  'Mangiare veloce abbassa il colesterolo buono (HDL), alza i trigliceridi e la pressione.',
+  'Mangiare di corsa scatena citochine infiammatorie che danneggiano i vasi sanguigni e peggiorano l\'insulino-resistenza.',
+  'Senza abbastanza saliva (mangiando veloce) lo stomaco deve produrre più acido per compensare.',
+  'Cibo inghiottito in pezzi grandi arriva intatto al colon e va in putrefazione invece che in sana fermentazione.',
+  'Mangiare veloce danneggia la parete intestinale: le tossine batteriche (LPS) passano nel sangue e infiammano fegato e cuore.',
+  'Il mangiare veloce è collegato a gastrite erosiva, fegato grasso e valori epatici alterati.',
+]
+
+// ─── Contenuto persistente (aforismi + benefici) ───────────────────────────
+// A differenza delle liste statiche sopra (MEAL_QUOTES/MEAL_BENEFITS, usate
+// solo come seed iniziale), ogni voce vive su Firestore con un contatore di
+// "mi piace", può essere modificata o archiviata per sempre — richiesta
+// esplicita di Flavio: le voci più apprezzate devono ripresentarsi più
+// spesso delle altre, non a rotazione fissa uguale per tutte.
+// Struttura: globalData.mealContent = { [id]: {type, text, likes, archived} }
+// — una mappa (non un array) apposta per poter aggiornare un singolo campo
+// di una singola voce con un updateDoc a percorso puntato, senza mai dover
+// leggere+riscrivere l'intera lista (stessa lezione della perdita dati del
+// 28/8/2026 applicata qui fin dall'inizio).
+function seedId(prefix, i) { return `${prefix}${i}` }
+
+export function buildDefaultMealContent() {
+  const content = {}
+  MEAL_QUOTES.forEach((text, i) => {
+    content[seedId('q', i)] = { type: 'quote', text, likes: 0, archived: false }
+  })
+  MEAL_BENEFITS.forEach((text, i) => {
+    content[seedId('b', i)] = { type: 'benefit', text, likes: 0, archived: false }
+  })
+  MEAL_CONS.forEach((text, i) => {
+    content[seedId('c', i)] = { type: 'con', text, likes: 0, archived: false }
+  })
+  return content
+}
+
+// PRNG deterministico (mulberry32) — a parità di seed restituisce sempre lo
+// stesso valore, così la voce mostrata resta stabile per un minuto intero
+// (o finché non si preme "prossimo") invece di cambiare ad ogni render.
+function seededRandom(seed) {
+  let s = seed | 0
+  s = (s + 0x6D2B79F5) | 0
+  let t = Math.imul(s ^ (s >>> 15), 1 | s)
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
+
+// Selezione pesata: le voci con più "mi piace" hanno più probabilità di
+// essere scelte (peso = 1 + likes, così anche una voce mai apprezzata ha
+// sempre una possibilità), ma non è mai deterministicamente sempre la
+// stessa — resta comunque una lotteria pesata, non una classifica fissa.
+export function pickMealContent(mealContent, offset = 0) {
+  const items = Object.entries(mealContent || {})
+    .filter(([, v]) => v && !v.archived && v.text)
+    .map(([id, v]) => ({ id, ...v }))
+  if (items.length === 0) return null
+
+  const seed = Math.floor(Date.now() / 60000) + offset * 97
+  const weights = items.map(it => 1 + Math.max(0, it.likes || 0))
+  const total = weights.reduce((a, b) => a + b, 0)
+  const r = seededRandom(seed) * total
+  let acc = 0
+  for (let i = 0; i < items.length; i++) {
+    acc += weights[i]
+    if (r < acc) return items[i]
+  }
+  return items[items.length - 1]
+}
+
+// Lista completa per il pannello di gestione, ordinata per "mi piace"
+// decrescente (le più apprezzate in cima, come richiesto) — include anche
+// le archiviate in fondo, per poterle eventualmente ripristinare.
+export function sortedMealContentList(mealContent) {
+  const items = Object.entries(mealContent || {}).map(([id, v]) => ({ id, ...v }))
+  return items.sort((a, b) => {
+    if (!!a.archived !== !!b.archived) return a.archived ? 1 : -1
+    return (b.likes || 0) - (a.likes || 0)
+  })
 }
 
 // ─── Trick durante il pasto ─────────────────────────────────────────────────

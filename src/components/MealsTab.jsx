@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  computeMealWeekStats, getMealHistory, getMealRate, setMealRate, MEAL_LEVELS, getMealQuote,
+  computeMealWeekStats, getMealHistory, groupMealHistoryByDay, getMealRate, setMealRate, MEAL_LEVELS,
+  pickMealContent, sortedMealContentList,
   getMealTarget, setMealTarget, MEAL_TARGET_OPTIONS, getEatingTip,
   getUntrackedMealPenalty, setUntrackedMealPenalty,
 } from '../lib/mealStats'
@@ -168,12 +169,20 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
   const [showLevelPicker, setShowLevelPicker] = useState(false)
   const [pendingDuration, setPendingDuration] = useState(0)
   const [showHistory, setShowHistory] = useState(false)
+  const [showDetailedStats, setShowDetailedStats] = useState(false)
   // Flusso "pasto non tracciato": null (chiuso) → 'count' (quanti pasti) →
   // 'reason' (perché non tracciati) — due passi separati invece di un unico
   // form, per tenere ogni schermata piccola e veloce da compilare.
   const [untrackedStep, setUntrackedStep] = useState(null)
   const [untrackedCount, setUntrackedCount] = useState(1)
   const [untrackedReason, setUntrackedReason] = useState('')
+  // Offset manuale per il tasto "prossimo": 0 = la voce "del minuto
+  // corrente" (vedi pickMealContent), ogni tap sposta la lotteria pesata
+  // su un'altra estrazione deterministica senza aspettare un minuto intero.
+  const [contentOffset, setContentOffset] = useState(0)
+  const [editingContentId, setEditingContentId] = useState(null)
+  const [editingContentText, setEditingContentText] = useState('')
+  const [showContentManager, setShowContentManager] = useState(false)
 
   const tickRef = useRef(null)
   const reminderRef = useRef(null)
@@ -191,6 +200,27 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
       try { await wakeLockRef.current.release() } catch { /* ignore */ }
       wakeLockRef.current = null
     }
+  }
+
+  // Notifica nativa persistente con timer live + beep/vibrazione ogni 60s —
+  // solo nell'app Android nativa (Capacitor), assente sulla web app in
+  // browser. Un setInterval JS non basta: viene rallentato o sospeso quando
+  // il browser/l'app va in background, mentre qui serve che funzioni anche
+  // mentre si usa un'altra app (es. un video) — richiesta esplicita, "a
+  // volte mi scordo e accelero". Sempre opzionale/silenzioso se il plugin
+  // non esiste (browser), non deve mai bloccare il timer web.
+  function startNativeSessionNotification(startMs) {
+    // I metodi del plugin Capacitor sono sempre Promise risolte/rifiutate
+    // lato nativo in modo asincrono — un try/catch sincrono non intercetta
+    // un eventuale reject (es. permesso notifiche negato), serve .catch().
+    try {
+      window.Capacitor?.Plugins?.MealSessionPlugin?.start({ startTime: startMs })?.catch(() => {})
+    } catch { /* plugin assente (browser) */ }
+  }
+  function stopNativeSessionNotification() {
+    try {
+      window.Capacitor?.Plugins?.MealSessionPlugin?.stop()?.catch(() => {})
+    } catch { /* plugin assente (browser) */ }
   }
 
   function celebrateTarget() {
@@ -240,6 +270,11 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
       setSessionActive(true)
       acquireWakeLock()
       startTicking(stored.target)
+      // Riavvia anche il Service nativo: se l'app era stata chiusa del
+      // tutto (non solo messa in background), il Service muore con il
+      // processo — questa chiamata lo fa ripartire con lo stesso orario di
+      // inizio storico, così la notifica torna a mostrare il tempo giusto.
+      startNativeSessionNotification(stored.start)
     }
     return () => {
       if (tickRef.current) clearInterval(tickRef.current)
@@ -264,6 +299,12 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [sessionActive])
 
+  // Popola la libreria di aforismi/benefici al primo utilizzo — no-op se già presente.
+  useEffect(() => {
+    if (authUserId === 'flavio' && !isReadOnly) actions.ensureDefaultMealContent()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function pickTarget(minutes) {
     setTarget(minutes)
     setMealTarget(minutes)
@@ -279,12 +320,14 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
     setSessionActive(true)
     acquireWakeLock()
     startTicking(target)
+    startNativeSessionNotification(start)
   }
 
   function endSession() {
     if (tickRef.current) clearInterval(tickRef.current)
     if (reminderRef.current) clearInterval(reminderRef.current)
     releaseWakeLock()
+    stopNativeSessionNotification()
     localStorage.removeItem(MEAL_SESSION_KEY)
     const finalElapsed = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : elapsed
     setSessionActive(false)
@@ -319,15 +362,37 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
   }
 
   const mealLog = globalData?.mealLog || {}
+  const mealContent = globalData?.mealContent || {}
   const stats = computeMealWeekStats(mealLog)
   const history = getMealHistory(mealLog)
   const today = toDateString(new Date())
-  // Chiamata diretta, non un hook: ruota da sola ogni minuto (vedi
-  // getMealQuote) semplicemente perché il componente si ri-renderizza spesso
-  // durante una sessione attiva (il timer aggiorna lo stato ogni secondo).
-  const quote = getMealQuote()
+  const contentItem = pickMealContent(mealContent, contentOffset)
   const reached = elapsed >= pendingTarget * 60
   const currentTip = getEatingTip(tipIndexForElapsedSec(elapsed))
+
+  function nextContent() { setContentOffset(o => o + 1) }
+  function startEditContent() {
+    if (!contentItem) return
+    setEditingContentId(contentItem.id)
+    setEditingContentText(contentItem.text)
+  }
+  async function saveEditContent() {
+    if (!editingContentText.trim()) return
+    try {
+      await actions.editMealContent(editingContentId, editingContentText)
+      setEditingContentId(null)
+    } catch {
+      // Resta in modifica invece di chiudere silenziosamente: altrimenti
+      // un salvataggio fallito (es. offline) farebbe sparire il testo
+      // appena scritto senza alcun avviso.
+      actions.showToast('Errore, riprova', '❌')
+    }
+  }
+  function archiveContent() {
+    if (!contentItem) return
+    actions.archiveMealContent(contentItem.id)
+    setContentOffset(o => o + 1)
+  }
 
   return (
     <div style={{ paddingTop: 8 }}>
@@ -343,11 +408,93 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
         </div>
 
         <div style={{
-          fontSize: '0.78em', color: 'var(--text-sec)', fontStyle: 'italic', lineHeight: 1.4,
-          padding: '10px 12px', marginBottom: 12, borderRadius: 10,
+          padding: '10px 10px 8px 12px', marginBottom: 12, borderRadius: 10,
           background: 'rgba(255,255,255,0.03)', borderLeft: '3px solid var(--theme-color)',
         }}>
-          "{quote}"
+          {/* Condizione basata solo su editingContentId, non su
+              "contentItem coincide ancora" — contentItem viene ripescato ad
+              ogni render (compreso ogni tick del timer durante una sessione
+              attiva) e la lotteria pesata potrebbe restituire una voce
+              diversa a cavallo di un minuto, chiudendo altrimenti la modifica
+              in corso e perdendo il testo non ancora salvato. */}
+          {editingContentId != null ? (
+            <div>
+              <textarea
+                autoFocus
+                value={editingContentText}
+                onChange={e => setEditingContentText(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%', padding: '8px 10px', borderRadius: 8, marginBottom: 8,
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid var(--theme-color)',
+                  color: 'var(--text)', fontSize: '0.78em', resize: 'none', fontFamily: 'inherit',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setEditingContentId(null)} style={{ flex: 1, padding: 7, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'none', color: '#888', fontWeight: 700, cursor: 'pointer', fontSize: '0.72em' }}>Annulla</button>
+                <button onClick={saveEditContent} style={{ flex: 1, padding: 7, borderRadius: 8, border: 'none', background: 'var(--theme-color)', color: '#000', fontWeight: 800, cursor: 'pointer', fontSize: '0.72em' }}>Salva</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: '0.78em', color: 'var(--text-sec)', fontStyle: 'italic', lineHeight: 1.4, flex: 1 }}>
+                {contentItem ? `"${contentItem.text}"` : '"Mangia con calma."'}
+                {contentItem?.type === 'benefit' && (
+                  <span style={{ fontSize: '0.85em', marginLeft: 5, color: '#4caf50', fontStyle: 'normal', fontWeight: 700 }}>🔬</span>
+                )}
+                {contentItem?.type === 'con' && (
+                  <span style={{ fontSize: '0.85em', marginLeft: 5, color: '#e53935', fontStyle: 'normal', fontWeight: 700 }}>⚠️</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                <button onClick={() => contentItem && actions.likeMealContent(contentItem.id)} title="Mi piace — verrà mostrato più spesso" className="btn-icon" style={{ padding: 4 }}>
+                  <span className="material-icons-round" style={{ fontSize: 15, color: '#888' }}>thumb_up</span>
+                  {contentItem?.likes > 0 && <span style={{ fontSize: '0.6em', color: '#888', marginLeft: 1 }}>{contentItem.likes}</span>}
+                </button>
+                <button onClick={startEditContent} title="Modifica" className="btn-icon" style={{ padding: 4 }}>
+                  <span className="material-icons-round" style={{ fontSize: 15, color: '#888' }}>edit</span>
+                </button>
+                <button onClick={archiveContent} title="Non mostrare più" className="btn-icon" style={{ padding: 4 }}>
+                  <span className="material-icons-round" style={{ fontSize: 15, color: '#888' }}>close</span>
+                </button>
+                <button onClick={nextContent} title="Prossimo" className="btn-icon" style={{ padding: 4 }}>
+                  <span className="material-icons-round" style={{ fontSize: 15, color: 'var(--theme-color)' }}>arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => setShowContentManager(v => !v)}
+            style={{ background: 'none', border: 'none', color: '#666', fontSize: '0.6em', fontWeight: 700, cursor: 'pointer', padding: '4px 0 0', textTransform: 'uppercase', letterSpacing: 0.4 }}
+          >
+            {showContentManager ? '▾' : '▸'} Gestisci aforismi e benefici ({sortedMealContentList(mealContent).filter(i => !i.archived).length})
+          </button>
+          {showContentManager && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 260, overflowY: 'auto' }}>
+              {sortedMealContentList(mealContent).map(item => (
+                <div key={item.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 8,
+                  background: item.archived ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)',
+                  opacity: item.archived ? 0.5 : 1,
+                }}>
+                  <span style={{ fontSize: '0.68em', color: 'var(--text-sec)', flex: 1, lineHeight: 1.3 }}>{item.text}</span>
+                  <span style={{ fontSize: '0.62em', color: '#888', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <span className="material-icons-round" style={{ fontSize: 12 }}>thumb_up</span>{item.likes || 0}
+                  </span>
+                  {item.archived ? (
+                    <button onClick={() => actions.unarchiveMealContent(item.id)} title="Ripristina" className="btn-icon" style={{ padding: 2, flexShrink: 0 }}>
+                      <span className="material-icons-round" style={{ fontSize: 13, color: '#4caf50' }}>restore</span>
+                    </button>
+                  ) : (
+                    <button onClick={() => actions.archiveMealContent(item.id)} title="Archivia" className="btn-icon" style={{ padding: 2, flexShrink: 0 }}>
+                      <span className="material-icons-round" style={{ fontSize: 13, color: '#444' }}>close</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Hero: il numero che conta davvero — tempo totale mangiato oggi,
@@ -574,6 +721,42 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
           {stats.untrackedCount7d > 0 && <StatCell label="Non tracciati 7gg" value={stats.untrackedCount7d} color="#e53935" />}
         </div>
 
+        <button
+          onClick={() => setShowDetailedStats(v => !v)}
+          style={{
+            width: '100%', textAlign: 'left', background: 'none', border: 'none',
+            color: 'var(--text-sec)', fontSize: '0.72em', fontWeight: 700, cursor: 'pointer',
+            padding: '6px 2px', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: showDetailedStats ? 8 : 0,
+          }}
+        >
+          {showDetailedStats ? '▾' : '▸'} Statistiche dettagliate
+        </button>
+        {showDetailedStats && (
+          <div style={{ marginBottom: 14 }}>
+            {/* Distribuzione veloce/normale/con calma — una barra sola divisa
+                in tre invece di solo la % "con calma" isolata. */}
+            <div style={{ fontSize: '0.6em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Distribuzione ritmo (7gg)</div>
+            <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 4 }}>
+              {stats.levelDistribution[1] > 0 && <div style={{ width: `${stats.levelDistribution[1]}%`, background: '#e53935' }} title={`Veloce ${stats.levelDistribution[1]}%`} />}
+              {stats.levelDistribution[2] > 0 && <div style={{ width: `${stats.levelDistribution[2]}%`, background: '#ffca28' }} title={`Normale ${stats.levelDistribution[2]}%`} />}
+              {stats.levelDistribution[3] > 0 && <div style={{ width: `${stats.levelDistribution[3]}%`, background: '#4caf50' }} title={`Con calma ${stats.levelDistribution[3]}%`} />}
+              {stats.levelDistribution[1] + stats.levelDistribution[2] + stats.levelDistribution[3] === 0 && <div style={{ width: '100%', background: 'rgba(255,255,255,0.06)' }} />}
+            </div>
+            <div style={{ display: 'flex', gap: 10, fontSize: '0.6em', color: '#888', marginBottom: 12 }}>
+              <span>🔴 Veloce {stats.levelDistribution[1]}%</span>
+              <span>🟡 Normale {stats.levelDistribution[2]}%</span>
+              <span>🟢 Con calma {stats.levelDistribution[3]}%</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
+              <StatCell label="Record giorno" value={stats.bestDay ? `${stats.bestDay.totalMin}m` : '–'} />
+              <StatCell label="Pasto più breve" value={stats.shortestMeal ? `${stats.shortestMeal}m` : '–'} />
+              <StatCell label="Pasti/giorno" value={stats.avgMealsPerDay || '–'} />
+              <StatCell label="Min. totali (sempre)" value={stats.lifetimeTotalMin} />
+            </div>
+          </div>
+        )}
+
         {history.length > 0 && (
           <>
             <button
@@ -587,50 +770,66 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
               {showHistory ? '▾' : '▸'} Storico pasti ({history.length})
             </button>
             {showHistory && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 260, overflowY: 'auto' }}>
-                {history.map(e => {
-                  if (e.untracked) {
-                    return (
-                      <div key={e.id} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '8px 10px', background: 'rgba(229,57,53,0.06)', border: '1px solid rgba(229,57,53,0.18)', borderRadius: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: '1em' }}>⚠️</span>
-                          <span style={{ fontSize: '0.75em', color: 'var(--text-sec)', flex: 1 }}>
-                            {e.date === today ? 'Oggi' : fmtDate(e.date)} · {fmtTime(e.time)} · {e.count} non tracciat{e.count === 1 ? 'o' : 'i'}
-                          </span>
-                          <span style={{ fontSize: '0.72em', color: '#e53935', fontWeight: 700 }}>{e.pts}pt</span>
-                          <button
-                            className="btn-icon"
-                            style={{ padding: 2 }}
-                            onClick={() => { const { date, ...original } = e; actions.deleteMealEntry(date, original) }}
-                          >
-                            <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>
-                          </button>
-                        </div>
-                        {e.reason && <div style={{ fontSize: '0.68em', color: '#888', fontStyle: 'italic', paddingLeft: 24 }}>"{e.reason}"</div>}
-                      </div>
-                    )
-                  }
-                  const lvl = MEAL_LEVELS.find(l => l.level === e.level) || MEAL_LEVELS[1]
-                  const hitTarget = e.target && e.durationMin >= e.target
-                  return (
-                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8 }}>
-                      <span style={{ fontSize: '1em' }}>{lvl.emoji}</span>
-                      <span style={{ fontSize: '0.75em', color: 'var(--text-sec)', flex: 1 }}>
-                        {e.date === today ? 'Oggi' : fmtDate(e.date)} · {fmtTime(e.time)}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 340, overflowY: 'auto' }}>
+                {groupMealHistoryByDay(history).map(group => (
+                  <div key={group.date}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '4px 2px', marginBottom: 4,
+                      borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    }}>
+                      <span style={{ fontSize: '0.68em', fontWeight: 800, color: 'var(--theme-color)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                        {group.date === today ? 'Oggi' : fmtDate(group.date)}
                       </span>
-                      {hitTarget && <span style={{ fontSize: '0.85em' }} title={`Obiettivo ${e.target}m centrato`}>🎯</span>}
-                      <span style={{ fontSize: '0.78em', fontWeight: 700, color: 'var(--theme-color)' }}>{e.durationMin} min</span>
-                      <span style={{ fontSize: '0.72em', color: 'var(--success)' }}>+{e.pts}pt</span>
-                      <button
-                        className="btn-icon"
-                        style={{ padding: 2 }}
-                        onClick={() => { const { date, ...original } = e; actions.deleteMealEntry(date, original) }}
-                      >
-                        <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>
-                      </button>
+                      {group.totalMin > 0 && (
+                        <span style={{ fontSize: '0.62em', color: '#888', fontWeight: 700 }}>{group.totalMin} min totali</span>
+                      )}
                     </div>
-                  )
-                })}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {group.entries.map(e => {
+                        if (e.untracked) {
+                          return (
+                            <div key={e.id} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '8px 10px', background: 'rgba(229,57,53,0.06)', border: '1px solid rgba(229,57,53,0.18)', borderRadius: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: '1em' }}>⚠️</span>
+                                <span style={{ fontSize: '0.75em', color: 'var(--text-sec)', flex: 1 }}>
+                                  {fmtTime(e.time)} · {e.count} non tracciat{e.count === 1 ? 'o' : 'i'}
+                                </span>
+                                <span style={{ fontSize: '0.72em', color: '#e53935', fontWeight: 700 }}>{e.pts}pt</span>
+                                <button
+                                  className="btn-icon"
+                                  style={{ padding: 2 }}
+                                  onClick={() => { const { date, ...original } = e; actions.deleteMealEntry(date, original) }}
+                                >
+                                  <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>
+                                </button>
+                              </div>
+                              {e.reason && <div style={{ fontSize: '0.68em', color: '#888', fontStyle: 'italic', paddingLeft: 24 }}>"{e.reason}"</div>}
+                            </div>
+                          )
+                        }
+                        const lvl = MEAL_LEVELS.find(l => l.level === e.level) || MEAL_LEVELS[1]
+                        const hitTarget = e.target && e.durationMin >= e.target
+                        return (
+                          <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8 }}>
+                            <span style={{ fontSize: '1em' }}>{lvl.emoji}</span>
+                            <span style={{ fontSize: '0.75em', color: 'var(--text-sec)', flex: 1 }}>{fmtTime(e.time)}</span>
+                            {hitTarget && <span style={{ fontSize: '0.85em' }} title={`Obiettivo ${e.target}m centrato`}>🎯</span>}
+                            <span style={{ fontSize: '0.78em', fontWeight: 700, color: 'var(--theme-color)' }}>{e.durationMin} min</span>
+                            <span style={{ fontSize: '0.72em', color: 'var(--success)' }}>+{e.pts}pt</span>
+                            <button
+                              className="btn-icon"
+                              style={{ padding: 2 }}
+                              onClick={() => { const { date, ...original } = e; actions.deleteMealEntry(date, original) }}
+                            >
+                              <span className="material-icons-round" style={{ fontSize: 14, color: '#444' }}>delete</span>
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </>

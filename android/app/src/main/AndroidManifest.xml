@@ -238,6 +238,24 @@
         <!-- Service per sync Google Fit -->
         <service android:name=".FitSyncService" android:exported="false"/>
 
+        <!-- Notifica persistente con timer live durante un pasto tracciato
+             (vedi MealSessionService) — "specialUse" è il tipo generico
+             introdotto per i casi (come questo, un timer di benessere) che
+             non rientrano nelle categorie standard (media, location, ecc).
+             stopWithTask="false": senza, rimuovere l'app dalle app recenti
+             (gesto comune, non "chiudere" in senso stretto) ucciderebbe il
+             Service insieme al task, vanificando il promemoria proprio nel
+             caso d'uso per cui esiste. -->
+        <service
+            android:name=".MealSessionService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Timer pasto consapevole con promemoria periodico" />
+        </service>
+
         <!-- Receiver per allarmi notifiche locali -->
         <receiver android:name=".NotificationReceiver"
             android:exported="false"/>
@@ -261,6 +279,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Foreground service per la notifica persistente col timer del pasto -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
 

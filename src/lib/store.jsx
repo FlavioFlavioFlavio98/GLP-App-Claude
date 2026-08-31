@@ -17,7 +17,7 @@ import { touchWorkoutSession, startRestTimer, getEffortMultiplier, DEFAULT_EFFOR
 import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
 import { getMeditationRate } from './meditationStats'
-import { computeMealPoints, getMealLevelInfo, getUntrackedMealPenalty } from './mealStats'
+import { computeMealPoints, getMealLevelInfo, getUntrackedMealPenalty, buildDefaultMealContent } from './mealStats'
 import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
@@ -1227,6 +1227,53 @@ export function AppProvider({ children }) {
       await updateDoc(ref, { [`mealLog.${logDate}`]: arrayUnion(logEntry) })
       actions.vibrate('heavy')
       actions.showToast(`${n} past${n === 1 ? 'o' : 'i'} non tracciat${n === 1 ? 'o' : 'i'} — ${pts}pt`, '⚠️')
+    },
+
+    // Semina la libreria di aforismi/benefici/contro alla prima apertura
+    // della tab Pasti. Aggiunge solo gli id di default ancora mancanti
+    // (percorsi puntati, uno per voce) invece di riscrivere l'intera mappa:
+    // così un futuro aggiornamento che aggiunge nuove voci di default (come
+    // i "contro" aggiunti dopo i "benefici") le ripesca senza toccare
+    // testo/like/archiviazione delle voci già esistenti modificate da Flavio.
+    async ensureDefaultMealContent() {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      const existing = gd?.mealContent || {}
+      const updates = {}
+      Object.entries(buildDefaultMealContent()).forEach(([id, item]) => {
+        if (!existing[id]) updates[`mealContent.${id}`] = item
+      })
+      if (Object.keys(updates).length === 0) return
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, updates)
+    },
+
+    // updateDoc a percorso puntato su un singolo campo di una singola voce:
+    // niente lettura, niente race con un altro tap concorrente sulla stessa
+    // libreria da un altro dispositivo (stessa lezione della perdita dati
+    // del 28/8/2026, qui applicata fin dal disegno della struttura dati).
+    async likeMealContent(id) {
+      if (state.authUserId !== 'flavio') return
+      await updateDoc(doc(db, 'users', 'flavio'), { [`mealContent.${id}.likes`]: increment(1) })
+    },
+
+    async archiveMealContent(id) {
+      if (state.authUserId !== 'flavio') return
+      await updateDoc(doc(db, 'users', 'flavio'), { [`mealContent.${id}.archived`]: true })
+      actions.showToast('Non verrà più mostrato', '🗑️')
+    },
+
+    async unarchiveMealContent(id) {
+      if (state.authUserId !== 'flavio') return
+      await updateDoc(doc(db, 'users', 'flavio'), { [`mealContent.${id}.archived`]: false })
+    },
+
+    async editMealContent(id, newText) {
+      if (state.authUserId !== 'flavio') return
+      const text = (newText || '').trim()
+      if (!text) return
+      await updateDoc(doc(db, 'users', 'flavio'), { [`mealContent.${id}.text`]: text })
+      actions.showToast('Testo aggiornato', '✏️')
     },
 
     // arrayRemove invece di leggere+filtrare+riscrivere l'intero giorno:

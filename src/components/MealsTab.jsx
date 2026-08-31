@@ -4,6 +4,14 @@ import { toDateString } from '../lib/habitLogic'
 import ActivityRateEditor from './ActivityRateEditor'
 
 const REMINDER_INTERVAL_MS = 45_000
+// L'orario di inizio pasto vive qui, non solo nello stato del componente:
+// cambiare tab (il componente smonta, App.jsx renderizza un tab alla volta),
+// mettere in background il browser/l'app, o persino chiuderla del tutto
+// (kill del processo) azzerava il timer — bug reale segnalato da Flavio, che
+// spesso guarda un video mentre mangia lentamente e non deve perdere la
+// sessione. localStorage sopravvive a tutto questo; l'unico modo per fermare
+// davvero la sessione resta il tasto "Fine pasto".
+const MEAL_SESSION_KEY = 'glp_meal_session_start'
 
 function fmtDate(dateStr) {
   if (!dateStr) return '-'
@@ -42,6 +50,7 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
   const tickRef = useRef(null)
   const reminderRef = useRef(null)
   const wakeLockRef = useRef(null)
+  const startTimeRef = useRef(null)
 
   async function acquireWakeLock() {
     try {
@@ -55,41 +64,78 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
     }
   }
 
-  // Il wake lock del browser si rilascia automaticamente quando l'app va in
-  // background — va richiesto di nuovo al ritorno, altrimenti lo schermo si
-  // spegne a metà pasto se si cambia app un attimo.
-  useEffect(() => {
-    function onVisibility() {
-      if (sessionActive && document.visibilityState === 'visible') acquireWakeLock()
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [sessionActive])
-
-  // Cleanup se si cambia tab/si chiude l'app a sessione attiva
-  useEffect(() => () => {
+  // Avvia gli interval di tick/richiamo. Il tick ricalcola sempre l'elapsed
+  // dall'orario di inizio reale (Date.now() - startTimeRef) invece di
+  // incrementare un contatore: un tab in background può ritardare o saltare
+  // dei tick del setInterval, ma al prossimo tick utile il valore si
+  // autocorregge comunque al tempo vero trascorso, invece di restare indietro.
+  function startTicking() {
     if (tickRef.current) clearInterval(tickRef.current)
     if (reminderRef.current) clearInterval(reminderRef.current)
-    releaseWakeLock()
-  }, [])
-
-  function startSession() {
-    setElapsed(0)
-    setSessionActive(true)
-    acquireWakeLock()
-    tickRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    tickRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+    }, 1000)
     reminderRef.current = setInterval(() => {
       actions.vibrate('heavy')
       actions.showToast('🐢 Rallenta, mastica bene', '🐢')
     }, REMINDER_INTERVAL_MS)
   }
 
+  // Al mount: riprende una sessione già in corso salvata in localStorage —
+  // copre sia il rientro da un altro tab dell'app (il componente è stato
+  // smontato e rimontato) sia la riapertura dell'app dopo che era stata
+  // chiusa del tutto mentre il pasto era ancora in corso.
+  useEffect(() => {
+    const stored = localStorage.getItem(MEAL_SESSION_KEY)
+    const start = stored ? parseInt(stored, 10) : NaN
+    if (!isNaN(start)) {
+      startTimeRef.current = start
+      setElapsed(Math.floor((Date.now() - start) / 1000))
+      setSessionActive(true)
+      acquireWakeLock()
+      startTicking()
+    }
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current)
+      if (reminderRef.current) clearInterval(reminderRef.current)
+      releaseWakeLock()
+    }
+  }, [])
+
+  // Il wake lock del browser si rilascia automaticamente quando l'app va in
+  // background — va richiesto di nuovo al ritorno, altrimenti lo schermo si
+  // spegne a metà pasto se si cambia app un attimo. Approfittiamo anche del
+  // rientro per far scattare subito l'elapsed al valore corretto, invece di
+  // aspettare il prossimo tick del setInterval.
+  useEffect(() => {
+    function onVisibility() {
+      if (sessionActive && document.visibilityState === 'visible') {
+        acquireWakeLock()
+        if (startTimeRef.current) setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [sessionActive])
+
+  function startSession() {
+    const start = Date.now()
+    startTimeRef.current = start
+    localStorage.setItem(MEAL_SESSION_KEY, String(start))
+    setElapsed(0)
+    setSessionActive(true)
+    acquireWakeLock()
+    startTicking()
+  }
+
   function endSession() {
     if (tickRef.current) clearInterval(tickRef.current)
     if (reminderRef.current) clearInterval(reminderRef.current)
     releaseWakeLock()
+    localStorage.removeItem(MEAL_SESSION_KEY)
+    const finalElapsed = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : elapsed
     setSessionActive(false)
-    setPendingDuration(Math.max(1, Math.round(elapsed / 60)))
+    setPendingDuration(Math.max(1, Math.round(finalElapsed / 60)))
     setShowLevelPicker(true)
   }
 

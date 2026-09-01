@@ -1,0 +1,275 @@
+package com.flavio.glp.wear
+
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.items
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.material.Chip
+import androidx.wear.compose.material.ChipDefaults
+import androidx.wear.compose.material.CircularProgressIndicator
+import androidx.wear.compose.material.CompactChip
+import androidx.wear.compose.material.ListHeader
+import androidx.wear.compose.material.MaterialTheme
+import androidx.wear.compose.material.PositionIndicator
+import androidx.wear.compose.material.Scaffold
+import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.TimeText
+import kotlinx.coroutines.delay
+
+private val TARGET_OPTIONS = listOf(5, 10, 15, 20, 25, 30)
+private const val REMINDER_INTERVAL_SEC = 60
+
+// Trick brevi (schermo piccolo, niente testi lunghi come sulla web app) —
+// stesso principio dei "trick durante il pasto" della web app, mostrati a
+// rotazione insieme alla vibrazione periodica.
+private val MEAL_TIPS = listOf(
+    "🍴 Posa le posate",
+    "🌬️ Fai un respiro",
+    "🦷 Mastica bene",
+    "💧 Bevi un sorso",
+    "🐢 Rallenta il ritmo",
+    "🧘 Rilassa le spalle",
+)
+
+private val MEAL_LEVELS = listOf(Triple(1, "🔴", "Veloce"), Triple(2, "🟡", "Normale"), Triple(3, "🟢", "Con calma"))
+
+private fun vibrate(context: Context, ms: Long = 300) {
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vm.defaultVibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            val v = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
+        }
+    } catch (e: Exception) { /* ignora — la sessione funziona comunque senza feedback aptico */ }
+}
+
+// Timer live + vibrazione ogni 60s finché la schermata resta aperta — a
+// differenza del telefono (dove un vero Service Android in foreground fa
+// funzionare tutto anche cambiando app) qui il timer vive nello stato del
+// Composable: attivo mentre questa schermata è visibile e il watch è
+// acceso/in ambient, coerente con come funzionano le sessioni allenamento su
+// Wear OS. Non sopravvive alla chiusura dell'app — semplificazione
+// accettabile per una prima versione, essendo comunque il caso d'uso
+// primario "l'orologio resta al polso mentre mangi", non "cambio app".
+@Composable
+fun MealScreen(
+    lastLoggedText: String?,
+    onLogMeal: (Int, Int, (Double) -> Unit) -> Unit,
+) {
+    val context = LocalContext.current
+    var step by remember { mutableStateOf("main") }
+    var target by remember { mutableIntStateOf(15) }
+    var elapsedSec by remember { mutableIntStateOf(0) }
+    var pendingMinutes by remember { mutableIntStateOf(0) }
+    var submitting by remember { mutableStateOf(false) }
+
+    // DisposableEffect (non LaunchedEffect): se l'utente scorre il pager su
+    // un'altra pagina mentre il pasto è attivo, questa composable viene
+    // smontata e la coroutine di LaunchedEffect cancellata — ma senza
+    // onDispose il flag keepScreenOn restava true per sempre (nessuno lo
+    // rimetteva a false), tenendo lo schermo del watch acceso a tempo
+    // indeterminato anche a sessione abbandonata.
+    val view = LocalView.current
+    DisposableEffect(step) {
+        view.keepScreenOn = step == "active"
+        onDispose { view.keepScreenOn = false }
+    }
+
+    LaunchedEffect(step) {
+        if (step != "active") return@LaunchedEffect
+        while (true) {
+            delay(1000)
+            elapsedSec++
+            if (elapsedSec % REMINDER_INTERVAL_SEC == 0) vibrate(context)
+        }
+    }
+
+    fun startSession() {
+        elapsedSec = 0
+        step = "active"
+    }
+
+    fun endSession() {
+        pendingMinutes = maxOf(1, Math.round(elapsedSec / 60.0).toInt())
+        step = "level"
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (step) {
+            "active" -> ActiveStep(
+                elapsedSec = elapsedSec,
+                targetMin = target,
+                tip = MEAL_TIPS[(elapsedSec / REMINDER_INTERVAL_SEC) % MEAL_TIPS.size],
+                onEnd = { endSession() },
+            )
+            "level" -> LevelStep(
+                minutes = pendingMinutes,
+                submitting = submitting,
+                onPick = { level ->
+                    if (!submitting) {
+                        submitting = true
+                        onLogMeal(pendingMinutes, level) { submitting = false; step = "main" }
+                    }
+                },
+            )
+            else -> {
+                val listState = rememberScalingLazyListState()
+                Scaffold(
+                    timeText = { TimeText() },
+                    positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
+                ) {
+                    ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+                        item { ListHeader { Text("🍽️ Pasto") } }
+                        if (lastLoggedText != null) {
+                            item { Text("✅ $lastLoggedText", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
+                        }
+                        item {
+                            Text(
+                                "Obiettivo",
+                                style = MaterialTheme.typography.caption2,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                        }
+                        item {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                TARGET_OPTIONS.take(3).forEach { min ->
+                                    CompactChip(
+                                        onClick = { target = min },
+                                        label = { Text("${min}m") },
+                                        colors = if (target == min) ChipDefaults.primaryChipColors() else ChipDefaults.secondaryChipColors(),
+                                        modifier = Modifier.padding(2.dp),
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                TARGET_OPTIONS.drop(3).forEach { min ->
+                                    CompactChip(
+                                        onClick = { target = min },
+                                        label = { Text("${min}m") },
+                                        colors = if (target == min) ChipDefaults.primaryChipColors() else ChipDefaults.secondaryChipColors(),
+                                        modifier = Modifier.padding(2.dp),
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Chip(
+                                onClick = { startSession() },
+                                label = { Text("Inizia pasto") },
+                                colors = ChipDefaults.primaryChipColors(),
+                                modifier = Modifier.padding(top = 10.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveStep(elapsedSec: Int, targetMin: Int, tip: String, onEnd: () -> Unit) {
+    val listState = rememberScalingLazyListState()
+    val mm = elapsedSec / 60
+    val ss = elapsedSec % 60
+    val progress = (elapsedSec.toFloat() / (targetMin * 60).coerceAtLeast(1)).coerceIn(0f, 1f)
+    Scaffold(
+        timeText = { TimeText() },
+        positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
+    ) {
+        ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+            item {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier.size(90.dp),
+                    )
+                    Text(
+                        "%02d:%02d".format(mm, ss),
+                        style = MaterialTheme.typography.title3,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+            item {
+                Text(
+                    "su $targetMin min",
+                    style = MaterialTheme.typography.caption2,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item {
+                Text(
+                    tip,
+                    style = MaterialTheme.typography.caption1,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
+            item {
+                Chip(
+                    onClick = onEnd,
+                    label = { Text("Fine pasto") },
+                    colors = ChipDefaults.primaryChipColors(),
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LevelStep(minutes: Int, submitting: Boolean, onPick: (Int) -> Unit) {
+    val listState = rememberScalingLazyListState()
+    Scaffold(
+        timeText = { TimeText() },
+        positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
+    ) {
+        ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+            item {
+                Text(
+                    "$minutes min — quanto calmo?",
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            items(MEAL_LEVELS) { (level, emoji, label) ->
+                Chip(
+                    onClick = { if (!submitting) onPick(level) },
+                    label = { Text("$emoji $label") },
+                    modifier = Modifier.padding(vertical = 2.dp),
+                )
+            }
+        }
+    }
+}

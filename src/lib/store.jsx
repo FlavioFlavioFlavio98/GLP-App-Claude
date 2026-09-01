@@ -383,8 +383,22 @@ export function AppProvider({ children }) {
               entry.habitLevels[habitId] = 'max'
               actionType = 'done'
             }
-            if (freshHabitIndex >= 0 && entry.habits.includes(habitId)) {
+          }
+
+          // lastDone va tenuto sincronizzato con "è davvero segnata fatta ora",
+          // qualunque sia stato il percorso (completata, annullata, o passata
+          // a fallita) — non solo dentro il ramo "next" come prima. Senza
+          // pulirlo quando entry.habits non la contiene più, un'abitudine a
+          // cadenza multi-giorno annullata subito dopo un tap per errore
+          // restava comunque nascosta per il resto della giornata (isHabitVisible
+          // legge lastDone per la cadenza), come se fosse stata completata
+          // davvero — stesso bug già corretto sul modulo Wear OS.
+          if (freshHabitIndex >= 0) {
+            if (entry.habits.includes(habitId)) {
               habitsArr[freshHabitIndex] = { ...habitsArr[freshHabitIndex], lastDone: viewDate }
+            } else if (habitsArr[freshHabitIndex].lastDone) {
+              const { lastDone, ...rest } = habitsArr[freshHabitIndex]
+              habitsArr[freshHabitIndex] = rest
             }
           }
 

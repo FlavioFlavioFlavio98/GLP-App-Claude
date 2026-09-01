@@ -38,6 +38,20 @@ data class WearHabit(
     val done: Boolean,
 )
 
+data class WearFood(
+    val id: String,
+    val name: String,
+    val emoji: String,
+    val proteinPer100g: Double,
+)
+
+// Moltiplicatori identici a MEAL_LEVELS in mealStats.js — il watch non ha
+// (e non gli serve) l'editor del tasso pt/min della web app, usa sempre il
+// default: uno scostamento minimo e accettabile per una schermata pensata
+// per essere veloce, non per la messa a punto fine dei punteggi.
+private val MEAL_LEVEL_MULTIPLIERS = mapOf(1 to 0.3, 2 to 0.7, 3 to 1.2)
+private const val DEFAULT_MEAL_RATE = 0.3
+
 fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
 private fun asDouble(v: Any?): Double = when (v) {
@@ -46,6 +60,40 @@ private fun asDouble(v: Any?): Double = when (v) {
     is Int -> v.toDouble()
     is String -> v.toDoubleOrNull() ?: 0.0
     else -> 0.0
+}
+
+// Porta su Kotlin di calcNumericPoints() di habitLogic.js — usata solo dal
+// calcolo punti (computeTodayNet), il watch non ha una schermata per
+// registrare valori numerici, ma deve comunque contarli nel totale se sono
+// stati registrati da telefono/web nella stessa giornata.
+@Suppress("UNCHECKED_CAST")
+private fun calcNumericPoints(value: Double, config: Map<String, Any>): Double {
+    val threshold = asDouble(config["threshold"])
+    val unitSize = asDouble(config["unitSize"]).let { if (it == 0.0) 1.0 else it }
+    val ppu = asDouble(config["pointsPerUnit"])
+    if (value < threshold) {
+        return when (config["belowThreshold"] as? String) {
+            "fixed" -> -asDouble(config["penaltyFixed"])
+            "proportional" -> {
+                // Arrotonda la grandezza positiva e SOLO DOPO nega — negare
+                // prima di arrotondare (Math.round(-2.5) = -2 in Kotlin/Java,
+                // arrotonda verso l'alto sui negativi) divergeva dalla JS
+                // (Math.round(2.5) = 3, poi negato = -3) proprio sui mezzi
+                // punti, lo stesso disallineamento watch/web che questa
+                // funzione esiste per evitare.
+                val deficit = threshold - value
+                -(Math.round((deficit / unitSize) * ppu * 10) / 10.0)
+            }
+            else -> 0.0 // "zero" o non impostato
+        }
+    }
+    var pts = (value / unitSize) * ppu
+    val cap = config["cap"]
+    if (cap != null) {
+        val capVal = asDouble(cap)
+        if (pts > capVal) pts = capVal
+    }
+    return Math.round(pts * 10) / 10.0
 }
 
 private fun priorityRank(p: String): Int = when (p) {
@@ -108,28 +156,63 @@ private fun todayDoneAndFailed(doc: DocumentSnapshot, todayStr: String): Pair<Li
     }
 }
 
-// Punti "Netto" di oggi — porta su Kotlin computeDayNet() di habitLogic.js,
-// con lo stesso approccio del watch per il resto (habitLevels sempre "max",
-// niente numericConfig/obiettivi/purchases: funzioni non presenti sul watch).
+// Punti "Netto" di oggi — porta su Kotlin computeDayNet() di habitLogic.js.
 // Aggiunto dopo che è emerso che il campo Firestore "score" non viene più
 // scritto da nessun'altra parte dell'app dal refactor che l'ha reso
 // puramente calcolato lato client (vedi CLAUDE.md) — il watch lo leggeva
 // comunque, mostrando un numero permanentemente disallineato da telefono/web.
+// Include anche habitLevels (min/max), abitudini numeriche e spese
+// (acquisti/tracked rewards): il watch non ha schermate per queste azioni,
+// ma se vengono fatte da telefono/web nella stessa giornata il "punti oggi"
+// del watch deve comunque rifletterle correttamente — altrimenti si
+// ripresenta esattamente il disallineamento che questa funzione esiste per
+// evitare, solo per altri campi invece del vecchio "score" morto.
 @Suppress("UNCHECKED_CAST")
 private fun computeTodayNet(doc: DocumentSnapshot): Double {
     val todayStr = today()
     val (doneIds, failedIds) = todayDoneAndFailed(doc, todayStr)
 
+    val todayEntryMap = (doc.get("dailyLogs") as? Map<String, Any>)?.get(todayStr) as? Map<String, Any>
+    val habitLevels = todayEntryMap?.get("habitLevels") as? Map<String, Any> ?: emptyMap()
+    val habitValues = todayEntryMap?.get("habitValues") as? Map<String, Any> ?: emptyMap()
+
     val habits = doc.get("habits") as? List<Map<String, Any>> ?: emptyList()
     var dailyEarned = 0.0
     var penaltyCost = 0.0
     habits.forEach { h ->
-        if (h["type"] == "goal" || h["type"] == "single") return@forEach
+        // Solo "goal" è escluso qui, esattamente come computeDayNet() in
+        // habitLogic.js (if (h.type === 'goal') return) — escludere anche
+        // "single" (come faceva prima) toglieva dal punteggio del watch la
+        // ricompensa di un'abitudine singola a data fissa completata da
+        // telefono/web, un disallineamento silenzioso con la web app.
+        if (h["type"] == "goal") return@forEach
         if (!isHabitVisibleToday(h, todayStr, doneIds, failedIds)) return@forEach
         val id = stableHabitId(h)
-        if (doneIds.contains(id)) dailyEarned += asDouble(h["reward"])
+        if (doneIds.contains(id)) {
+            val isMulti = h["isMulti"] == true
+            val level = habitLevels[id] as? String ?: "max"
+            dailyEarned += if (isMulti && level == "min") asDouble(h["rewardMin"]) else asDouble(h["reward"])
+        }
         if (failedIds.contains(id)) penaltyCost += asDouble(h["penalty"])
     }
+
+    // Chiave "h.id" grezzo (non lo stableId con fallback sul nome usato sopra
+    // per fatta/fallita) — habitValues su Firestore è indicizzato così anche
+    // lato web, vedi computeDayNet in habitLogic.js.
+    val numericHabitPoints = habits
+        .filter { h -> (h["numericConfig"] as? Map<String, Any>) != null && habitValues[h["id"] as? String] != null }
+        .sumOf { h ->
+            val config = h["numericConfig"] as Map<String, Any>
+            val value = asDouble(habitValues[h["id"] as? String])
+            calcNumericPoints(value, config).let { if (it > 0) it else 0.0 }
+        }
+    val totalHabitPoints = dailyEarned + numericHabitPoints
+
+    val purchases = todayEntryMap?.get("purchases") as? List<Map<String, Any>> ?: emptyList()
+    val purchaseCost = purchases.sumOf { asDouble(it["cost"]) }
+    val trackedRewards = todayEntryMap?.get("trackedRewards") as? Map<String, Any> ?: emptyMap()
+    val trackedCost = trackedRewards.values.sumOf { tr -> asDouble((tr as? Map<String, Any>)?.get("cost")) }
+    val dailySpent = penaltyCost + purchaseCost + trackedCost
 
     fun sumArrayLogPts(field: String): Double {
         val log = doc.get(field) as? Map<String, Any> ?: emptyMap()
@@ -148,7 +231,6 @@ private fun computeTodayNet(doc: DocumentSnapshot): Double {
         sumArrayLogPts("barefootLog") + sumArrayLogPts("hangLog") +
         singleLogPts("dayRecapLog") + singleLogPts("mindSocialLog")
 
-    val todayEntryMap = (doc.get("dailyLogs") as? Map<String, Any>)?.get(todayStr) as? Map<String, Any>
     val checkIns = todayEntryMap?.get("checkIns") as? Map<String, Any> ?: emptyMap()
     val checkInPts = checkIns.values.sumOf { c ->
         val m = c as? Map<String, Any> ?: return@sumOf 0.0
@@ -165,7 +247,7 @@ private fun computeTodayNet(doc: DocumentSnapshot): Double {
         it["penaltyApplied"] == true && expiredAt != null && isoToRomeDate(expiredAt) == todayStr
     }.sumOf { asDouble(it["penalty"]) }
 
-    return dailyEarned + taskPts + extraPts + checkInPts + readingPts - penaltyCost - expiredTaskCost
+    return totalHabitPoints + taskPts + extraPts + checkInPts + readingPts - dailySpent - expiredTaskCost
 }
 
 object GlpRepository {
@@ -362,6 +444,79 @@ object GlpRepository {
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
         )
         userRef().update("exerciseLog.${today()}", FieldValue.arrayUnion(logEntry))
+            .addOnSuccessListener { onDone(pts) }
+            .addOnFailureListener(onError)
+    }
+
+    // Alimenti (ordine alfabetico) + id degli ultimi 3 usati oggi — stesso
+    // schema di loadExercises qui sopra, per lo stesso motivo (scorciatoia
+    // rapida per i pasti che si ripetono più spesso).
+    fun loadFoods(onResult: (List<WearFood>, List<String>) -> Unit, onError: (Exception) -> Unit) {
+        userRef().get()
+            .addOnSuccessListener { doc ->
+                @Suppress("UNCHECKED_CAST")
+                val raw = doc.get("proteinFoods") as? List<Map<String, Any>> ?: emptyList()
+                val foods = raw
+                    .map {
+                        WearFood(
+                            id = it["id"]?.toString() ?: "",
+                            name = it["name"] as? String ?: "Alimento",
+                            emoji = it["emoji"] as? String ?: "🍽️",
+                            proteinPer100g = asDouble(it["proteinPer100g"]),
+                        )
+                    }
+                    .sortedBy { it.name }
+
+                @Suppress("UNCHECKED_CAST")
+                val todayLog = (doc.get("proteinLog") as? Map<String, Any>)?.get(today()) as? List<Map<String, Any>> ?: emptyList()
+                val recentIds = todayLog
+                    .sortedByDescending { it["time"] as? String ?: "" }
+                    .mapNotNull { it["foodId"] as? String }
+                    .distinct()
+                    .take(3)
+
+                onResult(foods, recentIds)
+            }
+            .addOnFailureListener(onError)
+    }
+
+    // arrayUnion invece di get()+update(): niente lettura, niente race con
+    // scritture concorrenti da telefono/web nella stessa finestra (stessa
+    // lezione della perdita dati del 28/8/2026) — stessa forma dell'entry
+    // scritta da AddProteinActivity.kt sul widget nativo Android.
+    fun logProtein(food: WearFood, grams: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
+        val proteinGrams = Math.round(grams * (food.proteinPer100g / 100) * 10) / 10.0
+        val logEntry = hashMapOf(
+            "id" to System.currentTimeMillis().toString(),
+            "foodId" to food.id,
+            "name" to food.name,
+            "emoji" to food.emoji,
+            "grams" to grams,
+            "proteinGrams" to proteinGrams,
+            "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
+        )
+        userRef().update("proteinLog.${today()}", FieldValue.arrayUnion(logEntry))
+            .addOnSuccessListener { onDone(proteinGrams) }
+            .addOnFailureListener(onError)
+    }
+
+    // Pasto consapevole: stessa forma dell'entry scritta da logMeal() in
+    // store.jsx (mealLog.{data}), livello 1/2/3 = veloce/normale/con calma.
+    // Il target impostato prima di iniziare è solo un traguardo mostrato
+    // durante il timer, non viene salvato sull'entry (a differenza della web
+    // app, che lo usa per il badge "obiettivo centrato" nello storico — non
+    // essenziale per una schermata pensata per essere rapida).
+    fun logMeal(durationMin: Int, level: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
+        val multiplier = MEAL_LEVEL_MULTIPLIERS[level] ?: 0.7
+        val pts = Math.round(durationMin * DEFAULT_MEAL_RATE * multiplier * 10) / 10.0
+        val logEntry = hashMapOf(
+            "id" to System.currentTimeMillis().toString(),
+            "durationMin" to durationMin,
+            "level" to level,
+            "pts" to pts,
+            "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
+        )
+        userRef().update("mealLog.${today()}", FieldValue.arrayUnion(logEntry))
             .addOnSuccessListener { onDone(pts) }
             .addOnFailureListener(onError)
     }

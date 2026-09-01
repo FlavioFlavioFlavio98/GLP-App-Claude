@@ -118,8 +118,8 @@ class MainActivity : ComponentActivity() {
 }
 
 // Ordine pagine: Oggi (riepilogo) → Abitudini (il loop più usato quotidiano,
-// per esplicita richiesta) → Task → Workout.
-private const val PAGE_COUNT = 4
+// per esplicita richiesta) → Task → Workout → Proteine → Pasto.
+private const val PAGE_COUNT = 6
 
 @Composable
 private fun MainPager() {
@@ -133,6 +133,11 @@ private fun MainPager() {
     var recentExerciseIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var exercisesLoading by remember { mutableStateOf(true) }
     var lastLoggedName by remember { mutableStateOf<String?>(null) }
+    var foods by remember { mutableStateOf<List<WearFood>>(emptyList()) }
+    var recentFoodIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var foodsLoading by remember { mutableStateOf(true) }
+    var lastLoggedFoodText by remember { mutableStateOf<String?>(null) }
+    var lastLoggedMealText by remember { mutableStateOf<String?>(null) }
 
     fun refreshScore() {
         scoreLoading = true
@@ -166,11 +171,20 @@ private fun MainPager() {
         )
     }
 
+    fun refreshFoods() {
+        foodsLoading = true
+        GlpRepository.loadFoods(
+            onResult = { all, recentIds -> foods = all; recentFoodIds = recentIds; foodsLoading = false },
+            onError = { foodsLoading = false },
+        )
+    }
+
     LaunchedEffect(Unit) {
         refreshScore()
         refreshHabits()
         refreshTasks()
         refreshExercises()
+        refreshFoods()
     }
 
     val pagerState = rememberPagerState(initialPage = 1, pageCount = { PAGE_COUNT })
@@ -219,6 +233,35 @@ private fun MainPager() {
                             effort = effort,
                             onDone = { lastLoggedName = exercise.name; refreshScore(); refreshExercises() },
                             onError = {},
+                        )
+                    },
+                )
+                4 -> ProteinScreen(
+                    foods = foods,
+                    recentIds = recentFoodIds,
+                    loading = foodsLoading,
+                    lastLoggedText = lastLoggedFoodText,
+                    onLogProtein = { food, grams ->
+                        GlpRepository.logProtein(
+                            food = food,
+                            grams = grams,
+                            onDone = { proteinGrams -> lastLoggedFoodText = "${food.name}: ${proteinGrams}g proteine"; refreshScore(); refreshFoods() },
+                            onError = {},
+                        )
+                    },
+                )
+                5 -> MealScreen(
+                    lastLoggedText = lastLoggedMealText,
+                    onLogMeal = { minutes, level, onComplete ->
+                        GlpRepository.logMeal(
+                            durationMin = minutes,
+                            level = level,
+                            onDone = { pts ->
+                                lastLoggedMealText = "$minutes min — +${pts}pt"
+                                refreshScore()
+                                onComplete(pts)
+                            },
+                            onError = { onComplete(0.0) },
                         )
                     },
                 )

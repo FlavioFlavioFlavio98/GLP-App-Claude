@@ -209,11 +209,22 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
   // mentre si usa un'altra app (es. un video) — richiesta esplicita, "a
   // volte mi scordo e accelero". Sempre opzionale/silenzioso se il plugin
   // non esiste (browser), non deve mai bloccare il timer web.
-  function startNativeSessionNotification(startMs) {
+  // Il Service in foreground parte comunque anche senza il permesso
+  // POST_NOTIFICATIONS (Android lo consente lo stesso), ma senza permesso
+  // la notifica resta invisibile — bug reale riscontrato in test: il timer
+  // girava ma niente compariva nella tendina. Riusa il plugin di notifiche
+  // già esistente nell'app (stesso usato per i promemoria abitudini/task)
+  // invece di duplicare la richiesta di permesso in un plugin nuovo.
+  async function ensureNotificationPermission() {
+    try { await window.Capacitor?.Plugins?.NotificationPlugin?.requestPermission() } catch { /* ignore */ }
+  }
+
+  async function startNativeSessionNotification(startMs) {
     // I metodi del plugin Capacitor sono sempre Promise risolte/rifiutate
     // lato nativo in modo asincrono — un try/catch sincrono non intercetta
-    // un eventuale reject (es. permesso notifiche negato), serve .catch().
+    // un eventuale reject, serve .catch().
     try {
+      await ensureNotificationPermission()
       window.Capacitor?.Plugins?.MealSessionPlugin?.start({ startTime: startMs })?.catch(() => {})
     } catch { /* plugin assente (browser) */ }
   }

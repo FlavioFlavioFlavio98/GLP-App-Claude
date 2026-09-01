@@ -26,14 +26,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.input.RemoteInputIntentHelper
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 
-// Account dedicato all'app watch (vedi firestore.rules) — separato dall'email
-// di login principale (flavio.rossi94@gmail.com, usata via Google Sign-In su
-// telefono/web) per evitare la collisione "un account per email" di Firebase
-// Auth quando si crea un credential email/password per un'email già legata
-// a un provider Google. Stessi dati (users/flavio), solo credenziale diversa.
+// Login primario: Google Sign-In con l'account principale
+// (flavio.rossi94@gmail.com, stesso usato su telefono/web) — vedi
+// LoginScreen.kt. Web client id preso da google-services.json
+// (oauth_client, client_type: 3), richiesto da requestIdToken per ottenere
+// un idToken scambiabile con Firebase Auth via GoogleAuthProvider.
+private const val WEB_CLIENT_ID = "925252547674-db1u97mup8gekoo6tsgclhfokc4qk0e7.apps.googleusercontent.com"
+
+// Account dedicato all'app watch (vedi firestore.rules), fallback se il
+// login Google dovesse bloccarsi — separato dall'email di login principale
+// per evitare la collisione "un account per email" di Firebase Auth quando
+// si crea un credential email/password per un'email già legata a un
+// provider Google. Stessi dati (users/flavio), solo credenziale diversa.
 private const val FIXED_EMAIL = "flavio.rossi95@gmail.com"
 private const val PASSWORD_INPUT_KEY = "password_input"
 
@@ -91,12 +102,53 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            val googleSignInClient = remember {
+                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(WEB_CLIENT_ID)
+                    .requestEmail()
+                    .build()
+                GoogleSignIn.getClient(this, gso)
+            }
+
+            val googleSignInLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                try {
+                    val account = task.getResult(ApiException::class.java)
+                    val idToken = account.idToken
+                    if (idToken == null) {
+                        authLoading = false
+                        authError = "Login Google fallito (nessun token)"
+                        return@rememberLauncherForActivityResult
+                    }
+                    val credential = GoogleAuthProvider.getCredential(idToken, null)
+                    FirebaseAuth.getInstance().signInWithCredential(credential)
+                        .addOnSuccessListener {
+                            authLoading = false
+                            user = FirebaseAuth.getInstance().currentUser
+                        }
+                        .addOnFailureListener { err ->
+                            authLoading = false
+                            authError = err.message ?: "Errore login Google"
+                        }
+                } catch (e: ApiException) {
+                    authLoading = false
+                    authError = "Login Google annullato o fallito (${e.statusCode})"
+                }
+            }
+
             MaterialTheme {
                 if (user == null) {
                     LoginScreen(
                         loading = authLoading,
                         error = authError,
-                        onSignInClick = {
+                        onGoogleSignInClick = {
+                            authLoading = true
+                            authError = null
+                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                        },
+                        onPasswordSignInClick = {
                             authLoading = true
                             authError = null
                             val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
@@ -110,19 +162,26 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 } else {
-                    MainPager()
+                    // Letto dall'intent che apre l'Activity: la Tile "Task
+                    // oggi" (TasksTileService) lo imposta a 2 per aprire
+                    // l'app direttamente sulla pagina Task, senza dover
+                    // scorrere manualmente dalle Abitudini.
+                    val startPage = intent.getIntExtra(EXTRA_START_PAGE, 1)
+                    MainPager(startPage = startPage)
                 }
             }
         }
     }
 }
 
+const val EXTRA_START_PAGE = "start_page"
+
 // Ordine pagine: Oggi (riepilogo) → Abitudini (il loop più usato quotidiano,
 // per esplicita richiesta) → Task → Workout → Proteine → Pasto → Willpower → Meditazione.
 private const val PAGE_COUNT = 8
 
 @Composable
-private fun MainPager() {
+private fun MainPager(startPage: Int = 1) {
     var score by remember { mutableStateOf(0.0) }
     var scoreLoading by remember { mutableStateOf(true) }
     var habits by remember { mutableStateOf<List<WearHabit>>(emptyList()) }
@@ -189,7 +248,7 @@ private fun MainPager() {
         refreshFoods()
     }
 
-    val pagerState = rememberPagerState(initialPage = 1, pageCount = { PAGE_COUNT })
+    val pagerState = rememberPagerState(initialPage = startPage.coerceIn(0, PAGE_COUNT - 1), pageCount = { PAGE_COUNT })
 
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->

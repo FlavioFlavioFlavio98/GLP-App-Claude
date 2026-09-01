@@ -13,13 +13,20 @@ import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 
-// Login email/password (non Google Sign-In): il picker di sistema per
-// aggiungere un account Google su Wear OS richiede un telefono associato
-// ("Add from phone") anche per un'app che fa il proprio OAuth — su un
-// emulatore standalone senza telefono associato resta bloccato lì. Password
-// inserita via RemoteInput (tastiera/voce del sistema, vedi MainActivity).
+// Login primario: Google Sign-In con l'account principale
+// (flavio.rossi94@gmail.com, stesso usato su telefono/web). Il blocco su
+// "Aggiungi da telefono" si verificava solo su emulatore senza telefono
+// associato — su un watch reale già accoppiato il picker propone
+// direttamente l'account Google già presente sul dispositivo.
+// Fallback: login email/password sull'account dedicato watch
+// (flavio.rossi95@gmail.com), password inserita via RemoteInput.
 @Composable
-fun LoginScreen(loading: Boolean, error: String?, onSignInClick: () -> Unit) {
+fun LoginScreen(
+    loading: Boolean,
+    error: String?,
+    onGoogleSignInClick: () -> Unit,
+    onPasswordSignInClick: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -33,14 +40,15 @@ fun LoginScreen(loading: Boolean, error: String?, onSignInClick: () -> Unit) {
             style = MaterialTheme.typography.title3,
             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
         )
-        Text(
-            text = "flavio.rossi95@gmail.com",
-            style = MaterialTheme.typography.caption2,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
-        Button(onClick = onSignInClick, enabled = !loading) {
-            Text(if (loading) "..." else "Password")
+        Button(onClick = onGoogleSignInClick, enabled = !loading) {
+            Text(if (loading) "..." else "Accedi con Google")
+        }
+        Button(
+            onClick = onPasswordSignInClick,
+            enabled = !loading,
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            Text("Password (account watch)")
         }
         if (error != null) {
             Text(

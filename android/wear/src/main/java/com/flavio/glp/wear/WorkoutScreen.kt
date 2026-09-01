@@ -1,11 +1,14 @@
 package com.flavio.glp.wear
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -13,6 +16,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
@@ -29,6 +36,24 @@ import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
 
 private val EFFORT_LEVELS = listOf(Triple(1, "🟢", "Leggero"), Triple(2, "🟡", "Medio"), Triple(3, "🔴", "Massimo"))
+
+// Icona immagine (stesse 13 di public/exercise-icons/ sul web) con fallback
+// all'emoji se l'esercizio non ne ha una — vedi ExerciseIconRes.kt.
+@Composable
+private fun ExerciseChipIcon(exercise: WearExercise, size: androidx.compose.ui.unit.Dp = 24.dp) {
+    val context = LocalContext.current
+    val resId = remember(exercise.name) { resolveExerciseIconRes(context, exercise.name) }
+    if (resId != null) {
+        Image(
+            painter = painterResource(id = resId),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(size).clip(CircleShape),
+        )
+    } else {
+        Text(exercise.emoji, style = MaterialTheme.typography.title3)
+    }
+}
 
 // step: 'main' (lista + ultimi usati) → 'picker' (tutti gli esercizi) → 'reps'
 // (contatore reps + sforzo) — stesso flusso in 3 passi del modal "Allenamento
@@ -116,7 +141,8 @@ fun WorkoutScreen(
                             items(recentExercises) { ex ->
                                 Chip(
                                     onClick = { openReps(ex) },
-                                    label = { Text("${ex.emoji} ${ex.name}", maxLines = 1) },
+                                    icon = { ExerciseChipIcon(ex) },
+                                    label = { Text(ex.name, maxLines = 1) },
                                     colors = ChipDefaults.secondaryChipColors(),
                                     modifier = Modifier.padding(vertical = 2.dp),
                                 )
@@ -148,7 +174,8 @@ private fun ExercisePickerStep(
             items(exercises) { ex ->
                 Chip(
                     onClick = { onPick(ex) },
-                    label = { Text("${ex.emoji} ${ex.name}", maxLines = 1) },
+                    icon = { ExerciseChipIcon(ex) },
+                    label = { Text(ex.name, maxLines = 1) },
                     modifier = Modifier.padding(vertical = 2.dp),
                 )
             }
@@ -181,7 +208,10 @@ private fun RepsStep(
     ) {
         ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
             item {
-                Text("${exercise.emoji} ${exercise.name}", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    ExerciseChipIcon(exercise, size = 32.dp)
+                    Text(exercise.name, textAlign = TextAlign.Center, modifier = Modifier.padding(start = 6.dp))
+                }
             }
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {

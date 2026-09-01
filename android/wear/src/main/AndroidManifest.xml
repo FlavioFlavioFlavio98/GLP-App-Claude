@@ -31,5 +31,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Tile "punti di oggi" — raggiungibile scorrendo da destra sul
+             quadrante senza aprire l'app. -->
+        <service
+            android:name="com.flavio.glp.wear.PointsTileService"
+            android:exported="true"
+            android:label="Punti oggi"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@mipmap/ic_launcher" />
+        </service>
     </application>
 </manifest>

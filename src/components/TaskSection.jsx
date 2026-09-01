@@ -131,19 +131,31 @@ export default function TaskSection({ minimalMode }) {
             {/* Sezione task scadute */}
             {expiredTasks.length > 0 && (
               <>
-                <div
-                  onClick={toggleExpired}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    marginTop: 4, cursor: 'pointer',
-                    fontSize: '0.72em', color: '#e53935', fontWeight: 700,
-                    userSelect: 'none',
-                  }}
-                >
-                  <span>⚠️ SCADUTE ({expiredTasks.length})</span>
-                  <span className="material-icons-round" style={{ fontSize: 14 }}>
-                    {showExpired ? 'expand_less' : 'expand_more'}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, gap: 6 }}>
+                  <div
+                    onClick={toggleExpired}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                      fontSize: '0.72em', color: '#e53935', fontWeight: 700,
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span>⚠️ SCADUTE ({expiredTasks.length})</span>
+                    <span className="material-icons-round" style={{ fontSize: 14 }}>
+                      {showExpired ? 'expand_less' : 'expand_more'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => actions.rescheduleAllExpiredToToday()}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 3, background: 'none',
+                      border: '1px solid rgba(229,57,53,0.3)', borderRadius: 20, cursor: 'pointer',
+                      color: '#e53935', fontSize: '0.62em', fontWeight: 700, padding: '3px 8px',
+                    }}
+                    title="Riattiva tutte le task scadute con scadenza oggi"
+                  >
+                    ⏰ Rimanda tutte a oggi
+                  </button>
                 </div>
                 {showExpired && expiredTasks.map(task => {
                   const rec = recurringByTaskId[task.recurringId]

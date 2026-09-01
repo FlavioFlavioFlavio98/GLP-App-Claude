@@ -41,6 +41,14 @@ dependencies {
     implementation 'androidx.wear:wear-input:1.2.0'
     implementation 'com.google.firebase:firebase-firestore-ktx:25.0.0'
     implementation 'com.google.firebase:firebase-auth-ktx:23.0.0'
+
+    // Tile "punti di oggi", raggiungibile scorrendo da destra sul quadrante
+    // senza aprire l'app — richiesta esplicita di Flavio.
+    implementation 'androidx.wear.tiles:tiles:1.4.0'
+    implementation 'androidx.wear.tiles:tiles-material:1.4.0'
+    implementation 'androidx.concurrent:concurrent-futures:1.2.0'
+    implementation 'androidx.concurrent:concurrent-futures-ktx:1.2.0'
+    implementation 'com.google.guava:guava:33.4.0-android'
 }
 
 apply plugin: 'com.google.gms.google-services'

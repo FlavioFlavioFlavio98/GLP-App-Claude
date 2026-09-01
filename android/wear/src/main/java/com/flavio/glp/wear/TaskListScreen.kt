@@ -1,5 +1,7 @@
 package com.flavio.glp.wear
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +25,7 @@ import androidx.wear.compose.material.PositionIndicator
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
+import androidx.wear.input.RemoteInputIntentHelper
 
 private fun priorityColor(priority: String): Color = when (priority) {
     "high" -> Color(0xFFEB5757)
@@ -30,14 +33,55 @@ private fun priorityColor(priority: String): Color = when (priority) {
     else -> Color(0xFFF2994A)
 }
 
+private const val VOICE_TASK_INPUT_KEY = "voice_task_input"
+
 @Composable
 fun TaskListScreen(
     tasks: List<WearTask>,
     loading: Boolean,
     onComplete: (WearTask) -> Unit,
+    onAddTask: (String, String) -> Unit,
 ) {
     val listState = rememberScalingLazyListState()
     var confirmTask by remember { mutableStateOf<WearTask?>(null) }
+    // Titolo+scadenza già interpretati dal comando vocale, in attesa di
+    // conferma — non si crea la task finché non tocchi "OK, crea": un
+    // errore di trascrizione qui creerebbe una task sbagliata senza che te
+    // ne accorga, stessa scelta già fatta sul telefono per lo stesso motivo.
+    var pendingTitle by remember { mutableStateOf<String?>(null) }
+    var pendingDeadline by remember { mutableStateOf("") }
+
+    // Stesso meccanismo già usato per la password di login in MainActivity:
+    // apre il selettore di input di sistema di Wear OS (tastiera/voce/scrittura
+    // a mano) — "voce" è già lì di default, non serve il permesso RECORD_AUDIO
+    // né un riconoscimento vocale gestito da noi.
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        val spoken = data?.let { android.app.RemoteInput.getResultsFromIntent(it) }
+            ?.getCharSequence(VOICE_TASK_INPUT_KEY)?.toString()
+        if (!spoken.isNullOrBlank()) {
+            val parsed = VoiceDateParser.parse(spoken)
+            if (parsed.title.isNotEmpty()) {
+                pendingTitle = parsed.title
+                pendingDeadline = parsed.deadline ?: today()
+            }
+            // Titolo vuoto (es. ha detto solo "domani") → non capito, ignora
+            // silenziosamente invece di creare una task fantasma.
+        }
+    }
+
+    fun launchVoiceInput() {
+        val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+        val remoteInputs = listOf(
+            android.app.RemoteInput.Builder(VOICE_TASK_INPUT_KEY)
+                .setLabel("Detta la task...")
+                .build()
+        )
+        RemoteInputIntentHelper.putRemoteInputsExtra(intent, remoteInputs)
+        voiceLauncher.launch(intent)
+    }
 
     // Tutto dentro un unico Box esterno (invece di due composable "fratelli"
     // allo stesso livello) — con due nodi separati lo stato dell'overlay di
@@ -54,6 +98,14 @@ fun TaskListScreen(
                 item {
                     ListHeader { Text("✅ Task") }
                 }
+                item {
+                    Chip(
+                        onClick = { launchVoiceInput() },
+                        label = { Text("🎤 Detta task") },
+                        colors = ChipDefaults.primaryChipColors(),
+                        modifier = Modifier.padding(vertical = 2.dp),
+                    )
+                }
                 if (tasks.isEmpty() && !loading) {
                     item { Text("Nessuna task attiva 🎉") }
                 }
@@ -69,8 +121,9 @@ fun TaskListScreen(
             }
         }
 
-        // Overlay di conferma fatto a mano (niente componente Dialog di Wear
-        // Compose Material — non disponibile in questa versione della libreria).
+        // Overlay di conferma completamento fatto a mano (niente componente
+        // Dialog di Wear Compose Material — non disponibile in questa versione
+        // della libreria).
         val taskToConfirm = confirmTask
         if (taskToConfirm != null) {
             Box(
@@ -94,6 +147,40 @@ fun TaskListScreen(
                     item {
                         Chip(
                             onClick = { confirmTask = null },
+                            label = { Text("Annulla") },
+                            colors = ChipDefaults.secondaryChipColors(),
+                        )
+                    }
+                }
+            }
+        }
+
+        // Overlay di conferma nuova task dettata — stesso schema dell'overlay
+        // di completamento qui sopra.
+        val title = pendingTitle
+        if (title != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.85f)),
+            ) {
+                ScalingLazyColumn(modifier = Modifier.fillMaxSize()) {
+                    item { Text("Nuova task") }
+                    item { Text(title, style = MaterialTheme.typography.caption1) }
+                    item { Text("📅 ${VoiceDateParser.formatDisplay(pendingDeadline)}", style = MaterialTheme.typography.caption2) }
+                    item {
+                        Chip(
+                            onClick = {
+                                onAddTask(title, pendingDeadline)
+                                pendingTitle = null
+                            },
+                            label = { Text("OK, crea") },
+                            colors = ChipDefaults.primaryChipColors(),
+                        )
+                    }
+                    item {
+                        Chip(
+                            onClick = { pendingTitle = null },
                             label = { Text("Annulla") },
                             colors = ChipDefaults.secondaryChipColors(),
                         )

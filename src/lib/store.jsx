@@ -2051,6 +2051,25 @@ export function AppProvider({ children }) {
       actions.showToast(`Posticipata al ${parseInt(d)}/${parseInt(m)}`, '📅')
     },
 
+    // Scorciatoia per riattivare in blocco tutte le task scadute invece di
+    // posticiparle una per una — richiesta esplicita quando se ne accumulano
+    // diverse. Stesso reset di stato di _setTaskDeadline (status/expiredAt/
+    // penaltyApplied), applicato a tutte le task "expired" in un colpo solo.
+    async rescheduleAllExpiredToToday() {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const todayStr = toDateString(new Date())
+      const expiredCount = (globalData.tasks || []).filter(t => t.status === 'expired').length
+      if (expiredCount === 0) return
+      if (!window.confirm(`Rimandare a oggi tutte le ${expiredCount} task scadute?`)) return
+      const tasks = (globalData.tasks || []).map(t => {
+        if (t.status !== 'expired') return t
+        return { ...t, status: 'active', deadline: todayStr, expiredAt: null, penaltyApplied: false }
+      })
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      actions.showToast(`${expiredCount} task rimandate a oggi`, '⏰')
+    },
+
     // Nome del template ricorrente collegato a una task, o null se non lo è —
     // usato per mostrare "ogni N giorni" prima di completare e il messaggio
     // giusto dopo.

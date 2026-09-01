@@ -506,6 +506,67 @@ object GlpRepository {
     // durante il timer, non viene salvato sull'entry (a differenza della web
     // app, che lo usa per il badge "obiettivo centrato" nello storico — non
     // essenziale per una schermata pensata per essere rapida).
+    // Aggiunta rapida stile QuickAddTaskActivity/VoiceAddTaskActivity sul
+    // telefono: solo titolo + scadenza, reward/penalità a 0, priorità media —
+    // si rifinisce poi dall'app se serve. arrayUnion invece di get()+update():
+    // niente lettura, niente race con scritture concorrenti (stessa lezione
+    // della perdita dati del 28/8/2026).
+    fun addTask(title: String, deadline: String, onDone: () -> Unit, onError: (Exception) -> Unit) {
+        val todayStr = today()
+        val isPast = deadline < todayStr
+        val task = hashMapOf<String, Any>(
+            "id" to "task_${System.currentTimeMillis()}",
+            "title" to title,
+            "deadline" to deadline,
+            "reward" to 0.0,
+            "penalty" to 0.0,
+            "priority" to "medium",
+            "status" to if (isPast) "expired" else "active",
+            "rewardApplied" to false,
+            "penaltyApplied" to isPast,
+        )
+        if (isPast) {
+            task["expiredAt"] = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+                .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
+        }
+        userRef().update("tasks", FieldValue.arrayUnion(task))
+            .addOnSuccessListener { onDone() }
+            .addOnFailureListener(onError)
+    }
+
+    // Willpower: log rapido +/-, non una sessione con durata — stessa forma
+    // dell'entry scritta da addWillpowerEntry in store.jsx / AddWillpowerActivity.kt.
+    fun logWillpower(text: String, succeeded: Boolean, points: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
+        val pts = if (succeeded) points.toDouble() else -points.toDouble()
+        val logEntry = hashMapOf(
+            "id" to System.currentTimeMillis().toString(),
+            "text" to text,
+            "succeeded" to succeeded,
+            "pts" to pts,
+            "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
+        )
+        userRef().update("willpowerLog.${today()}", FieldValue.arrayUnion(logEntry))
+            .addOnSuccessListener { onDone(pts) }
+            .addOnFailureListener(onError)
+    }
+
+    // Meditazione: punti a tasso fisso per sessione (non scalato sui minuti,
+    // stessa scelta di logMeditation in store.jsx — "se tocchi il pulsante è
+    // perché l'hai fatto", non serve un'autovalutazione come per i pasti.
+    private const val MEDITATION_RATE = 1.0
+
+    fun logMeditation(minutes: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
+        val logEntry = hashMapOf(
+            "id" to System.currentTimeMillis().toString(),
+            "pts" to MEDITATION_RATE,
+            "minutes" to minutes,
+            "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
+        )
+        userRef().update("meditationLog.${today()}", FieldValue.arrayUnion(logEntry))
+            .addOnSuccessListener { onDone(MEDITATION_RATE) }
+            .addOnFailureListener(onError)
+    }
+
     fun logMeal(durationMin: Int, level: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
         val multiplier = MEAL_LEVEL_MULTIPLIERS[level] ?: 0.7
         val pts = Math.round(durationMin * DEFAULT_MEAL_RATE * multiplier * 10) / 10.0

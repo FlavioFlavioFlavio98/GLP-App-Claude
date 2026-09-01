@@ -118,8 +118,8 @@ class MainActivity : ComponentActivity() {
 }
 
 // Ordine pagine: Oggi (riepilogo) → Abitudini (il loop più usato quotidiano,
-// per esplicita richiesta) → Task → Workout → Proteine → Pasto.
-private const val PAGE_COUNT = 6
+// per esplicita richiesta) → Task → Workout → Proteine → Pasto → Willpower → Meditazione.
+private const val PAGE_COUNT = 8
 
 @Composable
 private fun MainPager() {
@@ -138,6 +138,8 @@ private fun MainPager() {
     var foodsLoading by remember { mutableStateOf(true) }
     var lastLoggedFoodText by remember { mutableStateOf<String?>(null) }
     var lastLoggedMealText by remember { mutableStateOf<String?>(null) }
+    var lastLoggedWillpowerText by remember { mutableStateOf<String?>(null) }
+    var lastLoggedMeditationText by remember { mutableStateOf<String?>(null) }
 
     fun refreshScore() {
         scoreLoading = true
@@ -220,6 +222,14 @@ private fun MainPager() {
                             onError = { refreshTasks() },
                         )
                     },
+                    onAddTask = { title, deadline ->
+                        GlpRepository.addTask(
+                            title = title,
+                            deadline = deadline,
+                            onDone = { refreshTasks() },
+                            onError = {},
+                        )
+                    },
                 )
                 3 -> WorkoutScreen(
                     exercises = exercises,
@@ -258,6 +268,36 @@ private fun MainPager() {
                             level = level,
                             onDone = { pts ->
                                 lastLoggedMealText = "$minutes min — +${pts}pt"
+                                refreshScore()
+                                onComplete(pts)
+                            },
+                            onError = { onComplete(0.0) },
+                        )
+                    },
+                )
+                6 -> WillpowerScreen(
+                    lastLoggedText = lastLoggedWillpowerText,
+                    onLogWillpower = { text, succeeded, points, onComplete ->
+                        GlpRepository.logWillpower(
+                            text = text,
+                            succeeded = succeeded,
+                            points = points,
+                            onDone = { pts ->
+                                lastLoggedWillpowerText = "$text — ${if (pts >= 0) "+" else ""}${pts}pt"
+                                refreshScore()
+                                onComplete(pts)
+                            },
+                            onError = { onComplete(0.0) },
+                        )
+                    },
+                )
+                7 -> MeditationScreen(
+                    lastLoggedText = lastLoggedMeditationText,
+                    onLogMeditation = { minutes, onComplete ->
+                        GlpRepository.logMeditation(
+                            minutes = minutes,
+                            onDone = { pts ->
+                                lastLoggedMeditationText = "$minutes min — +${pts}pt"
                                 refreshScore()
                                 onComplete(pts)
                             },

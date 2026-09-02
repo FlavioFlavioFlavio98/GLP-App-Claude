@@ -12,25 +12,33 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
-import androidx.wear.compose.material.Chip
+import androidx.wear.compose.material.CompactChip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.google.firebase.FirebaseApp
+import kotlinx.coroutines.delay
 import java.util.Locale
+
+private const val AUTO_CONFIRM_SECONDS = 3
 
 // Scorciatoia "Nuova task" (Tile AddTaskTileService): ascolta e salva
 // subito. Usa SpeechRecognizer diretto invece di
@@ -145,50 +153,65 @@ class VoiceAddTaskActivity : ComponentActivity() {
             MaterialTheme {
                 when {
                     title != null -> {
-                        // Stessa scelta del telefono: non salva a occhi chiusi,
-                        // un errore di trascrizione qui creerebbe una task
-                        // sbagliata senza che te ne accorga finché non la
-                        // rivedi nell'app — resta comunque un solo tocco in più
-                        // rispetto ad "ascolta e salva", non l'intera UI
-                        // dell'app.
+                        // Stessa scelta del telefono: non salva a occhi chiusi
+                        // di default — ma qui il conto alla rovescia di 3s
+                        // sul segno di spunta lascia comunque "ascolta e
+                        // salva" come comportamento predefinito se non tocchi
+                        // nulla, con la X sempre lì per correggere in tempo se
+                        // il riconoscimento ha capito male.
+                        fun confirm() {
+                            if (submitting) return
+                            submitting = true
+                            // Ottimistico: chiude subito invece di aspettare la
+                            // conferma di Firestore (stesso motivo per cui lo fa
+                            // già VoiceAddTaskActivity sul telefono) — offline la
+                            // scrittura resta comunque in coda e si sincronizza da
+                            // sola alla riconnessione, aspettare qui rendeva il
+                            // salvataggio percepito come lento.
+                            Toast.makeText(this@VoiceAddTaskActivity, "✅ Task creata: $title", Toast.LENGTH_LONG).show()
+                            GlpRepository.addTask(
+                                title = title,
+                                deadline = pendingDeadline,
+                                onDone = {},
+                                onError = { err ->
+                                    Toast.makeText(this@VoiceAddTaskActivity, "Errore: ${err.message}", Toast.LENGTH_LONG).show()
+                                },
+                            )
+                            finish()
+                        }
+
+                        var secondsLeft by remember { mutableIntStateOf(AUTO_CONFIRM_SECONDS) }
+                        LaunchedEffect(title) {
+                            while (secondsLeft > 0) {
+                                delay(1000)
+                                secondsLeft--
+                            }
+                            confirm()
+                        }
+
                         val listState = rememberScalingLazyListState()
                         ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
                             item { Text("Nuova task", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                             item { Text(title, style = MaterialTheme.typography.caption1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                             item { Text("📅 ${VoiceDateParser.formatDisplay(pendingDeadline)}", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                             item {
-                                Chip(
-                                    onClick = {
-                                        if (!submitting) {
-                                            submitting = true
-                                            // Ottimistico: chiude subito invece di aspettare la
-                                            // conferma di Firestore (stesso motivo per cui lo fa
-                                            // già VoiceAddTaskActivity sul telefono) — offline la
-                                            // scrittura resta comunque in coda e si sincronizza da
-                                            // sola alla riconnessione, aspettare qui rendeva il
-                                            // salvataggio percepito come lento.
-                                            Toast.makeText(this@VoiceAddTaskActivity, "✅ Task creata: $title", Toast.LENGTH_LONG).show()
-                                            GlpRepository.addTask(
-                                                title = title,
-                                                deadline = pendingDeadline,
-                                                onDone = {},
-                                                onError = { err ->
-                                                    Toast.makeText(this@VoiceAddTaskActivity, "Errore: ${err.message}", Toast.LENGTH_LONG).show()
-                                                },
-                                            )
-                                            finish()
-                                        }
-                                    },
-                                    label = { Text("OK, crea") },
-                                    colors = ChipDefaults.primaryChipColors(),
-                                )
-                            }
-                            item {
-                                Chip(
-                                    onClick = { finish() },
-                                    label = { Text("Annulla") },
-                                    colors = ChipDefaults.secondaryChipColors(),
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    CompactChip(
+                                        onClick = { confirm() },
+                                        label = { Text("✓ $secondsLeft") },
+                                        colors = ChipDefaults.primaryChipColors(),
+                                        modifier = Modifier.padding(4.dp),
+                                    )
+                                    CompactChip(
+                                        onClick = { finish() },
+                                        label = { Text("✗") },
+                                        colors = ChipDefaults.secondaryChipColors(),
+                                        modifier = Modifier.padding(4.dp),
+                                    )
+                                }
                             }
                         }
                     }

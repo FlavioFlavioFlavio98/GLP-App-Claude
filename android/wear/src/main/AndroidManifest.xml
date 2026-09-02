@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:allowBackup="true"
@@ -32,6 +33,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Activity dedicata "ascolta e salva" per la Tile "Nuova task" —
+             taskAffinity vuoto + niente launchMode singleTask: deve poter
+             aprirsi ed essere finish() indipendentemente da un'eventuale
+             MainActivity già in esecuzione, senza scambiarsi il back-stack. -->
+        <activity
+            android:name="com.flavio.glp.wear.VoiceAddTaskActivity"
+            android:exported="true"
+            android:taskAffinity="com.flavio.glp.wear.voiceaddtask"
+            android:theme="@android:style/Theme.DeviceDefault" />
 
         <!-- Tile "punti di oggi" — raggiungibile scorrendo da destra sul
              quadrante senza aprire l'app. -->

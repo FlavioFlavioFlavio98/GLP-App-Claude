@@ -22,9 +22,10 @@ private const val RESOURCES_VERSION = "1"
 // registrate correttamente in ShortcutManager via `dumpsys shortcut`, ma
 // nessuna UI di sistema le mostra), quindi replichiamo la stessa
 // destinazione come Tile, il meccanismo di accesso rapido che Wear OS
-// supporta davvero — un tocco apre l'app già con la dettatura vocale
-// attiva (stessi extra start_page/auto_action già consumati da
-// MainActivity.onNewIntent + TaskListScreen, vedi setupShortcuts).
+// supporta davvero. Il tocco apre VoiceAddTaskActivity (non MainActivity):
+// ascolta subito col riconoscimento vocale diretto invece di passare dalla
+// UI completa dell'app o dal picker generico tastiera/voce — vedi
+// VoiceAddTaskActivity.kt.
 class AddTaskTileService : TileService() {
 
     override fun onTileRequest(
@@ -48,15 +49,7 @@ class AddTaskTileService : TileService() {
     private fun openVoiceAddClickable(): ModifiersBuilders.Clickable {
         val activity = ActionBuilders.AndroidActivity.Builder()
             .setPackageName(packageName)
-            .setClassName("com.flavio.glp.wear.MainActivity")
-            .addKeyToExtraMapping(
-                EXTRA_START_PAGE,
-                ActionBuilders.AndroidIntExtra.Builder().setValue(2).build(),
-            )
-            .addKeyToExtraMapping(
-                EXTRA_AUTO_ACTION,
-                ActionBuilders.AndroidStringExtra.Builder().setValue("add_task_voice").build(),
-            )
+            .setClassName("com.flavio.glp.wear.VoiceAddTaskActivity")
             .build()
         val action = ActionBuilders.LaunchAction.Builder().setAndroidActivity(activity).build()
         return ModifiersBuilders.Clickable.Builder()

@@ -1,5 +1,7 @@
 package com.flavio.glp.wear
 
+import android.content.Intent
+import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -7,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,7 +27,7 @@ import androidx.wear.compose.material.PositionIndicator
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
-import androidx.wear.input.RemoteInputIntentHelper
+import java.util.Locale
 
 private fun priorityColor(priority: String): Color = when (priority) {
     "high" -> Color(0xFFEB5757)
@@ -34,14 +35,10 @@ private fun priorityColor(priority: String): Color = when (priority) {
     else -> Color(0xFFF2994A)
 }
 
-private const val VOICE_TASK_INPUT_KEY = "voice_task_input"
-
 @Composable
 fun TaskListScreen(
     tasks: List<WearTask>,
     loading: Boolean,
-    autoVoiceAction: String? = null,
-    autoVoiceToken: Long = 0L,
     onComplete: (WearTask) -> Unit,
     onAddTask: (String, String) -> Unit,
 ) {
@@ -54,16 +51,16 @@ fun TaskListScreen(
     var pendingTitle by remember { mutableStateOf<String?>(null) }
     var pendingDeadline by remember { mutableStateOf("") }
 
-    // Stesso meccanismo già usato per la password di login in MainActivity:
-    // apre il selettore di input di sistema di Wear OS (tastiera/voce/scrittura
-    // a mano) — "voce" è già lì di default, non serve il permesso RECORD_AUDIO
-    // né un riconoscimento vocale gestito da noi.
+    // Riconoscimento vocale diretto (schermata di sistema "sto ascoltando")
+    // invece del picker generico tastiera/voce/scrittura di
+    // RemoteInputIntentHelper — quello va bene per un campo di testo
+    // qualsiasi (es. password di login), ma qui l'obiettivo è "un tocco e
+    // parlo" senza passaggi in più. Stesso approccio di VoiceAddTaskActivity.
     val voiceLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val data = result.data
-        val spoken = data?.let { android.app.RemoteInput.getResultsFromIntent(it) }
-            ?.getCharSequence(VOICE_TASK_INPUT_KEY)?.toString()
+        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()?.trim()
         if (!spoken.isNullOrBlank()) {
             val parsed = VoiceDateParser.parse(spoken)
             if (parsed.title.isNotEmpty()) {
@@ -76,24 +73,12 @@ fun TaskListScreen(
     }
 
     fun launchVoiceInput() {
-        val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
-        val remoteInputs = listOf(
-            android.app.RemoteInput.Builder(VOICE_TASK_INPUT_KEY)
-                .setLabel("Detta la task...")
-                .build()
-        )
-        RemoteInputIntentHelper.putRemoteInputsExtra(intent, remoteInputs)
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Detta la task...")
+        }
         voiceLauncher.launch(intent)
-    }
-
-    // Scorciatoia "Nuova task" (long-press sull'icona dell'app, vedi
-    // setupShortcuts in MainActivity.kt): apre subito la dettatura vocale
-    // appena questa pagina compare, senza dover prima toccare "Detta task".
-    // autoVoiceToken (non solo autoVoiceAction) come chiave: cambia ad ogni
-    // tocco della scorciatoia, così un secondo tocco riapre la dettatura
-    // anche se il valore della stringa azione è rimasto lo stesso.
-    LaunchedEffect(autoVoiceToken) {
-        if (autoVoiceToken != 0L && autoVoiceAction == "add_task_voice") launchVoiceInput()
     }
 
     // Tutto dentro un unico Box esterno (invece di due composable "fratelli"

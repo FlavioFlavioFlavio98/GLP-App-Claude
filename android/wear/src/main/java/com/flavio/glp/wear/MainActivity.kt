@@ -72,29 +72,22 @@ class MainActivity : ComponentActivity() {
     // letto solo alla prima creazione e ignorato sui rilanci successivi.
     private var requestedPage by mutableStateOf(1)
 
-    // Azione automatica da eseguire non appena si arriva sulla pagina
-    // richiesta (es. aprire subito la dettatura vocale della task) — usata
-    // dalla scorciatoia "Nuova task" (vedi setupShortcuts). autoActionToken
-    // cambia ad ogni tocco della scorciatoia (timestamp, non solo la
-    // stringa): senza un valore sempre diverso, un secondo tocco della
-    // stessa scorciatoia mentre l'app è già sulla pagina giusta non
-    // ritriggererebbe l'effetto, perché lo stato non cambierebbe di valore.
-    private var autoAction by mutableStateOf<String?>(null)
-    private var autoActionToken by mutableStateOf(0L)
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         requestedPage = intent.getIntExtra(EXTRA_START_PAGE, 1)
-        autoAction = intent.getStringExtra(EXTRA_AUTO_ACTION)
-        autoActionToken = System.currentTimeMillis()
     }
 
     private fun setupShortcuts() {
-        fun shortcutIntent(page: Int, action: String? = null) = Intent(this, MainActivity::class.java).apply {
+        // Lasciate registrate anche se il launcher di Wear OS non mostra la
+        // UI "tieni premuto → scorciatoie" (verificato con `dumpsys
+        // shortcut`: risultano correttamente registrate lato sistema, solo
+        // nessuna superficie di sistema le espone) — innocue da avere, e
+        // l'accesso rapido vero passa dalle Tile (vedi AddTaskTileService,
+        // VoiceAddTaskActivity).
+        fun shortcutIntent(page: Int) = Intent(this, MainActivity::class.java).apply {
             this.action = Intent.ACTION_VIEW
             putExtra(EXTRA_START_PAGE, page)
-            if (action != null) putExtra(EXTRA_AUTO_ACTION, action)
         }
         // getIdentifier invece della classe R generata: il namespace del
         // modulo (com.flavio.glp) differisce dal package Kotlin di questo
@@ -106,7 +99,7 @@ class MainActivity : ComponentActivity() {
                 .setShortLabel("Nuova task")
                 .setLongLabel("🎤 Nuova task a voce")
                 .setIcon(icon)
-                .setIntent(shortcutIntent(2, "add_task_voice"))
+                .setIntent(Intent(this, VoiceAddTaskActivity::class.java).apply { action = Intent.ACTION_VIEW })
                 .build(),
             ShortcutInfoCompat.Builder(this, "quick_workout")
                 .setShortLabel("Workout")
@@ -129,8 +122,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestedPage = intent.getIntExtra(EXTRA_START_PAGE, 1)
-        autoAction = intent.getStringExtra(EXTRA_AUTO_ACTION)
-        autoActionToken = System.currentTimeMillis()
         setupShortcuts()
 
         val ambientObserver = AmbientLifecycleObserver(
@@ -263,8 +254,6 @@ class MainActivity : ComponentActivity() {
                     MainPager(
                         startPage = requestedPage,
                         isAmbient = isAmbient,
-                        autoAction = autoAction,
-                        autoActionToken = autoActionToken,
                     )
                 }
             }
@@ -273,7 +262,6 @@ class MainActivity : ComponentActivity() {
 }
 
 const val EXTRA_START_PAGE = "start_page"
-const val EXTRA_AUTO_ACTION = "auto_action"
 
 fun formatPts(pts: Double): String =
     if (pts == pts.toLong().toDouble()) pts.toLong().toString() else "%.1f".format(pts)
@@ -286,8 +274,6 @@ private const val PAGE_COUNT = 8
 private fun MainPager(
     startPage: Int = 1,
     isAmbient: Boolean = false,
-    autoAction: String? = null,
-    autoActionToken: Long = 0L,
 ) {
     var score by remember { mutableStateOf(0.0) }
     var scoreLoading by remember { mutableStateOf(true) }
@@ -397,8 +383,6 @@ private fun MainPager(
                 2 -> TaskListScreen(
                     tasks = tasks,
                     loading = tasksLoading,
-                    autoVoiceAction = autoAction,
-                    autoVoiceToken = autoActionToken,
                     onComplete = { task ->
                         // Ottimistico: sparisce subito dalla lista, poi ri-sincronizza in caso di errore
                         tasks = tasks.filter { it.id != task.id }

@@ -66,7 +66,14 @@ class VoiceAddTaskActivity : ComponentActivity() {
             }
             var permissionDenied by remember { mutableStateOf(false) }
             var listening by remember { mutableStateOf(false) }
-            var notUnderstood by remember { mutableStateOf(false) }
+            // Messaggio specifico invece di un booleano "notUnderstood"
+            // generico: il riconoscimento vocale usa il servizio cloud di
+            // Google (a differenza del salvataggio su Firestore, che ora
+            // funziona offline) — senza connessione fallisce sempre con
+            // ERROR_NETWORK/ERROR_NETWORK_TIMEOUT, un caso ben diverso da
+            // "non ha capito cosa hai detto" e che merita un messaggio che
+            // dica perché, non lo stesso "riprova" generico.
+            var errorMessage by remember { mutableStateOf<String?>(null) }
             var pendingTitle by remember { mutableStateOf<String?>(null) }
             var pendingDeadline by remember { mutableStateOf("") }
             var submitting by remember { mutableStateOf(false) }
@@ -83,9 +90,9 @@ class VoiceAddTaskActivity : ComponentActivity() {
             }
 
             LaunchedEffect(permissionGranted) {
-                if (!permissionGranted || pendingTitle != null || notUnderstood || permissionDenied) return@LaunchedEffect
+                if (!permissionGranted || pendingTitle != null || errorMessage != null || permissionDenied) return@LaunchedEffect
                 if (!SpeechRecognizer.isRecognitionAvailable(this@VoiceAddTaskActivity)) {
-                    notUnderstood = true
+                    errorMessage = "Riconoscimento vocale non disponibile"
                     return@LaunchedEffect
                 }
                 listening = true
@@ -98,12 +105,12 @@ class VoiceAddTaskActivity : ComponentActivity() {
                             ?.firstOrNull()?.trim()
                         r.destroy()
                         if (raw.isNullOrEmpty()) {
-                            notUnderstood = true
+                            errorMessage = "Non ho capito, riprova"
                             return
                         }
                         val parsed = VoiceDateParser.parse(raw)
                         if (parsed.title.isEmpty()) {
-                            notUnderstood = true
+                            errorMessage = "Non ho capito, riprova"
                         } else {
                             pendingTitle = parsed.title
                             pendingDeadline = parsed.deadline ?: today()
@@ -112,7 +119,15 @@ class VoiceAddTaskActivity : ComponentActivity() {
                     override fun onError(error: Int) {
                         listening = false
                         r.destroy()
-                        notUnderstood = true
+                        // Il riconoscimento vocale usa il servizio cloud di
+                        // Google — a differenza del salvataggio task (ora
+                        // offline-safe), la trascrizione stessa fallisce
+                        // sempre con questi due codici se manca la rete.
+                        errorMessage = if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
+                            "Serve connessione per la dettatura vocale"
+                        } else {
+                            "Non ho capito, riprova"
+                        }
                     }
                     override fun onReadyForSpeech(params: Bundle?) {}
                     override fun onBeginningOfSpeech() {}
@@ -123,6 +138,13 @@ class VoiceAddTaskActivity : ComponentActivity() {
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
                 val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    // Preferisci il riconoscimento sul dispositivo se il
+                    // watch ha scaricato il pacchetto lingua offline
+                    // (Impostazioni → Sistema → Lingue e immissione →
+                    // riconoscimento vocale) — è solo una preferenza, non una
+                    // garanzia: se il modello offline non è installato per la
+                    // lingua corrente ricade comunque sul servizio cloud.
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
                 }
@@ -142,9 +164,10 @@ class VoiceAddTaskActivity : ComponentActivity() {
                     finish()
                 }
             }
-            if (notUnderstood) {
-                LaunchedEffect(Unit) {
-                    Toast.makeText(this@VoiceAddTaskActivity, "Non ho capito, riprova", Toast.LENGTH_SHORT).show()
+            val err = errorMessage
+            if (err != null) {
+                LaunchedEffect(err) {
+                    Toast.makeText(this@VoiceAddTaskActivity, err, Toast.LENGTH_LONG).show()
                     finish()
                 }
             }

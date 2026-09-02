@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -80,6 +81,7 @@ private fun vibrate(context: Context, ms: Long = 300) {
 // primario "l'orologio resta al polso mentre mangi", non "cambio app".
 @Composable
 fun MealScreen(
+    isAmbient: Boolean = false,
     lastLoggedText: String?,
     onLogMeal: (Int, Int, (Double) -> Unit) -> Unit,
 ) {
@@ -122,14 +124,15 @@ fun MealScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        when (step) {
-            "active" -> ActiveStep(
+        when {
+            step == "active" && isAmbient -> AmbientActiveStep(elapsedSec = elapsedSec, targetMin = target, emoji = "🍽️")
+            step == "active" -> ActiveStep(
                 elapsedSec = elapsedSec,
                 targetMin = target,
                 tip = MEAL_TIPS[(elapsedSec / REMINDER_INTERVAL_SEC) % MEAL_TIPS.size],
                 onEnd = { endSession() },
             )
-            "level" -> LevelStep(
+            step == "level" -> LevelStep(
                 minutes = pendingMinutes,
                 submitting = submitting,
                 onPick = { level ->
@@ -192,6 +195,38 @@ fun MealScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+// Vista ambient: sfondo nero, testo statico grigio chiaro senza animazioni né
+// aree bianche estese, come richiesto dalle linee guida always-on di Wear OS
+// per limitare il rischio di burn-in — niente CircularProgressIndicator (si
+// anima) né Chip cliccabili (non interagibili in ambient).
+@Composable
+private fun AmbientActiveStep(elapsedSec: Int, targetMin: Int, emoji: String) {
+    val mm = elapsedSec / 60
+    val ss = elapsedSec % 60
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(emoji, style = MaterialTheme.typography.title2)
+            Text(
+                "%02d:%02d".format(mm, ss),
+                style = MaterialTheme.typography.display2,
+                color = androidx.compose.ui.graphics.Color(0xFFAAAAAA),
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "su $targetMin min",
+                style = MaterialTheme.typography.caption2,
+                color = androidx.compose.ui.graphics.Color(0xFF888888),
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

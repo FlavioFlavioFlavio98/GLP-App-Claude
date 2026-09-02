@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,6 +64,7 @@ private fun vibrateSoft(context: Context) {
 // l'hai fatto", stessa filosofia di logMeditation in store.jsx sul web.
 @Composable
 fun MeditationScreen(
+    isAmbient: Boolean = false,
     lastLoggedText: String?,
     onLogMeditation: (Int, (Double) -> Unit) -> Unit,
 ) {
@@ -99,7 +101,9 @@ fun MeditationScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (step == "active") {
+        if (step == "active" && isAmbient) {
+            AmbientMeditationStep(elapsedSec = elapsedSec, targetMin = target)
+        } else if (step == "active") {
             val listState = rememberScalingLazyListState()
             val mm = elapsedSec / 60
             val ss = elapsedSec % 60
@@ -162,6 +166,36 @@ fun MeditationScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+// Vista ambient statica, stessa filosofia di AmbientActiveStep in
+// MealScreen.kt (sfondo nero, niente animazioni/aree bianche estese).
+@Composable
+private fun AmbientMeditationStep(elapsedSec: Int, targetMin: Int) {
+    val mm = elapsedSec / 60
+    val ss = elapsedSec % 60
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🧘", style = MaterialTheme.typography.title2)
+            Text(
+                "%02d:%02d".format(mm, ss),
+                style = MaterialTheme.typography.display2,
+                color = androidx.compose.ui.graphics.Color(0xFFAAAAAA),
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "su $targetMin min",
+                style = MaterialTheme.typography.caption2,
+                color = androidx.compose.ui.graphics.Color(0xFF888888),
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

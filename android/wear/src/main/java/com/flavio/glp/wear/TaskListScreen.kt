@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,8 @@ private const val VOICE_TASK_INPUT_KEY = "voice_task_input"
 fun TaskListScreen(
     tasks: List<WearTask>,
     loading: Boolean,
+    autoVoiceAction: String? = null,
+    autoVoiceToken: Long = 0L,
     onComplete: (WearTask) -> Unit,
     onAddTask: (String, String) -> Unit,
 ) {
@@ -81,6 +84,16 @@ fun TaskListScreen(
         )
         RemoteInputIntentHelper.putRemoteInputsExtra(intent, remoteInputs)
         voiceLauncher.launch(intent)
+    }
+
+    // Scorciatoia "Nuova task" (long-press sull'icona dell'app, vedi
+    // setupShortcuts in MainActivity.kt): apre subito la dettatura vocale
+    // appena questa pagina compare, senza dover prima toccare "Detta task".
+    // autoVoiceToken (non solo autoVoiceAction) come chiave: cambia ad ogni
+    // tocco della scorciatoia, così un secondo tocco riapre la dettatura
+    // anche se il valore della stringa azione è rimasto lo stesso.
+    LaunchedEffect(autoVoiceToken) {
+        if (autoVoiceToken != 0L && autoVoiceAction == "add_task_voice") launchVoiceInput()
     }
 
     // Tutto dentro un unico Box esterno (invece di due composable "fratelli"

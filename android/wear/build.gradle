@@ -39,6 +39,11 @@ dependencies {
 
     implementation 'com.google.android.gms:play-services-auth:21.3.0'
     implementation 'androidx.wear:wear-input:1.2.0'
+    // Ambient mode per i timer (pasto/meditazione): invece di forzare lo
+    // schermo sempre acceso a piena luminosità (keepScreenOn), quando il
+    // sistema passa in ambient si mostra una vista a basso consumo invece di
+    // spegnere lo schermo — richiesta esplicita di Flavio.
+    implementation 'androidx.wear:wear:1.3.0'
     implementation 'com.google.firebase:firebase-firestore-ktx:25.0.0'
     implementation 'com.google.firebase:firebase-auth-ktx:23.0.0'
 

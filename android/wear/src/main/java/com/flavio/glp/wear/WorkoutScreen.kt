@@ -3,6 +3,7 @@ package com.flavio.glp.wear
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -64,6 +66,8 @@ fun WorkoutScreen(
     recentIds: List<String>,
     loading: Boolean,
     lastLoggedName: String?,
+    sessionPoints: Double = 0.0,
+    setsThisSession: Int = 0,
     onLogSet: (WearExercise, Int, Int) -> Unit,
 ) {
     var step by remember { mutableStateOf("main") }
@@ -119,6 +123,24 @@ fun WorkoutScreen(
                 ) {
                     ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
                         item { ListHeader { Text("💪 Workout") } }
+                        if (setsThisSession > 0) {
+                            item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                    androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                        Text(
+                                            "🏆 ${formatPts(sessionPoints)} pt",
+                                            style = MaterialTheme.typography.display3,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                        Text(
+                                            "$setsThisSession serie questa sessione",
+                                            style = MaterialTheme.typography.caption2,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         item {
                             Chip(
                                 onClick = { step = "picker" },
@@ -128,7 +150,7 @@ fun WorkoutScreen(
                             )
                         }
                         if (lastLoggedName != null) {
-                            item { Text("✅ $lastLoggedName registrato", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
+                            item { Text("✅ $lastLoggedName", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                         }
                         if (recentExercises.isNotEmpty()) {
                             item {

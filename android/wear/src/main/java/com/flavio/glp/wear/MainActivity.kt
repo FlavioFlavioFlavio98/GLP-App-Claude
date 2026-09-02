@@ -1,5 +1,6 @@
 package com.flavio.glp.wear
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,6 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import androidx.wear.ambient.AmbientLifecycleObserver
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.input.RemoteInputIntentHelper
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -32,6 +38,7 @@ import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.launch
 
 // Login primario: Google Sign-In con l'account principale
 // (flavio.rossi94@gmail.com, stesso usato su telefono/web) — vedi
@@ -50,8 +57,94 @@ private const val PASSWORD_INPUT_KEY = "password_input"
 
 class MainActivity : ComponentActivity() {
 
+    // Stato ambient letto dai timer (MealScreen/MeditationScreen): quando il
+    // sistema passa in ambient (basso consumo, polso abbassato o timeout)
+    // invece di forzare sempre lo schermo acceso a piena luminosità si mostra
+    // una vista minimale statica — vedi AmbientLifecycleObserver più sotto.
+    private var isAmbient by mutableStateOf(false)
+
+    // launchMode="singleTask" (vedi manifest) fa sì che un rilancio (es. dal
+    // tocco sulla Tile "Task oggi" mentre l'app è già aperta) riusi questa
+    // stessa istanza invece di impilarne una nuova sopra — senza, si
+    // perdevano sessionPoints/stato e si accumulavano istanze duplicate nel
+    // back-stack. onNewIntent aggiorna la pagina richiesta sull'istanza già
+    // viva; senza singleTask + questo override, l'extra "start_page" veniva
+    // letto solo alla prima creazione e ignorato sui rilanci successivi.
+    private var requestedPage by mutableStateOf(1)
+
+    // Azione automatica da eseguire non appena si arriva sulla pagina
+    // richiesta (es. aprire subito la dettatura vocale della task) — usata
+    // dalla scorciatoia "Nuova task" (vedi setupShortcuts). autoActionToken
+    // cambia ad ogni tocco della scorciatoia (timestamp, non solo la
+    // stringa): senza un valore sempre diverso, un secondo tocco della
+    // stessa scorciatoia mentre l'app è già sulla pagina giusta non
+    // ritriggererebbe l'effetto, perché lo stato non cambierebbe di valore.
+    private var autoAction by mutableStateOf<String?>(null)
+    private var autoActionToken by mutableStateOf(0L)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        requestedPage = intent.getIntExtra(EXTRA_START_PAGE, 1)
+        autoAction = intent.getStringExtra(EXTRA_AUTO_ACTION)
+        autoActionToken = System.currentTimeMillis()
+    }
+
+    private fun setupShortcuts() {
+        fun shortcutIntent(page: Int, action: String? = null) = Intent(this, MainActivity::class.java).apply {
+            this.action = Intent.ACTION_VIEW
+            putExtra(EXTRA_START_PAGE, page)
+            if (action != null) putExtra(EXTRA_AUTO_ACTION, action)
+        }
+        // getIdentifier invece della classe R generata: il namespace del
+        // modulo (com.flavio.glp) differisce dal package Kotlin di questo
+        // file (com.flavio.glp.wear), stesso motivo per cui
+        // ExerciseIconRes.kt fa lo stesso.
+        val icon = IconCompat.createWithResource(this, resources.getIdentifier("ic_launcher", "mipmap", packageName))
+        val shortcuts = listOf(
+            ShortcutInfoCompat.Builder(this, "quick_add_task")
+                .setShortLabel("Nuova task")
+                .setLongLabel("🎤 Nuova task a voce")
+                .setIcon(icon)
+                .setIntent(shortcutIntent(2, "add_task_voice"))
+                .build(),
+            ShortcutInfoCompat.Builder(this, "quick_workout")
+                .setShortLabel("Workout")
+                .setLongLabel("💪 Vai a Workout")
+                .setIcon(icon)
+                .setIntent(shortcutIntent(3))
+                .build(),
+            ShortcutInfoCompat.Builder(this, "quick_meal")
+                .setShortLabel("Pasto")
+                .setLongLabel("🍽️ Inizia timer pasto")
+                .setIcon(icon)
+                .setIntent(shortcutIntent(5))
+                .build(),
+        )
+        try {
+            ShortcutManagerCompat.setDynamicShortcuts(this, shortcuts)
+        } catch (e: Exception) { /* non bloccare l'avvio se il sistema rifiuta le shortcut */ }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestedPage = intent.getIntExtra(EXTRA_START_PAGE, 1)
+        autoAction = intent.getStringExtra(EXTRA_AUTO_ACTION)
+        autoActionToken = System.currentTimeMillis()
+        setupShortcuts()
+
+        val ambientObserver = AmbientLifecycleObserver(
+            this,
+            object : AmbientLifecycleObserver.AmbientLifecycleCallback {
+                override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
+                    isAmbient = true
+                }
+                override fun onExitAmbient() {
+                    isAmbient = false
+                }
+            },
+        )
+        lifecycle.addObserver(ambientObserver)
 
         if (FirebaseApp.getApps(this).isEmpty()) {
             FirebaseApp.initializeApp(this)
@@ -162,12 +255,17 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 } else {
-                    // Letto dall'intent che apre l'Activity: la Tile "Task
-                    // oggi" (TasksTileService) lo imposta a 2 per aprire
-                    // l'app direttamente sulla pagina Task, senza dover
-                    // scorrere manualmente dalle Abitudini.
-                    val startPage = intent.getIntExtra(EXTRA_START_PAGE, 1)
-                    MainPager(startPage = startPage)
+                    // La Tile "Task oggi" (TasksTileService) imposta l'extra
+                    // a 2 per aprire l'app direttamente sulla pagina Task,
+                    // senza dover scorrere manualmente dalle Abitudini —
+                    // requestedPage si aggiorna anche a istanza già viva
+                    // (vedi onNewIntent sopra).
+                    MainPager(
+                        startPage = requestedPage,
+                        isAmbient = isAmbient,
+                        autoAction = autoAction,
+                        autoActionToken = autoActionToken,
+                    )
                 }
             }
         }
@@ -175,13 +273,22 @@ class MainActivity : ComponentActivity() {
 }
 
 const val EXTRA_START_PAGE = "start_page"
+const val EXTRA_AUTO_ACTION = "auto_action"
+
+fun formatPts(pts: Double): String =
+    if (pts == pts.toLong().toDouble()) pts.toLong().toString() else "%.1f".format(pts)
 
 // Ordine pagine: Oggi (riepilogo) → Abitudini (il loop più usato quotidiano,
 // per esplicita richiesta) → Task → Workout → Proteine → Pasto → Willpower → Meditazione.
 private const val PAGE_COUNT = 8
 
 @Composable
-private fun MainPager(startPage: Int = 1) {
+private fun MainPager(
+    startPage: Int = 1,
+    isAmbient: Boolean = false,
+    autoAction: String? = null,
+    autoActionToken: Long = 0L,
+) {
     var score by remember { mutableStateOf(0.0) }
     var scoreLoading by remember { mutableStateOf(true) }
     var habits by remember { mutableStateOf<List<WearHabit>>(emptyList()) }
@@ -192,6 +299,11 @@ private fun MainPager(startPage: Int = 1) {
     var recentExerciseIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var exercisesLoading by remember { mutableStateOf(true) }
     var lastLoggedName by remember { mutableStateOf<String?>(null) }
+    // Punti guadagnati dall'apertura dell'app in questa sessione di
+    // allenamento — permette un workout intero dal watch senza telefono,
+    // sapendo quanto si sta guadagnando serie dopo serie.
+    var sessionPoints by remember { mutableStateOf(0.0) }
+    var setsThisSession by remember { mutableStateOf(0) }
     var foods by remember { mutableStateOf<List<WearFood>>(emptyList()) }
     var recentFoodIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var foodsLoading by remember { mutableStateOf(true) }
@@ -249,11 +361,24 @@ private fun MainPager(startPage: Int = 1) {
     }
 
     val pagerState = rememberPagerState(initialPage = startPage.coerceIn(0, PAGE_COUNT - 1), pageCount = { PAGE_COUNT })
+    val pagerScope = rememberCoroutineScope()
+
+    // Reagisce anche ai cambi di startPage DOPO la prima composizione (es.
+    // tocco sulla Tile mentre l'app è già aperta, con singleTask +
+    // onNewIntent che aggiorna requestedPage in MainActivity) — initialPage
+    // di rememberPagerState viene letto solo alla creazione dello stato.
+    LaunchedEffect(startPage) {
+        pagerState.scrollToPage(startPage.coerceIn(0, PAGE_COUNT - 1))
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> TodayScreen(score = score, loading = scoreLoading)
+                0 -> TodayScreen(
+                    score = score,
+                    loading = scoreLoading,
+                    onNavigate = { targetPage -> pagerScope.launch { pagerState.animateScrollToPage(targetPage) } },
+                )
                 1 -> HabitsScreen(
                     habits = habits,
                     loading = habitsLoading,
@@ -272,6 +397,8 @@ private fun MainPager(startPage: Int = 1) {
                 2 -> TaskListScreen(
                     tasks = tasks,
                     loading = tasksLoading,
+                    autoVoiceAction = autoAction,
+                    autoVoiceToken = autoActionToken,
                     onComplete = { task ->
                         // Ottimistico: sparisce subito dalla lista, poi ri-sincronizza in caso di errore
                         tasks = tasks.filter { it.id != task.id }
@@ -295,12 +422,20 @@ private fun MainPager(startPage: Int = 1) {
                     recentIds = recentExerciseIds,
                     loading = exercisesLoading,
                     lastLoggedName = lastLoggedName,
+                    sessionPoints = sessionPoints,
+                    setsThisSession = setsThisSession,
                     onLogSet = { exercise, reps, effort ->
                         GlpRepository.logQuickSet(
                             exercise = exercise,
                             reps = reps,
                             effort = effort,
-                            onDone = { lastLoggedName = exercise.name; refreshScore(); refreshExercises() },
+                            onDone = { pts ->
+                                lastLoggedName = "${exercise.name} +${formatPts(pts)}pt"
+                                sessionPoints += pts
+                                setsThisSession += 1
+                                refreshScore()
+                                refreshExercises()
+                            },
                             onError = {},
                         )
                     },
@@ -320,6 +455,7 @@ private fun MainPager(startPage: Int = 1) {
                     },
                 )
                 5 -> MealScreen(
+                    isAmbient = isAmbient,
                     lastLoggedText = lastLoggedMealText,
                     onLogMeal = { minutes, level, onComplete ->
                         GlpRepository.logMeal(
@@ -351,6 +487,7 @@ private fun MainPager(startPage: Int = 1) {
                     },
                 )
                 7 -> MeditationScreen(
+                    isAmbient = isAmbient,
                     lastLoggedText = lastLoggedMeditationText,
                     onLogMeditation = { minutes, onComplete ->
                         GlpRepository.logMeditation(

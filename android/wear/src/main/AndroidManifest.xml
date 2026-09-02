@@ -25,6 +25,7 @@
         <activity
             android:name="com.flavio.glp.wear.MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:taskAffinity="">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -44,7 +45,7 @@
             </intent-filter>
             <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
-                android:resource="@mipmap/ic_launcher" />
+                android:resource="@drawable/tile_preview_points" />
         </service>
 
         <!-- Tile "task oggi" — tocco apre l'app direttamente sulla pagina
@@ -59,7 +60,23 @@
             </intent-filter>
             <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
-                android:resource="@mipmap/ic_launcher" />
+                android:resource="@drawable/tile_preview_tasks" />
+        </service>
+
+        <!-- Tile "Nuova task" — tocco apre subito la dettatura vocale, senza
+             passare dalla lista task (sostituisce la App Shortcut, non
+             supportata dal launcher di Wear OS). -->
+        <service
+            android:name="com.flavio.glp.wear.AddTaskTileService"
+            android:exported="true"
+            android:label="Nuova task"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview_add_task" />
         </service>
     </application>
 </manifest>

@@ -161,18 +161,22 @@ class VoiceAddTaskActivity : ComponentActivity() {
                                     onClick = {
                                         if (!submitting) {
                                             submitting = true
+                                            // Ottimistico: chiude subito invece di aspettare la
+                                            // conferma di Firestore (stesso motivo per cui lo fa
+                                            // già VoiceAddTaskActivity sul telefono) — offline la
+                                            // scrittura resta comunque in coda e si sincronizza da
+                                            // sola alla riconnessione, aspettare qui rendeva il
+                                            // salvataggio percepito come lento.
+                                            Toast.makeText(this@VoiceAddTaskActivity, "✅ Task creata: $title", Toast.LENGTH_LONG).show()
                                             GlpRepository.addTask(
                                                 title = title,
                                                 deadline = pendingDeadline,
-                                                onDone = {
-                                                    Toast.makeText(this@VoiceAddTaskActivity, "✅ Task creata: $title", Toast.LENGTH_LONG).show()
-                                                    finish()
-                                                },
+                                                onDone = {},
                                                 onError = { err ->
                                                     Toast.makeText(this@VoiceAddTaskActivity, "Errore: ${err.message}", Toast.LENGTH_LONG).show()
-                                                    finish()
                                                 },
                                             )
+                                            finish()
                                         }
                                     },
                                     label = { Text("OK, crea") },

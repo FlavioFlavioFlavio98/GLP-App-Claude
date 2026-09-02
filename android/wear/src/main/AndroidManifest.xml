@@ -89,5 +89,26 @@
                 android:name="androidx.wear.tiles.PREVIEW"
                 android:resource="@drawable/tile_preview_add_task" />
         </service>
+
+        <!-- Complicazione "Nuova task" — assegnabile a uno slot del
+             quadrante (personalizza quadrante → scegli GLP, passaggio
+             manuale non automatizzabile). Tocco diretto apre la dettatura
+             vocale, stessa destinazione della Tile omonima. -->
+        <service
+            android:name="com.flavio.glp.wear.AddTaskComplicationService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Nuova task"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="0" />
+        </service>
     </application>
 </manifest>

@@ -9,7 +9,9 @@ import androidx.wear.tiles.ResourceBuilders
 import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
 import androidx.wear.tiles.TimelineBuilders
-import androidx.wear.tiles.material.Chip
+import androidx.wear.tiles.material.Button
+import androidx.wear.tiles.material.ButtonColors
+import androidx.wear.tiles.material.ButtonDefaults
 import androidx.wear.tiles.material.Text
 import androidx.wear.tiles.material.Typography
 import androidx.wear.tiles.material.layouts.PrimaryLayout
@@ -59,22 +61,23 @@ class AddTaskTileService : TileService() {
     }
 
     private fun buildTile(requestParams: RequestBuilders.TileRequest): TileBuilders.Tile {
-        val chip = Chip.Builder(this, openVoiceAddClickable(), requestParams.deviceParameters!!)
-            .setPrimaryLabelContent("Detta ora")
+        // Button circolare invece di Chip (una pillola rettangolare, che
+        // taglia lo schermo tondo in modo poco naturale) — sfondo blu pieno
+        // per dare all'emoji microfono un contrasto netto invece di
+        // galleggiare sottile sul nero, richiesta esplicita di Flavio.
+        val micButton = Button.Builder(this, openVoiceAddClickable())
+            .setButtonColors(ButtonColors(0xFF4A90D9.toInt(), 0xFFFFFFFF.toInt()))
+            .setSize(ButtonDefaults.LARGE_SIZE)
+            .setTextContent("🎤", Typography.TYPOGRAPHY_TITLE1)
             .build()
 
         val layout = PrimaryLayout.Builder(requestParams.deviceParameters!!)
-            .setContent(
-                Text.Builder(this, "🎤")
-                    .setTypography(Typography.TYPOGRAPHY_DISPLAY2)
-                    .build()
-            )
+            .setContent(micButton)
             .setPrimaryLabelTextContent(
                 Text.Builder(this, "nuova task")
                     .setTypography(Typography.TYPOGRAPHY_CAPTION1)
                     .build()
             )
-            .setPrimaryChipContent(chip)
             .build()
 
         val timeline = TimelineBuilders.Timeline.Builder()

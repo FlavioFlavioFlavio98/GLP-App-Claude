@@ -46,6 +46,11 @@ private val TARGET_OPTIONS = listOf(1, 3, 5, 10)
 // stessa logica ma un ritmo diverso, coerente con lo scopo diverso.
 private const val BREATH_CUE_INTERVAL_SEC = 30
 
+private const val MEDITATION_PREFS = "glp_meditation_session"
+private const val KEY_START_MILLIS = "start_millis"
+private const val KEY_TARGET_MIN = "target_min"
+private const val MAX_SESSION_AGE_MS = 6 * 60 * 60 * 1000L
+
 private fun vibrateSoft(context: Context) {
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -69,10 +74,27 @@ fun MeditationScreen(
     onLogMeditation: (Int, (Double) -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
-    var step by remember { mutableStateOf("main") }
-    var target by remember { mutableIntStateOf(3) }
-    var elapsedSec by remember { mutableIntStateOf(0) }
+    // Vedi il commento esteso in MealScreen.kt: tempo trascorso ricalcolato
+    // da un orario di inizio reale (System.currentTimeMillis()), non da un
+    // contatore di coroutine — resta corretto anche se lo schermo del watch
+    // si spegne del tutto (non solo l'ambient dimmerato) per risparmio
+    // batteria, e sopravvive a un riavvio dell'app grazie al
+    // salvataggio in SharedPreferences.
+    val prefs = remember { context.getSharedPreferences(MEDITATION_PREFS, Context.MODE_PRIVATE) }
+    var sessionStartMillis by remember {
+        mutableStateOf(
+            prefs.getLong(KEY_START_MILLIS, 0L)
+                .takeIf { it > 0 && System.currentTimeMillis() - it < MAX_SESSION_AGE_MS }
+        )
+    }
+    var step by remember { mutableStateOf(if (sessionStartMillis != null) "active" else "main") }
+    var target by remember { mutableIntStateOf(prefs.getInt(KEY_TARGET_MIN, 3)) }
+    var tick by remember { mutableIntStateOf(0) }
     var submitting by remember { mutableStateOf(false) }
+
+    val elapsedSec = sessionStartMillis?.let {
+        ((System.currentTimeMillis() - it) / 1000).toInt().coerceAtLeast(0)
+    } ?: 0
 
     val view = LocalView.current
     DisposableEffect(step) {
@@ -84,9 +106,22 @@ fun MeditationScreen(
         if (step != "active") return@LaunchedEffect
         while (true) {
             delay(1000)
-            elapsedSec++
-            if (elapsedSec % BREATH_CUE_INTERVAL_SEC == 0) vibrateSoft(context)
+            tick++
+            val sec = sessionStartMillis?.let { ((System.currentTimeMillis() - it) / 1000).toInt() } ?: 0
+            if (sec > 0 && sec % BREATH_CUE_INTERVAL_SEC == 0) vibrateSoft(context)
         }
+    }
+
+    fun startSession() {
+        val now = System.currentTimeMillis()
+        sessionStartMillis = now
+        prefs.edit().putLong(KEY_START_MILLIS, now).putInt(KEY_TARGET_MIN, target).apply()
+        step = "active"
+    }
+
+    fun clearSession() {
+        sessionStartMillis = null
+        prefs.edit().remove(KEY_START_MILLIS).remove(KEY_TARGET_MIN).apply()
     }
 
     fun endSession() {
@@ -95,7 +130,7 @@ fun MeditationScreen(
         val minutes = maxOf(1, Math.round(elapsedSec / 60.0).toInt())
         onLogMeditation(minutes) {
             submitting = false
-            elapsedSec = 0
+            clearSession()
             step = "main"
         }
     }
@@ -158,7 +193,7 @@ fun MeditationScreen(
                     }
                     item {
                         Chip(
-                            onClick = { elapsedSec = 0; step = "active" },
+                            onClick = { startSession() },
                             label = { Text("Inizia") },
                             colors = ChipDefaults.primaryChipColors(),
                             modifier = Modifier.padding(top = 10.dp),

@@ -54,6 +54,11 @@ dependencies {
     implementation 'androidx.concurrent:concurrent-futures:1.2.0'
     implementation 'androidx.concurrent:concurrent-futures-ktx:1.2.0'
     implementation 'com.google.guava:guava:33.4.0-android'
+
+    // Complicazione "Nuova task" sul quadrante — a differenza della Tile
+    // (che richiede scorrere dal quadrante) tocco diretto sul quadrante
+    // stesso, richiesta esplicita di Flavio.
+    implementation 'androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1'
 }
 
 apply plugin: 'com.google.gms.google-services'

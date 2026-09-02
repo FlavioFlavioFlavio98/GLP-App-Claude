@@ -52,24 +52,40 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
     setCheckingUpdate(true)
     try {
       const reg = window.__swRegistration
-      if (reg) {
-        await reg.update()
-        if (reg.waiting) {
-          // New version waiting — trigger install
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-          actions.showToast('Installazione aggiornamento...', '🔄')
-          setTimeout(() => window.location.reload(), 800)
-          return
-        }
+      if (!reg) {
+        actions.showToast('Aggiornamento non disponibile, riprova più tardi', '⚠️')
+        return
       }
-      // Fallback: clear caches and reload
-      if ('caches' in window) {
-        const keys = await caches.keys()
-        await Promise.all(keys.map(k => caches.delete(k)))
+      await reg.update()
+
+      // sw.js chiama self.skipWaiting() in automatico all'installazione, quindi
+      // un nuovo worker non resta mai fermo in stato "waiting" — passa subito
+      // ad "activating". Il segnale affidabile di un aggiornamento reale è
+      // quindi controllerchange (che main.jsx ascolta già e usa per ricaricare
+      // la pagina da solo), non reg.waiting: controllare reg.waiting qui
+      // faceva sì che il bottone dicesse sempre "già aggiornato", anche
+      // quando un aggiornamento vero veniva scaricato e installato.
+      const updated = await new Promise(resolve => {
+        let done = false
+        const onChange = () => { if (!done) { done = true; resolve(true) } }
+        navigator.serviceWorker.addEventListener('controllerchange', onChange, { once: true })
+        setTimeout(() => {
+          if (!done) {
+            done = true
+            navigator.serviceWorker.removeEventListener('controllerchange', onChange)
+            resolve(false)
+          }
+        }, 3000)
+      })
+
+      if (updated) {
+        actions.showToast('Aggiornamento trovato, ricarico...', '🔄')
+        // Il reload arriva da solo dal listener controllerchange in main.jsx
+      } else {
+        actions.showToast('Sei già all\'ultima versione ✓', '✅')
       }
-      actions.showToast('Sei già all\'ultima versione ✓', '✅')
     } catch (e) {
-      actions.showToast('Sei già all\'ultima versione ✓', '✅')
+      actions.showToast('Errore nel controllo aggiornamenti', '⚠️')
     } finally {
       setCheckingUpdate(false)
     }

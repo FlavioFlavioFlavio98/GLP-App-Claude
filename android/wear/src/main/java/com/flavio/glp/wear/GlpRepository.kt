@@ -431,6 +431,18 @@ object GlpRepository {
     // (reps * pointsPerRep * multiplier * 100).toLong() arrotonda sempre per
     // difetto (es. 28.999999999999996 -> 28 invece di 29), sottostimando i
     // punti in modo sistematico rispetto alla stessa formula sul web.
+    // onDone chiamato subito dopo aver passato la scrittura all'SDK, non
+    // dentro addOnSuccessListener: quest'ultimo scatta solo quando il server
+    // conferma la ricezione, cosa che offline non succede mai (resta in coda
+    // finché non torna la connessione) — aspettarlo qui teneva la UI bloccata
+    // a tempo indeterminato senza rete, esattamente il "non funziona offline"
+    // segnalato da Flavio. La persistenza offline di Firestore (attiva di
+    // default su Android) applica comunque la scrittura alla cache locale in
+    // modo sincrono quando la chiami, quindi onDone(pts) qui non anticipa
+    // nulla che non sia già vero — semplicemente non blocchiamo la UI in
+    // attesa di una conferma di rete che l'utente non deve percepire.
+    // addOnFailureListener resta solo per log di errori genuinamente non
+    // di rete (es. permessi), non per gating della UI.
     fun logQuickSet(exercise: WearExercise, reps: Int, effort: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
         val multiplier = when (effort) { 2 -> 1.2; 3 -> 1.5; else -> 1.0 }
         val pts = Math.round(reps * exercise.pointsPerRep * multiplier * 100) / 100.0
@@ -444,8 +456,8 @@ object GlpRepository {
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
         )
         userRef().update("exerciseLog.${today()}", FieldValue.arrayUnion(logEntry))
-            .addOnSuccessListener { onDone(pts) }
             .addOnFailureListener(onError)
+        onDone(pts)
     }
 
     // Alimenti (ordine alfabetico) + id degli ultimi 3 usati oggi — stesso
@@ -496,8 +508,8 @@ object GlpRepository {
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
         )
         userRef().update("proteinLog.${today()}", FieldValue.arrayUnion(logEntry))
-            .addOnSuccessListener { onDone(proteinGrams) }
             .addOnFailureListener(onError)
+        onDone(proteinGrams)
     }
 
     // Pasto consapevole: stessa forma dell'entry scritta da logMeal() in
@@ -530,8 +542,8 @@ object GlpRepository {
                 .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
         }
         userRef().update("tasks", FieldValue.arrayUnion(task))
-            .addOnSuccessListener { onDone() }
             .addOnFailureListener(onError)
+        onDone()
     }
 
     // Willpower: log rapido +/-, non una sessione con durata — stessa forma
@@ -546,8 +558,8 @@ object GlpRepository {
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
         )
         userRef().update("willpowerLog.${today()}", FieldValue.arrayUnion(logEntry))
-            .addOnSuccessListener { onDone(pts) }
             .addOnFailureListener(onError)
+        onDone(pts)
     }
 
     // Meditazione: punti a tasso fisso per sessione (non scalato sui minuti,
@@ -563,8 +575,8 @@ object GlpRepository {
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
         )
         userRef().update("meditationLog.${today()}", FieldValue.arrayUnion(logEntry))
-            .addOnSuccessListener { onDone(MEDITATION_RATE) }
             .addOnFailureListener(onError)
+        onDone(MEDITATION_RATE)
     }
 
     fun logMeal(durationMin: Int, level: Int, onDone: (Double) -> Unit, onError: (Exception) -> Unit) {
@@ -578,7 +590,7 @@ object GlpRepository {
             "time" to SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
         )
         userRef().update("mealLog.${today()}", FieldValue.arrayUnion(logEntry))
-            .addOnSuccessListener { onDone(pts) }
             .addOnFailureListener(onError)
+        onDone(pts)
     }
 }

@@ -2,6 +2,7 @@ package com.flavio.glp.wear
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -24,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.core.content.pm.ShortcutInfoCompat
@@ -275,6 +277,7 @@ private fun MainPager(
     startPage: Int = 1,
     isAmbient: Boolean = false,
 ) {
+    val context = LocalContext.current
     var score by remember { mutableStateOf(0.0) }
     var scoreLoading by remember { mutableStateOf(true) }
     var habits by remember { mutableStateOf<List<WearHabit>>(emptyList()) }
@@ -369,14 +372,25 @@ private fun MainPager(
                     habits = habits,
                     loading = habitsLoading,
                     onToggle = { habit ->
-                        // Ottimistico: si spunta subito, poi ri-sincronizza in caso di errore
+                        // Ottimistico: si spunta subito, poi ri-sincronizza in caso di errore.
+                        // toggleHabit usa una transazione Firestore (necessaria per modificare
+                        // in sicurezza un elemento esistente dell'array "habits" senza rischiare
+                        // la stessa perdita dati del 28/8/2026) — a differenza delle scritture
+                        // arrayUnion (aggiungi task, log allenamento/pasto/proteine/ecc, tutte
+                        // offline-safe), le transazioni Firestore NON possono essere messe in
+                        // coda offline: falliscono e basta se non c'è rete, quindi qui lo spunta
+                        // torna indietro invece di restare — messaggio esplicito per non
+                        // lasciarlo sembrare un bug muto.
                         val wasDone = habit.done
                         habits = habits.map { if (it.id == habit.id) it.copy(done = !wasDone) else it }
                         GlpRepository.toggleHabit(
                             habitId = habit.id,
                             currentlyDone = wasDone,
                             onDone = { refreshScore() },
-                            onError = { refreshHabits() },
+                            onError = {
+                                Toast.makeText(context, "Serve connessione per le abitudini, riprova online", Toast.LENGTH_SHORT).show()
+                                refreshHabits()
+                            },
                         )
                     },
                 )
@@ -384,12 +398,17 @@ private fun MainPager(
                     tasks = tasks,
                     loading = tasksLoading,
                     onComplete = { task ->
-                        // Ottimistico: sparisce subito dalla lista, poi ri-sincronizza in caso di errore
+                        // Ottimistico: sparisce subito dalla lista, poi ri-sincronizza in caso di
+                        // errore — stessa limitazione di toggleHabit qui sopra (transazione, non
+                        // in coda offline).
                         tasks = tasks.filter { it.id != task.id }
                         GlpRepository.completeTask(
                             taskId = task.id,
                             onDone = { refreshScore() },
-                            onError = { refreshTasks() },
+                            onError = {
+                                Toast.makeText(context, "Serve connessione per completare task, riprova online", Toast.LENGTH_SHORT).show()
+                                refreshTasks()
+                            },
                         )
                     },
                     onAddTask = { title, deadline ->

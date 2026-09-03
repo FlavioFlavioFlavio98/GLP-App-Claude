@@ -66,8 +66,8 @@ fun WorkoutScreen(
     recentIds: List<String>,
     loading: Boolean,
     lastLoggedName: String?,
-    sessionPoints: Double = 0.0,
-    setsThisSession: Int = 0,
+    dayPoints: Double = 0.0,
+    daySets: Int = 0,
     onLogSet: (WearExercise, Int, Int) -> Unit,
 ) {
     var step by remember { mutableStateOf("main") }
@@ -123,17 +123,17 @@ fun WorkoutScreen(
                 ) {
                     ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
                         item { ListHeader { Text("💪 Workout") } }
-                        if (setsThisSession > 0) {
+                        if (daySets > 0) {
                             item {
                                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
                                     androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                         Text(
-                                            "🏆 ${formatPts(sessionPoints)} pt",
+                                            "🏆 ${formatPts(dayPoints)} pt",
                                             style = MaterialTheme.typography.display3,
                                             textAlign = TextAlign.Center,
                                         )
                                         Text(
-                                            "$setsThisSession serie questa sessione",
+                                            "$daySets serie oggi",
                                             style = MaterialTheme.typography.caption2,
                                             textAlign = TextAlign.Center,
                                         )

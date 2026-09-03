@@ -309,8 +309,13 @@ object GlpRepository {
 
     // Esercizi (ordine alfabetico) + id degli ultimi 3 usati oggi (più recente
     // prima) — quasi sempre gli stessi di sempre, per suggerirli come
-    // scorciatoia accanto al "+" nella schermata Workout.
-    fun loadExercises(onResult: (List<WearExercise>, List<String>) -> Unit, onError: (Exception) -> Unit) {
+    // scorciatoia accanto al "+" nella schermata Workout. Include anche
+    // punti/serie totali di oggi (somma di exerciseLog[oggi], non un
+    // contatore in memoria): un contatore "dall'apertura dell'app" partiva
+    // sempre da 0 e non rifletteva le serie già fatte oggi da telefono/web
+    // o in una sessione precedente sul watch — bug reale segnalato da
+    // Flavio ("dovrebbe mostrare i punti di oggi, mostra 0").
+    fun loadExercises(onResult: (List<WearExercise>, List<String>, Double, Int) -> Unit, onError: (Exception) -> Unit) {
         userRef().get()
             .addOnSuccessListener { doc ->
                 @Suppress("UNCHECKED_CAST")
@@ -334,8 +339,9 @@ object GlpRepository {
                     .mapNotNull { it["exerciseId"] as? String }
                     .distinct()
                     .take(3)
+                val todayPoints = todayLog.sumOf { asDouble(it["pts"]) }
 
-                onResult(exercises, recentIds)
+                onResult(exercises, recentIds, todayPoints, todayLog.size)
             }
             .addOnFailureListener(onError)
     }

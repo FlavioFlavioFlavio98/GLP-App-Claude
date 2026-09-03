@@ -2,8 +2,8 @@
 // CACHE_NAME and PRECACHE_ASSETS are injected at build time by scripts/stamp-sw.js
 // (reads the real hashed filenames from dist/ after `vite build` — no manual list to
 // maintain, and the cache name changes on every build so stale caches are dropped).
-const CACHE_NAME = 'glp-cache-1788334436006'
-const PRECACHE_ASSETS = ["/GLP-App-Claude/","/GLP-App-Claude/index.html","/GLP-App-Claude/manifest.json","/GLP-App-Claude/assets/index-CjMtx0oq.js","/GLP-App-Claude/assets/index-C56AtMEp.css"]
+const CACHE_NAME = 'glp-cache-1788441443008'
+const PRECACHE_ASSETS = ["/GLP-App-Claude/","/GLP-App-Claude/index.html","/GLP-App-Claude/manifest.json","/GLP-App-Claude/assets/index-BE9-RhBd.js","/GLP-App-Claude/assets/index-C56AtMEp.css"]
 
 // External font/icon CDNs we opportunistically cache (cache-first, static content)
 const EXTERNAL_CACHE_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net']
@@ -35,10 +35,17 @@ self.addEventListener('fetch', event => {
   const isCacheableExternal = EXTERNAL_CACHE_HOSTS.includes(url.hostname)
   if (!isSameOrigin && !isCacheableExternal) return
 
-  // Navigation (index.html): network-only — always get fresh HTML with current asset hashes
+  // Navigation (index.html): network-only, cache: 'no-store' — always get
+  // fresh HTML with current asset hashes. fetch(event.request) alone still
+  // consults the browser's own HTTP cache (separate from this SW's Cache
+  // Storage above, and outside its control) if the host sends a permissive
+  // Cache-Control — GitHub Pages does exactly that, which left a real client
+  // stuck on an old build indefinitely despite CACHE_NAME being versioned
+  // correctly on every deploy. Rebuilding the request with cache:'no-store'
+  // forces an actual network round-trip every time, bypassing that layer too.
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/GLP-App-Claude/index.html'))
+      fetch(event.request.url, { cache: 'no-store' }).catch(() => caches.match('/GLP-App-Claude/index.html'))
     )
     return
   }

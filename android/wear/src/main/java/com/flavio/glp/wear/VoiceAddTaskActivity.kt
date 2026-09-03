@@ -34,11 +34,13 @@ import androidx.wear.compose.material.CompactChip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
+import androidx.wear.input.RemoteInputIntentHelper
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.delay
 import java.util.Locale
 
 private const val AUTO_CONFIRM_SECONDS = 3
+private const val KEYBOARD_FALLBACK_INPUT_KEY = "voice_add_task_keyboard_fallback"
 
 // Scorciatoia "Nuova task" (Tile AddTaskTileService): ascolta e salva
 // subito. Usa SpeechRecognizer diretto invece di
@@ -47,7 +49,12 @@ private const val AUTO_CONFIRM_SECONDS = 3
 // `dumpsys package`), che apre sempre prima la tastiera con un'icona
 // microfono da toccare a parte: SpeechRecognizer parla direttamente col
 // servizio di riconoscimento vocale di sistema, senza passare da nessuna UI
-// di tastiera.
+// di tastiera. Ma la trascrizione vocale stessa usa il servizio cloud di
+// Google (a differenza del salvataggio, già offline-safe): senza rete
+// fallisce sempre — in quel caso specifico ripieghiamo sulla tastiera
+// (RemoteInputIntentHelper), che funziona anche offline, invece di lasciare
+// Flavio senza alcun modo di aggiungere una task mentre è fuori senza
+// telefono/wifi.
 class VoiceAddTaskActivity : ComponentActivity() {
 
     private var recognizer: SpeechRecognizer? = null
@@ -74,9 +81,25 @@ class VoiceAddTaskActivity : ComponentActivity() {
             // "non ha capito cosa hai detto" e che merita un messaggio che
             // dica perché, non lo stesso "riprova" generico.
             var errorMessage by remember { mutableStateOf<String?>(null) }
+            var needsKeyboardFallback by remember { mutableStateOf(false) }
             var pendingTitle by remember { mutableStateOf<String?>(null) }
             var pendingDeadline by remember { mutableStateOf("") }
             var submitting by remember { mutableStateOf(false) }
+
+            fun applyRecognizedText(raw: String?) {
+                val trimmed = raw?.trim()
+                if (trimmed.isNullOrEmpty()) {
+                    errorMessage = "Non ho capito, riprova"
+                    return
+                }
+                val parsed = VoiceDateParser.parse(trimmed)
+                if (parsed.title.isEmpty()) {
+                    errorMessage = "Non ho capito, riprova"
+                } else {
+                    pendingTitle = parsed.title
+                    pendingDeadline = parsed.deadline ?: today()
+                }
+            }
 
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission()
@@ -85,14 +108,43 @@ class VoiceAddTaskActivity : ComponentActivity() {
                 if (!granted) permissionDenied = true
             }
 
+            // Fallback tastiera quando manca la rete: funziona offline perché
+            // è solo testo digitato, nessuna trascrizione cloud coinvolta.
+            val keyboardLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                val typed = result.data?.let { android.app.RemoteInput.getResultsFromIntent(it) }
+                    ?.getCharSequence(KEYBOARD_FALLBACK_INPUT_KEY)?.toString()
+                if (typed.isNullOrBlank()) {
+                    // Annullato dalla tastiera: nessun errore da mostrare,
+                    // l'utente ha scelto lui di non scrivere nulla.
+                    finish()
+                } else {
+                    applyRecognizedText(typed)
+                }
+            }
+
+            LaunchedEffect(needsKeyboardFallback) {
+                if (!needsKeyboardFallback) return@LaunchedEffect
+                Toast.makeText(this@VoiceAddTaskActivity, "Manca la rete, scrivila", Toast.LENGTH_SHORT).show()
+                val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+                val remoteInputs = listOf(
+                    android.app.RemoteInput.Builder(KEYBOARD_FALLBACK_INPUT_KEY)
+                        .setLabel("Scrivi la task...")
+                        .build()
+                )
+                RemoteInputIntentHelper.putRemoteInputsExtra(intent, remoteInputs)
+                keyboardLauncher.launch(intent)
+            }
+
             LaunchedEffect(Unit) {
                 if (!permissionGranted) permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
 
             LaunchedEffect(permissionGranted) {
-                if (!permissionGranted || pendingTitle != null || errorMessage != null || permissionDenied) return@LaunchedEffect
+                if (!permissionGranted || pendingTitle != null || errorMessage != null || needsKeyboardFallback || permissionDenied) return@LaunchedEffect
                 if (!SpeechRecognizer.isRecognitionAvailable(this@VoiceAddTaskActivity)) {
-                    errorMessage = "Riconoscimento vocale non disponibile"
+                    needsKeyboardFallback = true
                     return@LaunchedEffect
                 }
                 listening = true
@@ -101,20 +153,9 @@ class VoiceAddTaskActivity : ComponentActivity() {
                 r.setRecognitionListener(object : RecognitionListener {
                     override fun onResults(results: Bundle) {
                         listening = false
-                        val raw = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()?.trim()
+                        val raw = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
                         r.destroy()
-                        if (raw.isNullOrEmpty()) {
-                            errorMessage = "Non ho capito, riprova"
-                            return
-                        }
-                        val parsed = VoiceDateParser.parse(raw)
-                        if (parsed.title.isEmpty()) {
-                            errorMessage = "Non ho capito, riprova"
-                        } else {
-                            pendingTitle = parsed.title
-                            pendingDeadline = parsed.deadline ?: today()
-                        }
+                        applyRecognizedText(raw)
                     }
                     override fun onError(error: Int) {
                         listening = false
@@ -122,11 +163,14 @@ class VoiceAddTaskActivity : ComponentActivity() {
                         // Il riconoscimento vocale usa il servizio cloud di
                         // Google — a differenza del salvataggio task (ora
                         // offline-safe), la trascrizione stessa fallisce
-                        // sempre con questi due codici se manca la rete.
-                        errorMessage = if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
-                            "Serve connessione per la dettatura vocale"
+                        // sempre con questi due codici se manca la rete. In
+                        // quel caso, tastiera invece di un errore secco: è
+                        // l'unico modo per aggiungere una task mentre si è
+                        // fuori senza rete, l'obiettivo dichiarato di Flavio.
+                        if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
+                            needsKeyboardFallback = true
                         } else {
-                            "Non ho capito, riprova"
+                            errorMessage = "Non ho capito, riprova"
                         }
                     }
                     override fun onReadyForSpeech(params: Bundle?) {}

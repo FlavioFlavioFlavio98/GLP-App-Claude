@@ -35,10 +35,17 @@ self.addEventListener('fetch', event => {
   const isCacheableExternal = EXTERNAL_CACHE_HOSTS.includes(url.hostname)
   if (!isSameOrigin && !isCacheableExternal) return
 
-  // Navigation (index.html): network-only — always get fresh HTML with current asset hashes
+  // Navigation (index.html): network-only, cache: 'no-store' — always get
+  // fresh HTML with current asset hashes. fetch(event.request) alone still
+  // consults the browser's own HTTP cache (separate from this SW's Cache
+  // Storage above, and outside its control) if the host sends a permissive
+  // Cache-Control — GitHub Pages does exactly that, which left a real client
+  // stuck on an old build indefinitely despite CACHE_NAME being versioned
+  // correctly on every deploy. Rebuilding the request with cache:'no-store'
+  // forces an actual network round-trip every time, bypassing that layer too.
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/GLP-App-Claude/index.html'))
+      fetch(event.request.url, { cache: 'no-store' }).catch(() => caches.match('/GLP-App-Claude/index.html'))
     )
     return
   }

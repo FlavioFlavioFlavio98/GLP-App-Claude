@@ -5,6 +5,29 @@ package com.flavio.glp
 // prima era triplicata in modo leggermente diverso in ognuno dei tre punti.
 object TaskWidgetUtils {
 
+    private const val AUTO_RESET_AFTER_MS = 60 * 60 * 1000L // 1 ora
+
+    // Se la data selezionata nel widget lista task non è "oggi" da più di
+    // un'ora, la riporta automaticamente a oggi — sia perché l'utente ha
+    // lasciato aperta una data diversa per sbaglio (dimenticandosi di
+    // riportarla indietro), sia perché nel frattempo è scoccata la
+    // mezzanotte e "oggi" stesso è cambiato. Senza questo il widget può
+    // restare bloccato a mostrare (o peggio, sembrare vuoto per) un altro
+    // giorno a tempo indeterminato — bug reale segnalato da Flavio ("penso
+    // di non avere task in scadenza invece è vuoto perché è impostata la
+    // data di un'altra giornata"). Scrive subito il ripristino in prefs così
+    // ogni chiamante (refresh manuale, worker periodico) lo vede coerente.
+    fun resolveSelectedDate(prefs: android.content.SharedPreferences, today: String): String {
+        val selectedDate = prefs.getString("selected_date", null) ?: today
+        if (selectedDate == today) return today
+        val setAt = prefs.getLong("selected_date_set_at", 0L)
+        if (System.currentTimeMillis() - setAt > AUTO_RESET_AFTER_MS) {
+            prefs.edit().putString("selected_date", today).remove("selected_date_set_at").apply()
+            return today
+        }
+        return selectedDate
+    }
+
     private fun priorityRank(priority: String?): Int = when (priority) {
         "high" -> 0
         "low"  -> 2

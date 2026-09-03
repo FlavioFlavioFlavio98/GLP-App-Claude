@@ -44,7 +44,7 @@ class WidgetUpdateWorker(
             // ── Task attive per la data selezionata nel widget (oggi = include
             // anche le scadute), più le completate quel giorno per lo stesso ──
             val prefsRead = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
-            val selectedDate = prefsRead.getString("selected_date", null) ?: today
+            val selectedDate = TaskWidgetUtils.resolveSelectedDate(prefsRead, today)
             val activeTasks = TaskWidgetUtils.activeTasksForDate(tasks, selectedDate, today)
             val completedTasksWidget = TaskWidgetUtils.completedTasksForDate(tasks, selectedDate)
 

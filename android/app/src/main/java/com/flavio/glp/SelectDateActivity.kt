@@ -15,9 +15,13 @@ class SelectDateActivity : Activity() {
         DatePickerDialog(this, { _, y, m, d ->
             val selected = String.format("%04d-%02d-%02d", y, m + 1, d)
 
+            // selected_date_set_at: usato da TaskWidgetUtils.resolveSelectedDate
+            // per riportare da solo la data a "oggi" dopo un'ora, se te ne
+            // dimentichi — vedi il commento lì.
             getSharedPreferences("glp_widget", MODE_PRIVATE)
                 .edit()
                 .putString("selected_date", selected)
+                .putLong("selected_date_set_at", System.currentTimeMillis())
                 .apply()
 
             if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {

@@ -41,7 +41,7 @@ class TaskWidgetProvider : AppWidgetProvider() {
 
             val prefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            val targetDate = prefs.getString("selected_date", null) ?: today
+            val targetDate = TaskWidgetUtils.resolveSelectedDate(prefs, today)
 
             com.google.firebase.firestore.FirebaseFirestore.getInstance()
                 .collection("users").document("flavio")
@@ -80,7 +80,7 @@ class TaskWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)
             val todaySdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val today = todaySdf.format(Date())
-            val selectedDate = prefs.getString("selected_date", null) ?: today
+            val selectedDate = TaskWidgetUtils.resolveSelectedDate(prefs, today)
 
             // Tap titolo → apre app
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)

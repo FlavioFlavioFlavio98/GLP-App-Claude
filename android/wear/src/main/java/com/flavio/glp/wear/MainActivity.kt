@@ -40,6 +40,7 @@ import com.google.android.gms.common.api.ApiException
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // Login primario: Google Sign-In con l'account principale
@@ -290,9 +291,37 @@ private fun MainPager(
     var lastLoggedName by remember { mutableStateOf<String?>(null) }
     // Punti guadagnati dall'apertura dell'app in questa sessione di
     // allenamento — permette un workout intero dal watch senza telefono,
-    // sapendo quanto si sta guadagnando serie dopo serie.
+    // sapendo quanto si sta guadagnando serie dopo serie. sessionDay traccia
+    // la giornata a cui si riferisce il conteggio: senza un reset esplicito
+    // legato alla data, un'app rimasta aperta/in memoria da un giorno
+    // all'altro (facile su un watch che si porta al polso tutto il giorno,
+    // a differenza di un telefono che si chiude più spesso) sommava le serie
+    // di ieri con quelle di oggi all'infinito — bug reale segnalato da
+    // Flavio.
     var sessionPoints by remember { mutableStateOf(0.0) }
     var setsThisSession by remember { mutableStateOf(0) }
+    var sessionDay by remember { mutableStateOf(today()) }
+
+    fun resetSessionIfNewDay() {
+        val current = today()
+        if (current != sessionDay) {
+            sessionDay = current
+            sessionPoints = 0.0
+            setsThisSession = 0
+        }
+    }
+
+    // Controllo passivo ogni minuto: fa scattare il reset anche se il watch
+    // resta aperto sulla schermata Workout attraverso la mezzanotte senza
+    // che venga registrata nessuna nuova serie (altrimenti il numero
+    // visualizzato resterebbe quello di ieri finché non arriva un nuovo log
+    // a triggerare il controllo).
+    LaunchedEffect(Unit) {
+        while (true) {
+            resetSessionIfNewDay()
+            delay(60_000)
+        }
+    }
     var foods by remember { mutableStateOf<List<WearFood>>(emptyList()) }
     var recentFoodIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var foodsLoading by remember { mutableStateOf(true) }
@@ -431,6 +460,7 @@ private fun MainPager(
                             reps = reps,
                             effort = effort,
                             onDone = { pts ->
+                                resetSessionIfNewDay()
                                 lastLoggedName = "${exercise.name} +${formatPts(pts)}pt"
                                 sessionPoints += pts
                                 setsThisSession += 1

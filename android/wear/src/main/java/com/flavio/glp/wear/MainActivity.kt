@@ -364,8 +364,6 @@ private fun MainPager(
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
                 0 -> TodayScreen(
-                    score = score,
-                    loading = scoreLoading,
                     onNavigate = { targetPage -> pagerScope.launch { pagerState.animateScrollToPage(targetPage) } },
                 )
                 1 -> HabitsScreen(

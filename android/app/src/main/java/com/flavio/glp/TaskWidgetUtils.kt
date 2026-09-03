@@ -22,7 +22,23 @@ object TaskWidgetUtils {
         if (selectedDate == today) return today
         val setAt = prefs.getLong("selected_date_set_at", 0L)
         if (System.currentTimeMillis() - setAt > AUTO_RESET_AFTER_MS) {
-            prefs.edit().putString("selected_date", today).remove("selected_date_set_at").apply()
+            // Invalida anche la cache task/completate insieme alla data:
+            // trovato con un test reale che, senza questo, TaskWidgetProvider
+            // .onUpdate() (il refresh periodico OS, che chiama updateWidget()
+            // direttamente senza rifare il fetch da Firestore) rendeva subito
+            // l'etichetta "Oggi" corretta ma con la lista task ANCORA quella
+            // vecchia — cioè esattamente lo stato ingannevole che questa
+            // funzione doveva evitare, solo spostato dall'etichetta al
+            // contenuto. Rimuovendo la cache, nel peggiore dei casi il widget
+            // mostra "nessuna task" (onesto, invece di dati sbagliati sotto
+            // un'etichetta corretta) finché il prossimo fetch reale (refresh
+            // manuale, o il worker periodico entro 15 min) non la ripopola.
+            prefs.edit()
+                .putString("selected_date", today)
+                .remove("selected_date_set_at")
+                .remove("active_tasks")
+                .remove("completed_tasks_widget")
+                .apply()
             return today
         }
         return selectedDate

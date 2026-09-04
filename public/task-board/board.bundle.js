@@ -31015,6 +31015,8 @@ This typically indicates that your device does not have a healthy Internet conne
   var footerEl = document.getElementById("footer");
   var clockEl = document.getElementById("clock");
   var pipBtn = document.getElementById("pipBtn");
+  var minBtn = document.getElementById("minBtn");
+  var pageEl = document.querySelector(".page");
   loginBtn.addEventListener("click", doLogin);
   passwordInput.addEventListener("keydown", (e2) => {
     if (e2.key === "Enter") doLogin();
@@ -31186,7 +31188,6 @@ This typically indicates that your device does not have a healthy Internet conne
     pipWindow = await window.documentPictureInPicture.requestWindow({ width: 300, height: 480 });
     await copyStylesInto(pipWindow.document);
     pipWindow.document.title = "Task di oggi";
-    const pageEl = document.querySelector(".page");
     pipWindow.document.body.appendChild(pageEl);
     pipWindow.document.body.style.margin = "0";
     pipWindow.document.body.style.background = "#0d0d10";
@@ -31196,6 +31197,22 @@ This typically indicates that your device does not have a healthy Internet conne
     });
   }
   pipBtn.addEventListener("click", togglePiP);
+  var collapsed = false;
+  var expandedHeight = 480;
+  minBtn.addEventListener("click", () => {
+    collapsed = !collapsed;
+    pageEl.classList.toggle("collapsed", collapsed);
+    minBtn.textContent = collapsed ? "\u25B8" : "\u25BE";
+    minBtn.title = collapsed ? "Espandi" : "Riduci";
+    if (pipWindow) {
+      if (collapsed) {
+        expandedHeight = pipWindow.innerHeight;
+        pipWindow.resizeTo(pipWindow.outerWidth, 46);
+      } else {
+        pipWindow.resizeTo(pipWindow.outerWidth, expandedHeight);
+      }
+    }
+  });
 })();
 /*! Bundled license information:
 

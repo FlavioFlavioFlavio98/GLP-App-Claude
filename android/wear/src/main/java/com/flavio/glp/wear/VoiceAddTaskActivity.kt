@@ -89,6 +89,7 @@ class VoiceAddTaskActivity : ComponentActivity() {
             fun applyRecognizedText(raw: String?) {
                 val trimmed = raw?.trim()
                 if (trimmed.isNullOrEmpty()) {
+                    android.util.Log.e("GLPVoiceAddTask", "onResults con risultato vuoto/nullo (raw=$raw)")
                     errorMessage = "Non ho capito, riprova"
                     return
                 }
@@ -160,6 +161,7 @@ class VoiceAddTaskActivity : ComponentActivity() {
                     override fun onError(error: Int) {
                         listening = false
                         r.destroy()
+                        android.util.Log.e("GLPVoiceAddTask", "SpeechRecognizer onError code=$error")
                         // Il riconoscimento vocale usa il servizio cloud di
                         // Google — a differenza del salvataggio task (ora
                         // offline-safe), la trascrizione stessa fallisce
@@ -182,13 +184,15 @@ class VoiceAddTaskActivity : ComponentActivity() {
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
                 val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    // Preferisci il riconoscimento sul dispositivo se il
-                    // watch ha scaricato il pacchetto lingua offline
-                    // (Impostazioni → Sistema → Lingue e immissione →
-                    // riconoscimento vocale) — è solo una preferenza, non una
-                    // garanzia: se il modello offline non è installato per la
-                    // lingua corrente ricade comunque sul servizio cloud.
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    // EXTRA_PREFER_OFFLINE rimosso: introdotto per usare un
+                    // eventuale modello vocale offline, ma il watch
+                    // probabilmente non ne ha uno installato — la richiesta
+                    // sembra aver reso il riconoscimento meno affidabile
+                    // anche con rete disponibile (fallisce silenziosamente,
+                    // "onResults" con lista vuota invece di ascoltare
+                    // normalmente), regressione segnalata da Flavio subito
+                    // dopo l'introduzione di questo flag. Meglio affidarsi
+                    // sempre al servizio cloud, che prima funzionava bene.
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
                 }

@@ -33,6 +33,8 @@ const listEl = document.getElementById('list')
 const footerEl = document.getElementById('footer')
 const clockEl = document.getElementById('clock')
 const pipBtn = document.getElementById('pipBtn')
+const minBtn = document.getElementById('minBtn')
+const pageEl = document.querySelector('.page')
 
 loginBtn.addEventListener('click', doLogin)
 passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin() })
@@ -249,7 +251,6 @@ async function togglePiP() {
   await copyStylesInto(pipWindow.document)
   pipWindow.document.title = 'Task di oggi'
 
-  const pageEl = document.querySelector('.page')
   pipWindow.document.body.appendChild(pageEl)
   pipWindow.document.body.style.margin = '0'
   pipWindow.document.body.style.background = '#0d0d10'
@@ -261,3 +262,26 @@ async function togglePiP() {
 }
 
 pipBtn.addEventListener('click', togglePiP)
+
+// Riduci temporaneamente: nasconde la lista task e, se la finestra è in
+// modalità "sempre in primo piano", la ridimensiona a una striscia sottile
+// (solo l'header) — così si può dare un'occhiata a quello che c'è sotto sul
+// laptop senza dover chiudere/riaprire il widget. expandedHeight ricorda
+// l'altezza da cui si è ridotto, per tornarci esattamente invece di un
+// valore fisso (l'utente potrebbe aver ridimensionato la finestra a mano).
+let collapsed = false
+let expandedHeight = 480
+minBtn.addEventListener('click', () => {
+  collapsed = !collapsed
+  pageEl.classList.toggle('collapsed', collapsed)
+  minBtn.textContent = collapsed ? '▸' : '▾'
+  minBtn.title = collapsed ? 'Espandi' : 'Riduci'
+  if (pipWindow) {
+    if (collapsed) {
+      expandedHeight = pipWindow.innerHeight
+      pipWindow.resizeTo(pipWindow.outerWidth, 46)
+    } else {
+      pipWindow.resizeTo(pipWindow.outerWidth, expandedHeight)
+    }
+  }
+})

@@ -3,6 +3,7 @@ package com.flavio.glp.wear
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -315,35 +316,52 @@ object GlpRepository {
     // sempre da 0 e non rifletteva le serie già fatte oggi da telefono/web
     // o in una sessione precedente sul watch — bug reale segnalato da
     // Flavio ("dovrebbe mostrare i punti di oggi, mostra 0").
-    fun loadExercises(onResult: (List<WearExercise>, List<String>, Double, Int) -> Unit, onError: (Exception) -> Unit) {
-        userRef().get()
-            .addOnSuccessListener { doc ->
-                @Suppress("UNCHECKED_CAST")
-                val raw = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
-                val exercises = raw
-                    .filter { it["active"] != false }
-                    .map {
-                        WearExercise(
-                            id = it["id"]?.toString() ?: "",
-                            name = it["name"] as? String ?: "Esercizio",
-                            emoji = it["emoji"] as? String ?: "💪",
-                            pointsPerRep = asDouble(it["pointsPerRep"]),
-                        )
-                    }
-                    .sortedBy { it.name }
-
-                @Suppress("UNCHECKED_CAST")
-                val todayLog = (doc.get("exerciseLog") as? Map<String, Any>)?.get(today()) as? List<Map<String, Any>> ?: emptyList()
-                val recentIds = todayLog
-                    .sortedByDescending { it["time"] as? String ?: "" }
-                    .mapNotNull { it["exerciseId"] as? String }
-                    .distinct()
-                    .take(3)
-                val todayPoints = todayLog.sumOf { asDouble(it["pts"]) }
-
-                onResult(exercises, recentIds, todayPoints, todayLog.size)
+    // Snapshot listener (non un get() singolo): se una serie viene aggiunta
+    // da telefono/laptop a metà allenamento, il watch la vedeva solo dopo
+    // una propria azione (che richiamava questa stessa funzione) — bug reale
+    // segnalato da Flavio ("il watch mostra solo le serie aggiunte da sé
+    // stesso"). Con addSnapshotListener il totale di oggi si aggiorna da
+    // solo appena arriva la scrittura, da qualunque dispositivo, senza che
+    // il watch debba fare nulla. Ritorna anche l'orario ("HH:mm:ss", stesso
+    // formato usato da web e watch per scrivere ogni serie) dell'ultima
+    // serie di oggi, per il timer di riposo nella schermata Workout.
+    fun observeExercises(
+        onResult: (List<WearExercise>, List<String>, Double, Int, String?) -> Unit,
+        onError: (Exception) -> Unit,
+    ): ListenerRegistration {
+        return userRef().addSnapshotListener { doc, error ->
+            if (error != null) {
+                onError(error)
+                return@addSnapshotListener
             }
-            .addOnFailureListener(onError)
+            if (doc == null) return@addSnapshotListener
+
+            @Suppress("UNCHECKED_CAST")
+            val raw = doc.get("quickExercises") as? List<Map<String, Any>> ?: emptyList()
+            val exercises = raw
+                .filter { it["active"] != false }
+                .map {
+                    WearExercise(
+                        id = it["id"]?.toString() ?: "",
+                        name = it["name"] as? String ?: "Esercizio",
+                        emoji = it["emoji"] as? String ?: "💪",
+                        pointsPerRep = asDouble(it["pointsPerRep"]),
+                    )
+                }
+                .sortedBy { it.name }
+
+            @Suppress("UNCHECKED_CAST")
+            val todayLog = (doc.get("exerciseLog") as? Map<String, Any>)?.get(today()) as? List<Map<String, Any>> ?: emptyList()
+            val sortedByTimeDesc = todayLog.sortedByDescending { it["time"] as? String ?: "" }
+            val recentIds = sortedByTimeDesc
+                .mapNotNull { it["exerciseId"] as? String }
+                .distinct()
+                .take(3)
+            val todayPoints = todayLog.sumOf { asDouble(it["pts"]) }
+            val lastSetTime = sortedByTimeDesc.firstOrNull()?.get("time") as? String
+
+            onResult(exercises, recentIds, todayPoints, todayLog.size, lastSetTime)
+        }
     }
 
     // "Punti oggi" (non più un fittizio "punti totali" letto da un campo

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,8 +37,48 @@ import androidx.wear.compose.material.PositionIndicator
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val EFFORT_LEVELS = listOf(Triple(1, "🟢", "Leggero"), Triple(2, "🟡", "Medio"), Triple(3, "🔴", "Massimo"))
+
+// Timer di riposo dall'ultima serie di oggi (da qualunque dispositivo, vedi
+// GlpRepository.observeExercises) — richiesta esplicita di Flavio: dopo aver
+// loggato una serie, guardando il watch vuole capire da quanto si sta
+// riposando tra una serie e l'altra. Orologio a muro (ricalcola l'elapsed da
+// un timestamp fisso ad ogni tick) invece di un contatore che si scorda di
+// avanzare durante ambient/schermo spento — stesso pattern di MealScreen e
+// MeditationScreen.
+private fun parseTodayHms(hms: String): Long? = try {
+    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).parse("${today()} $hms")?.time
+} catch (e: Exception) {
+    null
+}
+
+@Composable
+private fun RestTimerText(lastSetTime: String) {
+    var tick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(lastSetTime) {
+        while (true) {
+            delay(1000)
+            tick++
+        }
+    }
+    val setMillis = remember(lastSetTime) { parseTodayHms(lastSetTime) } ?: return
+    val elapsedSec = ((System.currentTimeMillis() - setMillis) / 1000).coerceAtLeast(0)
+    val min = elapsedSec / 60
+    val sec = elapsedSec % 60
+    // tick non viene letto direttamente ma forza questa ricomposizione ogni secondo.
+    @Suppress("UNUSED_EXPRESSION") tick
+    Text(
+        "⏱️ riposo $min:${sec.toString().padStart(2, '0')}",
+        style = MaterialTheme.typography.caption2,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+    )
+}
 
 // Icona immagine (stesse 13 di public/exercise-icons/ sul web) con fallback
 // all'emoji se l'esercizio non ne ha una — vedi ExerciseIconRes.kt.
@@ -68,6 +109,7 @@ fun WorkoutScreen(
     lastLoggedName: String?,
     dayPoints: Double = 0.0,
     daySets: Int = 0,
+    lastSetTime: String? = null,
     onLogSet: (WearExercise, Int, Int) -> Unit,
 ) {
     var step by remember { mutableStateOf("main") }
@@ -140,6 +182,9 @@ fun WorkoutScreen(
                                     }
                                 }
                             }
+                        }
+                        if (lastSetTime != null) {
+                            item { RestTimerText(lastSetTime) }
                         }
                         item {
                             Chip(

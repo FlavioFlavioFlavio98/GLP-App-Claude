@@ -17,6 +17,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -299,6 +300,11 @@ private fun MainPager(
     // diverso legge semplicemente una chiave diversa della mappa.
     var dayWorkoutPoints by remember { mutableStateOf(0.0) }
     var dayWorkoutSets by remember { mutableStateOf(0) }
+    // Orario ("HH:mm:ss") dell'ultima serie di oggi, da qualunque dispositivo
+    // — usato dal timer di riposo in WorkoutScreen, richiesta esplicita di
+    // Flavio ("dopo che viene aggiunta una serie fa partire un timer di
+    // recupero cosicché guardando il watch capisco da quanto mi sto riposando").
+    var lastSetTime by remember { mutableStateOf<String?>(null) }
     var foods by remember { mutableStateOf<List<WearFood>>(emptyList()) }
     var recentFoodIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var foodsLoading by remember { mutableStateOf(true) }
@@ -331,20 +337,6 @@ private fun MainPager(
         )
     }
 
-    fun refreshExercises() {
-        exercisesLoading = true
-        GlpRepository.loadExercises(
-            onResult = { all, recentIds, todayPoints, todaySets ->
-                exercises = all
-                recentExerciseIds = recentIds
-                dayWorkoutPoints = todayPoints
-                dayWorkoutSets = todaySets
-                exercisesLoading = false
-            },
-            onError = { exercisesLoading = false },
-        )
-    }
-
     fun refreshFoods() {
         foodsLoading = true
         GlpRepository.loadFoods(
@@ -357,8 +349,30 @@ private fun MainPager(
         refreshScore()
         refreshHabits()
         refreshTasks()
-        refreshExercises()
         refreshFoods()
+    }
+
+    // Listener persistente (non un get() singolo) per punti/serie/esercizi
+    // di oggi: si aggiorna da solo appena arriva una scrittura da qualunque
+    // dispositivo (telefono, laptop o il watch stesso), invece di richiedere
+    // che sia il watch a compiere un'azione per rivedere i dati aggiornati —
+    // fix del bug segnalato da Flavio ("il watch mostra solo le serie
+    // aggiunte da sé stesso"). Rimosso in onDispose per non tenere il
+    // listener vivo dopo che MainPager esce di scena.
+    DisposableEffect(Unit) {
+        exercisesLoading = true
+        val registration = GlpRepository.observeExercises(
+            onResult = { all, recentIds, todayPoints, todaySets, setTime ->
+                exercises = all
+                recentExerciseIds = recentIds
+                dayWorkoutPoints = todayPoints
+                dayWorkoutSets = todaySets
+                lastSetTime = setTime
+                exercisesLoading = false
+            },
+            onError = { exercisesLoading = false },
+        )
+        onDispose { registration.remove() }
     }
 
     val pagerState = rememberPagerState(initialPage = startPage.coerceIn(0, PAGE_COUNT - 1), pageCount = { PAGE_COUNT })
@@ -437,6 +451,7 @@ private fun MainPager(
                     lastLoggedName = lastLoggedName,
                     dayPoints = dayWorkoutPoints,
                     daySets = dayWorkoutSets,
+                    lastSetTime = lastSetTime,
                     onLogSet = { exercise, reps, effort ->
                         GlpRepository.logQuickSet(
                             exercise = exercise,
@@ -445,7 +460,9 @@ private fun MainPager(
                             onDone = { pts ->
                                 lastLoggedName = "${exercise.name} +${formatPts(pts)}pt"
                                 refreshScore()
-                                refreshExercises()
+                                // Non serve più refreshExercises(): il listener in
+                                // observeExercises si aggiorna da solo appena la
+                                // scrittura arriva (anche dalla cache locale offline).
                             },
                             onError = {},
                         )

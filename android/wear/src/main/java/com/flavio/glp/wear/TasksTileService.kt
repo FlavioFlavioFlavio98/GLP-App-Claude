@@ -2,6 +2,7 @@ package com.flavio.glp.wear
 
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.wear.tiles.ActionBuilders
+import androidx.wear.tiles.ColorBuilders
 import androidx.wear.tiles.DimensionBuilders
 import androidx.wear.tiles.LayoutElementBuilders
 import androidx.wear.tiles.ModifiersBuilders
@@ -13,6 +14,11 @@ import androidx.wear.tiles.TimelineBuilders
 import androidx.wear.tiles.material.Text
 import androidx.wear.tiles.material.Typography
 import com.google.common.util.concurrent.ListenableFuture
+
+// Bianco pieno invece del colore predefinito (grigio/secondario, poco
+// leggibile su nero) degli stili CAPTION di Typography — "poco visibile"
+// segnalato da Flavio guardando una foto reale del quadrante.
+private val WHITE = ColorBuilders.ColorProp.Builder().setArgb(0xFFFFFFFF.toInt()).build()
 
 private const val RESOURCES_VERSION = "1"
 
@@ -76,35 +82,42 @@ class TasksTileService : TileService() {
 
         column.addContent(
             Text.Builder(this, if (tasks == null) "📋 Task oggi" else "📋 Task oggi (${tasks.size})")
-                .setTypography(Typography.TYPOGRAPHY_CAPTION1)
+                .setTypography(Typography.TYPOGRAPHY_TITLE3)
+                .setColor(WHITE)
                 .build()
         )
 
         when {
             tasks == null -> column.addContent(
                 Text.Builder(this, "Tocca per aprire")
-                    .setTypography(Typography.TYPOGRAPHY_CAPTION2)
+                    .setTypography(Typography.TYPOGRAPHY_BODY1)
+                    .setColor(WHITE)
                     .build()
             )
             tasks.isEmpty() -> column.addContent(
                 Text.Builder(this, "🎉 Niente in scadenza")
-                    .setTypography(Typography.TYPOGRAPHY_CAPTION2)
+                    .setTypography(Typography.TYPOGRAPHY_BODY1)
+                    .setColor(WHITE)
                     .build()
             )
             else -> {
-                tasks.take(3).forEach { t ->
+                // Solo 2 invece di 3: testo più grande e leggibile conta più
+                // di farcene stare di più — richiesta esplicita di Flavio.
+                tasks.take(2).forEach { t ->
                     column.addContent(
                         Text.Builder(this, "${priorityDot(t.priority)} ${t.title}")
-                            .setTypography(Typography.TYPOGRAPHY_CAPTION2)
+                            .setTypography(Typography.TYPOGRAPHY_BODY1)
+                            .setColor(WHITE)
                             .setMaxLines(1)
                             .setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
                             .build()
                     )
                 }
-                if (tasks.size > 3) {
+                if (tasks.size > 2) {
                     column.addContent(
-                        Text.Builder(this, "+ altre ${tasks.size - 3}")
-                            .setTypography(Typography.TYPOGRAPHY_CAPTION3)
+                        Text.Builder(this, "+ altre ${tasks.size - 2}")
+                            .setTypography(Typography.TYPOGRAPHY_CAPTION1)
+                            .setColor(WHITE)
                             .build()
                     )
                 }

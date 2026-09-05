@@ -51,6 +51,14 @@ dependencies {
     // senza aprire l'app — richiesta esplicita di Flavio.
     implementation 'androidx.wear.tiles:tiles:1.4.0'
     implementation 'androidx.wear.tiles:tiles-material:1.4.0'
+    // Solo per lo stato reale (LoadAction/State) delle Tile interattive —
+    // il pacchetto androidx.wear.tiles.* incluso sopra è un involucro
+    // deprecato su questo, e per lo State non porta con sé metodi veri
+    // (Builder senza modo di impostare coppie chiave/valore): serve la
+    // classe protolayout direttamente per completare una task dalla Tile
+    // senza aprire l'app — richiesta esplicita di Flavio.
+    implementation 'androidx.wear.protolayout:protolayout:1.1.0'
+    implementation 'androidx.wear.protolayout:protolayout-material:1.1.0'
     implementation 'androidx.concurrent:concurrent-futures:1.2.0'
     implementation 'androidx.concurrent:concurrent-futures-ktx:1.2.0'
     implementation 'com.google.guava:guava:33.4.0-android'

@@ -20,7 +20,7 @@ import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.ListenableFuture
 
 private const val RESOURCES_VERSION = "1"
-private const val MAX_ROWS = 4
+private const val MAX_ROWS = 6
 
 // Due chiavi di stato per il flusso a due tocchi (riga → conferma → fatto):
 // la prima riga tocca solo "chiedi conferma", la seconda (✓ nel riquadro di
@@ -146,12 +146,16 @@ class TasksTileService : TileService() {
             buildListContent(tasks)
         }
 
-        // Padding per restare dentro l'area sicura del quadrante tondo.
+        // Padding per restare dentro l'area sicura del quadrante tondo. Meno
+        // margine orizzontale di prima (26→20dp): con più righe (MAX_ROWS=6)
+        // il contenuto arriva più vicino ai poli del cerchio, dove la
+        // larghezza utile si restringe — verificato via screenshot reale sul
+        // watch, non solo a calcolo.
         val padding = ModifiersBuilders.Padding.Builder()
-            .setStart(DimensionBuilders.dp(26f))
-            .setEnd(DimensionBuilders.dp(26f))
-            .setTop(DimensionBuilders.dp(4f))
-            .setBottom(DimensionBuilders.dp(4f))
+            .setStart(DimensionBuilders.dp(20f))
+            .setEnd(DimensionBuilders.dp(20f))
+            .setTop(DimensionBuilders.dp(2f))
+            .setBottom(DimensionBuilders.dp(2f))
             .build()
         val box = LayoutElementBuilders.Box.Builder()
             .setWidth(DimensionBuilders.expand())
@@ -229,9 +233,18 @@ class TasksTileService : TileService() {
     }
 
     private fun buildListContent(tasks: List<WearTask>?): LayoutElementBuilders.LayoutElement {
+        // Con overflow (più di MAX_ROWS task) la colonna riempie tutta
+        // l'altezza del quadrante (invece di restare centrata come blocco
+        // unico) così l'header può stare ancorato in alto e "+ altre X" in
+        // fondo, guadagnando spazio per più righe nel mezzo — richiesta
+        // esplicita di Flavio ("l'header più in alto per risparmiare spazio
+        // in basso, +altre centrato in basso per avere altre 2 righe").
+        // Senza overflow non serve: il contenuto resta compatto e centrato
+        // nel Box esterno come prima.
+        val hasOverflow = tasks != null && tasks.size > MAX_ROWS
         val column = LayoutElementBuilders.Column.Builder()
             .setWidth(DimensionBuilders.wrap())
-            .setHeight(DimensionBuilders.wrap())
+            .setHeight(if (hasOverflow) DimensionBuilders.expand() else DimensionBuilders.wrap())
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
 
         column.addContent(
@@ -274,9 +287,14 @@ class TasksTileService : TileService() {
                             .build()
                     )
                 }
-                if (tasks.size > MAX_ROWS) {
+                if (hasOverflow) {
                     column.addContent(
-                        Text.Builder(this, "+ altre ${tasks.size - MAX_ROWS}")
+                        LayoutElementBuilders.Spacer.Builder()
+                            .setHeight(DimensionBuilders.expand())
+                            .build()
+                    )
+                    column.addContent(
+                        Text.Builder(this, "+ altre ${tasks!!.size - MAX_ROWS}")
                             .setTypography(Typography.TYPOGRAPHY_CAPTION2)
                             .setColor(WHITE)
                             .setModifiers(ModifiersBuilders.Modifiers.Builder().setClickable(openAppClickable("open_more")).build())

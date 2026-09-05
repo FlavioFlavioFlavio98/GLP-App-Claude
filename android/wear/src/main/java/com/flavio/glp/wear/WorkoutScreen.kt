@@ -164,10 +164,17 @@ fun WorkoutScreen(
                     positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
                 ) {
                     ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
-                        item { ListHeader { Text("💪 Workout") } }
+                        // Header "💪 Workout" nascosto appena è stata loggata la prima
+                        // serie di oggi: una volta partita la sessione non serve più
+                        // etichettare la schermata, e libera spazio in cima per far
+                        // salire punti/serie/riposo — richiesta esplicita di Flavio
+                        // ("quelle emoji con quella scritta sprecano solo spazio").
+                        if (daySets == 0) {
+                            item { ListHeader { Text("💪 Workout") } }
+                        }
                         if (daySets > 0) {
                             item {
-                                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                                     androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                         Text(
                                             "🏆 ${formatPts(dayPoints)} pt",
@@ -186,17 +193,13 @@ fun WorkoutScreen(
                         if (lastSetTime != null) {
                             item { RestTimerText(lastSetTime) }
                         }
-                        item {
-                            Chip(
-                                onClick = { step = "picker" },
-                                label = { Text("+ Aggiungi esercizio") },
-                                colors = ChipDefaults.primaryChipColors(),
-                                modifier = Modifier.padding(vertical = 2.dp),
-                            )
-                        }
                         if (lastLoggedName != null) {
                             item { Text("✅ $lastLoggedName", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                         }
+                        // Esercizi già fatti oggi PRIMA del pulsante "nuovo esercizio":
+                        // durante la sessione si aggiungono per lo più altre serie agli
+                        // stessi esercizi, non se ne scelgono di nuovi — richiesta
+                        // esplicita di Flavio per aggiungere più velocemente.
                         if (recentExercises.isNotEmpty()) {
                             item {
                                 Text(
@@ -214,6 +217,14 @@ fun WorkoutScreen(
                                     modifier = Modifier.padding(vertical = 2.dp),
                                 )
                             }
+                        }
+                        item {
+                            Chip(
+                                onClick = { step = "picker" },
+                                label = { Text("+ Aggiungi esercizio") },
+                                colors = ChipDefaults.primaryChipColors(),
+                                modifier = Modifier.padding(vertical = 2.dp),
+                            )
                         }
                         if (exercises.isEmpty() && !loading) {
                             item { Text("Nessun esercizio configurato") }

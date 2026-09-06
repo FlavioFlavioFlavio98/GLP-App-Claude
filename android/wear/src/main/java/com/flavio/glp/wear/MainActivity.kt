@@ -421,6 +421,7 @@ private fun MainPager(
                 2 -> TaskListScreen(
                     tasks = tasks,
                     loading = tasksLoading,
+                    focused = pagerState.currentPage == 2,
                     onComplete = { task ->
                         // Ottimistico: sparisce subito dalla lista, poi ri-sincronizza in caso di
                         // errore — stessa limitazione di toggleHabit qui sopra (transazione, non

@@ -92,6 +92,13 @@ fun MeditationScreen(
     var tick by remember { mutableIntStateOf(0) }
     var submitting by remember { mutableStateOf(false) }
 
+    // Lettura esplicita necessaria: Compose ricompone solo gli state che
+    // vengono LETTI durante la composizione — se "tick" non viene mai letto
+    // qui, incrementarlo nel LaunchedEffect qui sotto non innesca mai una
+    // ricomposizione, e il timer resta bloccato al primo valore calcolato
+    // (stesso bug del timer pasto, "il timer rimane su 00:00").
+    @Suppress("UNUSED_EXPRESSION") tick
+
     val elapsedSec = sessionStartMillis?.let {
         ((System.currentTimeMillis() - it) / 1000).toInt().coerceAtLeast(0)
     } ?: 0

@@ -49,12 +49,22 @@ private fun priorityColor(priority: String): Color = when (priority) {
 fun TaskListScreen(
     tasks: List<WearTask>,
     loading: Boolean,
+    focused: Boolean = true,
     onComplete: (WearTask) -> Unit,
     onAddTask: (String, String) -> Unit,
 ) {
     val listState = rememberScalingLazyListState()
     val rotaryFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { rotaryFocusRequester.requestFocus() }
+    // Richiesta di focus legata a "focused" (true quando questa è la pagina
+    // corrente dello HorizontalPager), non solo alla prima composizione: con
+    // HorizontalPager questa schermata può essere composta anche mentre
+    // un'altra pagina è quella visibile, e in quel momento richiedere il
+    // focus non ha effetto — la rotella restava senza far nulla, bug
+    // segnalato da Flavio subito dopo il primo tentativo. Ri-richiesto ogni
+    // volta che si torna su questa pagina.
+    LaunchedEffect(focused) {
+        if (focused) rotaryFocusRequester.requestFocus()
+    }
     // Indice della task "a fuoco" al centro dello schermo mentre si scorre
     // con la rotella/corona fisica — 0=ListHeader, 1=Chip "Detta task", poi
     // le task da indice 2 in poi (solo quando l'elenco non è vuoto, unico

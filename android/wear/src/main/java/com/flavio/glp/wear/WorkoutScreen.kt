@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
@@ -57,8 +58,11 @@ private fun parseTodayHms(hms: String): Long? = try {
     null
 }
 
+// Ritorna solo l'etichetta testuale (non più un Text a riga intera): serve
+// per stare sulla STESSA riga di "N serie oggi" invece che su una riga
+// dedicata — richiesta esplicita di Flavio per risparmiare spazio verticale.
 @Composable
-private fun RestTimerText(lastSetTime: String) {
+private fun restTimerLabel(lastSetTime: String): String? {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(lastSetTime) {
         while (true) {
@@ -66,18 +70,13 @@ private fun RestTimerText(lastSetTime: String) {
             tick++
         }
     }
-    val setMillis = remember(lastSetTime) { parseTodayHms(lastSetTime) } ?: return
+    val setMillis = remember(lastSetTime) { parseTodayHms(lastSetTime) } ?: return null
     val elapsedSec = ((System.currentTimeMillis() - setMillis) / 1000).coerceAtLeast(0)
     val min = elapsedSec / 60
     val sec = elapsedSec % 60
     // tick non viene letto direttamente ma forza questa ricomposizione ogni secondo.
     @Suppress("UNUSED_EXPRESSION") tick
-    Text(
-        "⏱️ riposo $min:${sec.toString().padStart(2, '0')}",
-        style = MaterialTheme.typography.caption2,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
-    )
+    return "⏱️ $min:${sec.toString().padStart(2, '0')}"
 }
 
 // Icona immagine (stesse 13 di public/exercise-icons/ sul web) con fallback
@@ -122,6 +121,14 @@ fun WorkoutScreen(
     // rimuova il Chip dallo schermo — guardia esplicita per evitare due serie
     // duplicate (due arrayUnion con id diversi) dallo stesso tocco.
     var submitting by remember { mutableStateOf(false) }
+    // Ferma il timer di riposo su richiesta ("Termina workout"): senza un
+    // modo per dire "ho finito", il riposo continuava a crescere all'infinito
+    // dopo l'ultima serie e non si capiva se l'allenamento fosse finito o in
+    // pausa — richiesta esplicita di Flavio. Si resetta da solo alla serie
+    // successiva (lastSetTime cambia), così ricomincia a funzionare per una
+    // nuova sessione senza dover fare nulla.
+    var workoutEnded by remember { mutableStateOf(false) }
+    LaunchedEffect(lastSetTime) { workoutEnded = false }
 
     val recentExercises = recentIds.mapNotNull { id -> exercises.find { it.id == id } }
 
@@ -178,11 +185,15 @@ fun WorkoutScreen(
                                     androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                                         Text(
                                             "🏆 ${formatPts(dayPoints)} pt",
-                                            style = MaterialTheme.typography.display3,
+                                            style = MaterialTheme.typography.title1,
                                             textAlign = TextAlign.Center,
                                         )
+                                        // Serie e riposo sulla stessa riga (invece di due righe
+                                        // separate) per guadagnare spazio verticale — richiesta
+                                        // esplicita di Flavio.
+                                        val restLabel = if (!workoutEnded) lastSetTime?.let { restTimerLabel(it) } else null
                                         Text(
-                                            "$daySets serie oggi",
+                                            if (restLabel != null) "$daySets serie · $restLabel" else "$daySets serie oggi",
                                             style = MaterialTheme.typography.caption2,
                                             textAlign = TextAlign.Center,
                                         )
@@ -190,33 +201,19 @@ fun WorkoutScreen(
                                 }
                             }
                         }
-                        if (lastSetTime != null) {
-                            item { RestTimerText(lastSetTime) }
-                        }
-                        if (lastLoggedName != null) {
-                            item { Text("✅ $lastLoggedName", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
-                        }
-                        // Esercizi già fatti oggi PRIMA del pulsante "nuovo esercizio":
-                        // durante la sessione si aggiungono per lo più altre serie agli
-                        // stessi esercizi, non se ne scelgono di nuovi — richiesta
+                        // Esercizi già fatti oggi PRIMA del pulsante "nuovo esercizio" e
+                        // senza il titolo "Ultimi di oggi" sopra (tolto per risparmiare una
+                        // riga): durante la sessione si aggiungono per lo più altre serie
+                        // agli stessi esercizi, non se ne scelgono di nuovi — richiesta
                         // esplicita di Flavio per aggiungere più velocemente.
-                        if (recentExercises.isNotEmpty()) {
-                            item {
-                                Text(
-                                    "Ultimi di oggi",
-                                    style = MaterialTheme.typography.caption2,
-                                    modifier = Modifier.padding(top = 6.dp),
-                                )
-                            }
-                            items(recentExercises) { ex ->
-                                Chip(
-                                    onClick = { openReps(ex) },
-                                    icon = { ExerciseChipIcon(ex) },
-                                    label = { Text(ex.name, maxLines = 1) },
-                                    colors = ChipDefaults.secondaryChipColors(),
-                                    modifier = Modifier.padding(vertical = 2.dp),
-                                )
-                            }
+                        items(recentExercises) { ex ->
+                            Chip(
+                                onClick = { openReps(ex) },
+                                icon = { ExerciseChipIcon(ex) },
+                                label = { Text(ex.name, maxLines = 1) },
+                                colors = ChipDefaults.secondaryChipColors(),
+                                modifier = Modifier.padding(vertical = 2.dp),
+                            )
                         }
                         item {
                             Chip(
@@ -228,6 +225,32 @@ fun WorkoutScreen(
                         }
                         if (exercises.isEmpty() && !loading) {
                             item { Text("Nessun esercizio configurato") }
+                        }
+                        // Pulsante per fermare esplicitamente il timer di riposo — senza,
+                        // continuava a crescere all'infinito dopo l'ultima serie senza modo
+                        // di dire "ho finito l'allenamento", richiesta esplicita di Flavio.
+                        // Visibile solo quando c'è davvero un riposo in corso da fermare.
+                        if (daySets > 0 && lastSetTime != null && !workoutEnded) {
+                            item {
+                                Chip(
+                                    onClick = { workoutEnded = true },
+                                    label = { Text("🏁 Termina workout") },
+                                    colors = ChipDefaults.secondaryChipColors(),
+                                    modifier = Modifier.padding(vertical = 2.dp),
+                                )
+                            }
+                        }
+                        // Ultimo loggato in fondo (ultima riga) e più piccolo — non serve
+                        // più subito in evidenza sotto i punti, richiesta esplicita di Flavio.
+                        if (lastLoggedName != null) {
+                            item {
+                                Text(
+                                    "✅ $lastLoggedName",
+                                    style = MaterialTheme.typography.caption2.copy(fontSize = 9.sp),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
                 }

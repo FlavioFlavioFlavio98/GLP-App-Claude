@@ -5,30 +5,20 @@ import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.itemsIndexed
+import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
-import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
-import androidx.wear.compose.foundation.rotary.rotaryScrollable
-import androidx.wear.compose.material.Button
-import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.ListHeader
@@ -49,32 +39,10 @@ private fun priorityColor(priority: String): Color = when (priority) {
 fun TaskListScreen(
     tasks: List<WearTask>,
     loading: Boolean,
-    focused: Boolean = true,
     onComplete: (WearTask) -> Unit,
     onAddTask: (String, String) -> Unit,
 ) {
     val listState = rememberScalingLazyListState()
-    val rotaryFocusRequester = remember { FocusRequester() }
-    // Richiesta di focus legata a "focused" (true quando questa è la pagina
-    // corrente dello HorizontalPager), non solo alla prima composizione: con
-    // HorizontalPager questa schermata può essere composta anche mentre
-    // un'altra pagina è quella visibile, e in quel momento richiedere il
-    // focus non ha effetto — la rotella restava senza far nulla, bug
-    // segnalato da Flavio subito dopo il primo tentativo. Ri-richiesto ogni
-    // volta che si torna su questa pagina.
-    LaunchedEffect(focused) {
-        if (focused) rotaryFocusRequester.requestFocus()
-    }
-    // Indice della task "a fuoco" al centro dello schermo mentre si scorre
-    // con la rotella/corona fisica — 0=ListHeader, 1=Chip "Detta task", poi
-    // le task da indice 2 in poi (solo quando l'elenco non è vuoto, unico
-    // caso in cui non c'è l'item extra "Nessuna task attiva" di mezzo).
-    // Serve per il pulsante ✓ fisso in basso: più comodo di toccare
-    // precisamente una riga stretta, richiesta esplicita di Flavio ("posso
-    // scorrere con la rotella e selezionare, poi un pulsante grande in
-    // basso per completare?").
-    val selectedTaskIndex = listState.centerItemIndex - 2
-    val selectedTask = tasks.getOrNull(selectedTaskIndex)
     var confirmTask by remember { mutableStateOf<WearTask?>(null) }
     // Titolo+scadenza già interpretati dal comando vocale, in attesa di
     // conferma — non si crea la task finché non tocchi "OK, crea": un
@@ -122,14 +90,7 @@ fun TaskListScreen(
             positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
         ) {
             ScalingLazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .focusRequester(rotaryFocusRequester)
-                    .focusable()
-                    .rotaryScrollable(
-                        behavior = RotaryScrollableDefaults.snapBehavior(listState),
-                        focusRequester = rotaryFocusRequester,
-                    ),
+                modifier = Modifier.fillMaxSize(),
                 state = listState,
             ) {
                 item {
@@ -146,41 +107,15 @@ fun TaskListScreen(
                 if (tasks.isEmpty() && !loading) {
                     item { Text("Nessuna task attiva 🎉") }
                 }
-                itemsIndexed(tasks) { index, task ->
-                    val isSelected = index == selectedTaskIndex
+                items(tasks) { task ->
                     Chip(
                         onClick = { confirmTask = task },
-                        label = { Text((if (isSelected) "👉 " else "") + task.title, maxLines = 1) },
+                        label = { Text(task.title, maxLines = 1) },
                         secondaryLabel = { Text("+${task.reward}pt") },
-                        colors = ChipDefaults.chipColors(
-                            backgroundColor = priorityColor(task.priority).copy(alpha = if (isSelected) 0.55f else 0.25f),
-                        ),
+                        colors = ChipDefaults.chipColors(backgroundColor = priorityColor(task.priority).copy(alpha = 0.25f)),
                         modifier = Modifier.padding(vertical = 2.dp),
                     )
                 }
-                // Spazio in fondo per non far restare l'ultima task nascosta
-                // dietro il pulsante ✓ fisso qui sotto.
-                if (tasks.isNotEmpty()) {
-                    item { Box(modifier = Modifier.size(1.dp)) }
-                }
-            }
-        }
-
-        // Pulsante ✓ grande e fisso in basso: completa la task attualmente
-        // "a fuoco" al centro (scelta scorrendo con la rotella/corona) invece
-        // di dover toccare con precisione una riga stretta — richiesta
-        // esplicita di Flavio. Nascosto sopra gli overlay di conferma (sono
-        // dichiarati dopo nel Box e coprono tutto lo schermo comunque).
-        if (selectedTask != null && confirmTask == null && pendingTitle == null) {
-            Button(
-                onClick = { confirmTask = selectedTask },
-                colors = ButtonDefaults.primaryButtonColors(backgroundColor = Color(0xFF4CAF50)),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 2.dp)
-                    .size(ButtonDefaults.LargeButtonSize),
-            ) {
-                Text("✓", style = MaterialTheme.typography.title1)
             }
         }
 

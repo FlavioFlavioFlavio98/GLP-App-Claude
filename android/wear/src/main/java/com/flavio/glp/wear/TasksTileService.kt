@@ -66,7 +66,11 @@ class TasksTileService : TileService() {
             val pendingConfirm = stringState(PENDING_CONFIRM_KEY)
 
             fun loadAndBuild(pendingConfirmId: String?) {
+                // preferCache=true: risposta quasi istantanea dalla cache locale
+                // invece di aspettare sempre il server — la Tile restava nera per
+                // 4-5 secondi ad ogni apertura, segnalato da Flavio.
                 GlpRepository.loadActiveTasks(
+                    preferCache = true,
                     onResult = { tasks -> completer.set(buildTile(requestParams, tasks, pendingConfirmId)) },
                     onError = { _ -> completer.set(buildTile(requestParams, null, null)) },
                 )

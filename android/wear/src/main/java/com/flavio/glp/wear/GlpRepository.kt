@@ -4,6 +4,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Source
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -255,27 +256,77 @@ object GlpRepository {
 
     private fun userRef() = FirebaseFirestore.getInstance().collection("users").document("flavio")
 
-    fun loadActiveTasks(onResult: (List<WearTask>) -> Unit, onError: (Exception) -> Unit) {
-        userRef().get()
-            .addOnSuccessListener { doc ->
-                @Suppress("UNCHECKED_CAST")
-                val raw = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
-                val todayStr = today()
-                val tasks = raw
-                    .filter { (it["status"] as? String) == "active" && !(it["deadline"] as? String).isNullOrEmpty() }
-                    .filter { (it["deadline"] as? String ?: "") <= todayStr }
-                    .map {
-                        WearTask(
-                            id = it["id"]?.toString() ?: "",
-                            title = it["title"] as? String ?: "Task",
-                            priority = it["priority"] as? String ?: "medium",
-                            reward = asDouble(it["reward"]).toInt(),
-                            deadline = it["deadline"] as? String ?: todayStr,
-                        )
-                    }
-                    .sortedWith(compareBy({ priorityRank(it.priority) }, { it.deadline }))
-                onResult(tasks)
+    // Cache in memoria per la Tile "Task oggi", aggiornata da un listener
+    // persistente. Provato empiricamente: leggere anche solo dalla cache
+    // locale Firestore su disco (Source.CACHE) impiegava comunque ~3.3s, non
+    // per la rete ma per la DESERIALIZZAZIONE dell'intero documento
+    // "users/flavio" (pesante: mesi di log/trascrizioni vocali) ad ogni
+    // singola lettura — leggere un solo campo non evita di scaricare/
+    // deserializzare tutto il documento, limite di Firestore per get() su un
+    // documento singolo. Con un listener persistente la deserializzazione
+    // pesante avviene una sola volta per tutta la vita del processo (non ad
+    // ogni apertura della Tile) e gli aggiornamenti successivi sono delta
+    // leggeri — le richieste successive leggono da qui, istantanee. Il primo
+    // utilizzo dopo che il processo è stato ucciso resta comunque lento (non
+    // c'è modo di evitarlo senza spostare i dati pesanti in un documento
+    // Firestore separato — cambiamento più invasivo, non fatto qui).
+    @Volatile private var cachedActiveTasks: List<WearTask>? = null
+    private var activeTasksListener: ListenerRegistration? = null
+
+    private fun ensureActiveTasksListening() {
+        if (activeTasksListener != null) return
+        activeTasksListener = userRef().addSnapshotListener { doc, error ->
+            if (error != null || doc == null) return@addSnapshotListener
+            cachedActiveTasks = parseActiveTasks(doc)
+        }
+    }
+
+    private fun parseActiveTasks(doc: DocumentSnapshot): List<WearTask> {
+        @Suppress("UNCHECKED_CAST")
+        val raw = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
+        val todayStr = today()
+        return raw
+            .filter { (it["status"] as? String) == "active" && !(it["deadline"] as? String).isNullOrEmpty() }
+            .filter { (it["deadline"] as? String ?: "") <= todayStr }
+            .map {
+                WearTask(
+                    id = it["id"]?.toString() ?: "",
+                    title = it["title"] as? String ?: "Task",
+                    priority = it["priority"] as? String ?: "medium",
+                    reward = asDouble(it["reward"]).toInt(),
+                    deadline = it["deadline"] as? String ?: todayStr,
+                )
             }
+            .sortedWith(compareBy({ priorityRank(it.priority) }, { it.deadline }))
+    }
+
+    // preferCache=true legge prima dalla cache locale Firestore (istantanea,
+    // niente attesa di rete) invece che sempre dal server — usato dalla Tile
+    // "Task oggi", che restava nera per 4-5 secondi ad ogni apertura mentre
+    // aspettava una risposta di rete per l'intero documento "users/flavio"
+    // (pesante: mesi di log/trascrizioni), segnalato da Flavio. La cache
+    // Firestore è persistita su disco e sopravvive ai riavvii del processo,
+    // quindi è quasi sempre disponibile; se non lo è ancora (mai aperta prima
+    // in questa installazione), fa comunque un fetch dal server come prima.
+    fun loadActiveTasks(preferCache: Boolean = false, onResult: (List<WearTask>) -> Unit, onError: (Exception) -> Unit) {
+        if (preferCache) {
+            ensureActiveTasksListening()
+            cachedActiveTasks?.let { onResult(it); return }
+            // Cache in memoria non ancora pronta (primo utilizzo dopo l'avvio
+            // del processo) — risponde comunque il prima possibile con la
+            // cache locale su disco, il listener sopra popolerà cachedActiveTasks
+            // per le prossime richieste.
+            userRef().get(Source.CACHE)
+                .addOnSuccessListener { doc -> onResult(parseActiveTasks(doc)) }
+                .addOnFailureListener {
+                    userRef().get()
+                        .addOnSuccessListener { doc -> onResult(parseActiveTasks(doc)) }
+                        .addOnFailureListener(onError)
+                }
+            return
+        }
+        userRef().get()
+            .addOnSuccessListener { doc -> onResult(parseActiveTasks(doc)) }
             .addOnFailureListener(onError)
     }
 

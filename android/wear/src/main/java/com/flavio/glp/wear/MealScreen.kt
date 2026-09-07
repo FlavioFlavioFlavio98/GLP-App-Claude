@@ -6,6 +6,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,7 +34,6 @@ import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.CompactChip
-import androidx.wear.compose.material.ListHeader
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.PositionIndicator
 import androidx.wear.compose.material.Scaffold
@@ -193,8 +193,34 @@ fun MealScreen(
                     timeText = { TimeText() },
                     positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
                 ) {
-                    ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
-                        item { ListHeader { Text("🍽️ Pasto") } }
+                    // Stesso trattamento della schermata reps del Workout:
+                    // autoCentering=null toglie il padding automatico che
+                    // ScalingLazyColumn aggiunge in cima/fondo per poter
+                    // centrare qualsiasi riga scrollando — con un contenuto
+                    // già corto lasciava un vuoto sopra il primo elemento e
+                    // spingeva "Inizia pasto" fuori dallo schermo, richiesta
+                    // esplicita di Flavio ("tutto visibile senza scrollare
+                    // in basso"). Header sostituito da un Text piccolo
+                    // (invece di ListHeader, più ingombrante) e meno padding
+                    // ovunque.
+                    ScalingLazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState,
+                        autoCentering = null,
+                        // top più alto delle altre (4dp): con autoCentering
+                        // disattivato il primo elemento arrivava a
+                        // sovrapporsi al TimeText di sistema in cima al
+                        // quadrante, verificato via screenshot reale.
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 16.dp, bottom = 4.dp),
+                    ) {
+                        item {
+                            Text(
+                                "🍽️ Pasto",
+                                style = MaterialTheme.typography.caption1,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         if (lastLoggedText != null) {
                             item { Text("✅ $lastLoggedText", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
                         }
@@ -202,11 +228,12 @@ fun MealScreen(
                             Text(
                                 "Obiettivo",
                                 style = MaterialTheme.typography.caption2,
-                                modifier = Modifier.padding(top = 6.dp),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         item {
-                            Row(modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                                 TARGET_OPTIONS.take(3).forEach { min ->
                                     CompactChip(
                                         onClick = { target = min },
@@ -218,7 +245,7 @@ fun MealScreen(
                             }
                         }
                         item {
-                            Row(modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                                 TARGET_OPTIONS.drop(3).forEach { min ->
                                     CompactChip(
                                         onClick = { target = min },
@@ -234,7 +261,7 @@ fun MealScreen(
                                 onClick = { startSession() },
                                 label = { Text("Inizia pasto") },
                                 colors = ChipDefaults.primaryChipColors(),
-                                modifier = Modifier.padding(top = 10.dp),
+                                modifier = Modifier.padding(top = 2.dp),
                             )
                         }
                     }
@@ -286,9 +313,14 @@ private fun ActiveStep(elapsedSec: Int, targetMin: Int, tip: String, onEnd: () -
         timeText = { TimeText() },
         positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
     ) {
-        ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+        ScalingLazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            autoCentering = null,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 16.dp, bottom = 4.dp),
+        ) {
             item {
-                Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
                         progress = progress,
                         modifier = Modifier.size(90.dp),
@@ -313,7 +345,7 @@ private fun ActiveStep(elapsedSec: Int, targetMin: Int, tip: String, onEnd: () -
                     tip,
                     style = MaterialTheme.typography.caption1,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
             item {
@@ -321,7 +353,7 @@ private fun ActiveStep(elapsedSec: Int, targetMin: Int, tip: String, onEnd: () -
                     onClick = onEnd,
                     label = { Text("Fine pasto") },
                     colors = ChipDefaults.primaryChipColors(),
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }
@@ -335,10 +367,16 @@ private fun LevelStep(minutes: Int, submitting: Boolean, onPick: (Int) -> Unit) 
         timeText = { TimeText() },
         positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
     ) {
-        ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+        ScalingLazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            autoCentering = null,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 16.dp, bottom = 4.dp),
+        ) {
             item {
                 Text(
                     "$minutes min — quanto calmo?",
+                    style = MaterialTheme.typography.caption2,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )

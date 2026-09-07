@@ -18,6 +18,7 @@ import { getBarefootRate, getHangRate } from './bodyStats'
 import { getWillpowerRate } from './willpowerStats'
 import { getMeditationRate } from './meditationStats'
 import { computeMealPoints, getMealLevelInfo, getUntrackedMealPenalty, buildDefaultMealContent } from './mealStats'
+import { computeLifeAreaPoints } from './lifeAreaStats'
 import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
@@ -1117,6 +1118,110 @@ export function AppProvider({ children }) {
       const newLog = dayLog.map(e => e.id === logId ? { ...e, duration: numDuration, note: (newNote || '').trim().slice(0, 200), pts } : e)
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`studyLog.${dateStr}`]: newLog })
+      actions.showToast('Sessione modificata ✏️', '✏️')
+    },
+
+    // ─── Aree della vita ── tempo dedicato a migliorare aspetti della vita
+    // (salute mentale, salute fisica, relazioni...) — aree personalizzabili
+    // da Flavio, non una lista fissa, stesso principio di quickExercises ma
+    // senza changes[] (niente valore economico da storicizzare, solo
+    // etichetta ed estetica).
+    async ensureDefaultLifeAreas() {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd || (gd.lifeAreas || []).length > 0) return
+      const today = toDateString(new Date())
+      const defaults = [
+        { id: 'la_mentale', name: 'Salute mentale', emoji: '🧠', color: '#7c4dff', active: true, createdAt: today },
+        { id: 'la_fisica', name: 'Salute fisica', emoji: '💪', color: '#2196f3', active: true, createdAt: today },
+        { id: 'la_relazioni', name: 'Relazioni', emoji: '🤝', color: '#4caf50', active: true, createdAt: today },
+      ]
+      await updateDoc(doc(db, 'users', 'flavio'), { lifeAreas: defaults })
+    },
+
+    async saveLifeArea(area) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const existing = gd.lifeAreas || []
+      const idx = existing.findIndex(a => a.id === area.id)
+      let updated
+      if (idx === -1) {
+        const newArea = {
+          id: Date.now().toString(36),
+          name: area.name, emoji: area.emoji || '⭐', color: area.color || '#ffca28',
+          active: true, createdAt: toDateString(new Date()),
+        }
+        updated = [...existing, newArea]
+      } else {
+        updated = existing.map(a => a.id === area.id ? { ...a, name: area.name, emoji: area.emoji, color: area.color } : a)
+      }
+      await updateDoc(doc(db, 'users', 'flavio'), { lifeAreas: updated })
+      actions.showToast('Area salvata', '✅')
+    },
+
+    async archiveLifeArea(areaId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      // Lo storico in lifeAreaLog referenzia l'id, non il nome — archiviare
+      // non tocca le sessioni già loggate, restano visibili nelle statistiche.
+      const updated = (gd.lifeAreas || []).map(a => a.id === areaId ? { ...a, active: false } : a)
+      await updateDoc(doc(db, 'users', 'flavio'), { lifeAreas: updated })
+      actions.showToast('Area archiviata', '📦')
+    },
+
+    async addLifeAreaSession(areaId, durationMin, note, dateStr, source = 'manual') {
+      if (state.authUserId !== 'flavio') return
+      const numDuration = parseFloat(durationMin) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      if (!areaId) { actions.showToast('Scegli un\'area', '⚠️'); return }
+      const pts = computeLifeAreaPoints(numDuration)
+      const logDate = dateStr || toDateString(new Date())
+      const logEntry = {
+        id: Date.now().toString(),
+        areaId,
+        duration: numDuration,
+        note: (note || '').trim().slice(0, 200),
+        pts,
+        time: new Date().toTimeString().slice(0, 8),
+        source,
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`lifeAreaLog.${logDate}`]: arrayUnion(logEntry) })
+      actions.vibrate('light')
+      const area = (state.allUsersData?.flavio?.lifeAreas || []).find(a => a.id === areaId)
+      actions.showToast(`+${pts} pt ${area?.emoji || ''}`, area?.emoji || '✅')
+    },
+
+    async deleteLifeAreaSession(dateStr, logId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.lifeAreaLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const newLog = dayLog.filter(e => e.id !== logId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`lifeAreaLog.${dateStr}`]: newLog })
+      actions.showToast(`-${entry.pts} pt annullato`, '↩️')
+    },
+
+    async editLifeAreaSession(dateStr, logId, newAreaId, newDuration, newNote) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayLog = (gd.lifeAreaLog?.[dateStr] || [])
+      const entry = dayLog.find(e => e.id === logId)
+      if (!entry) return
+      const numDuration = parseFloat(newDuration) || 0
+      if (numDuration <= 0) { actions.showToast('Durata non valida', '⚠️'); return }
+      const pts = computeLifeAreaPoints(numDuration)
+      const newLog = dayLog.map(e => e.id === logId
+        ? { ...e, areaId: newAreaId || e.areaId, duration: numDuration, note: (newNote || '').trim().slice(0, 200), pts }
+        : e)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`lifeAreaLog.${dateStr}`]: newLog })
       actions.showToast('Sessione modificata ✏️', '✏️')
     },
 

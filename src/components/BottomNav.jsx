@@ -8,6 +8,7 @@ const TABS = [
   { id: 'nutrizione',icon: 'restaurant',      label: 'Nutrizione' },
   { id: 'pasti',     icon: 'lunch_dining',    label: 'Pasti' },
   { id: 'stats',     icon: 'bar_chart',       label: 'Stats' },
+  { id: 'aree',      icon: 'diversity_3',     label: 'Aree' },
 ]
 
 export default function BottomNav({ currentTab, onTabChange }) {

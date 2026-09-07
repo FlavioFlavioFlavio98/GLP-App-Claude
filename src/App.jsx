@@ -29,6 +29,7 @@ const MenteTab = lazy(() => import('./components/MenteTab'))
 const NutritionTab = lazy(() => import('./components/NutritionTab'))
 const MealsTab = lazy(() => import('./components/MealsTab'))
 const StatsTabContent = lazy(() => import('./components/StatsTabContent'))
+const LifeAreaTab = lazy(() => import('./components/LifeAreaTab'))
 
 // ── Gruppi di modali: caricati on-demand al primo accesso, raggruppati per contesto d'uso ──
 const HabitCoreModals = lazy(() => import('./modalGroups/HabitCoreModals'))
@@ -41,6 +42,7 @@ const MenteModals = lazy(() => import('./modalGroups/MenteModals'))
 const NutritionModals = lazy(() => import('./modalGroups/NutritionModals'))
 const TaskModals = lazy(() => import('./modalGroups/TaskModals'))
 const GlobalSearchModals = lazy(() => import('./modalGroups/GlobalSearchModals'))
+const LifeAreaModals = lazy(() => import('./modalGroups/LifeAreaModals'))
 
 // Pagine fullscreen indipendenti (già gated da stato booleano proprio, lazy dirette)
 const ReadingsPage = lazy(() => import('./modals/ReadingsPage'))
@@ -59,6 +61,7 @@ const MENTE_MODALS = ['willpowerEntry', 'willpowerStats', 'discoveries']
 const NUTRITION_MODALS = ['proteinEntry', 'proteinFoodsManage']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory', 'recurringTasks']
 const GLOBAL_SEARCH_MODALS = ['globalSearch']
+const LIFEAREA_MODALS = ['lifeAreaLog', 'lifeAreaManage']
 
 function TabLoadingFallback() {
   return (
@@ -379,7 +382,7 @@ export default function App() {
       {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout/Benessere/
           Mente: l'economia generale di task/abitudini non è rilevante lì, dove
           ogni tab mostra già le proprie statistiche specifiche ── */}
-      {!['workout', 'body', 'mente', 'nutrizione', 'pasti'].includes(currentTab) && (
+      {!['workout', 'body', 'mente', 'nutrizione', 'pasti', 'aree'].includes(currentTab) && (
         <DailySummaryPanel
           authUserId={authUserId}
           globalData={globalData}
@@ -475,6 +478,13 @@ export default function App() {
           </Suspense>
         )}
 
+        {/* ───────── TAB: AREE DELLA VITA ───────── */}
+        {currentTab === 'aree' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <LifeAreaTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
+          </Suspense>
+        )}
+
       </div>
 
       {/* ── BOTTOM NAV ── */}
@@ -518,6 +528,9 @@ export default function App() {
       )}
       {TASK_MODALS.includes(modal) && (
         <Suspense fallback={null}><TaskModals authUserId={authUserId} /></Suspense>
+      )}
+      {LIFEAREA_MODALS.includes(modal) && (
+        <Suspense fallback={null}><LifeAreaModals authUserId={authUserId} /></Suspense>
       )}
       {authUserId === 'flavio' && !isReadOnly && showPsychPage && (
         <Suspense fallback={null}>

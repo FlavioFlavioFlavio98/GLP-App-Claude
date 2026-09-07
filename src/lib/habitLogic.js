@@ -172,7 +172,8 @@ export function computeDayNet(userData, dateStr) {
       (parseFloat((userData.dayRecapLog || {})[dateStr]?.pts) || 0) +
       ((userData.barefootLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
       ((userData.hangLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0) +
-      (parseFloat((userData.mindSocialLog || {})[dateStr]?.pts) || 0)
+      (parseFloat((userData.mindSocialLog || {})[dateStr]?.pts) || 0) +
+      ((userData.lifeAreaLog || {})[dateStr] || []).reduce((sum, s) => sum + (parseFloat(s.pts) || 0), 0)
     ) * 10
   ) / 10
 
@@ -222,6 +223,7 @@ export function calculateTotalScore(userData) {
     ...Object.keys(userData.barefootLog || {}),
     ...Object.keys(userData.hangLog || {}),
     ...Object.keys(userData.mindSocialLog || {}),
+    ...Object.keys(userData.lifeAreaLog || {}),
   ])
   ;(userData.tasks || []).forEach(t => {
     if (typeof t.completedAt === 'string') dates.add(t.completedAt.slice(0, 10))

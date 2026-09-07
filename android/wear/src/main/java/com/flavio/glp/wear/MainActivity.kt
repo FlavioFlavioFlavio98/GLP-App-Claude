@@ -74,11 +74,22 @@ class MainActivity : ComponentActivity() {
     // viva; senza singleTask + questo override, l'extra "start_page" veniva
     // letto solo alla prima creazione e ignorato sui rilanci successivi.
     private var requestedPage by mutableStateOf(1)
+    // Incrementato ad ogni onNewIntent: se l'utente naviga manualmente altrove
+    // dopo un primo tocco su una scorciatoia (Tile/complicazione) e poi tocca
+    // di nuovo la STESSA scorciatoia, requestedPage riceve lo stesso valore
+    // di prima — LaunchedEffect(requestedPage) da solo non si ri-esegue
+    // (Compose confronta il nuovo valore col vecchio, sono uguali), quindi lo
+    // scroll alla pagina richiesta non scattava e restava sulla pagina dove
+    // si era navigato manualmente. Bug reale segnalato da Flavio con le
+    // complicazioni Workout/Pasto. Il nonce cambia SEMPRE ad ogni intent,
+    // anche a parità di pagina, forzando comunque lo scroll.
+    private var requestedPageNonce by mutableStateOf(0)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         requestedPage = intent.getIntExtra(EXTRA_START_PAGE, 1)
+        requestedPageNonce++
     }
 
     private fun setupShortcuts() {
@@ -256,6 +267,7 @@ class MainActivity : ComponentActivity() {
                     // (vedi onNewIntent sopra).
                     MainPager(
                         startPage = requestedPage,
+                        startPageNonce = requestedPageNonce,
                         isAmbient = isAmbient,
                     )
                 }
@@ -276,6 +288,7 @@ private const val PAGE_COUNT = 8
 @Composable
 private fun MainPager(
     startPage: Int = 1,
+    startPageNonce: Int = 0,
     isAmbient: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -382,7 +395,11 @@ private fun MainPager(
     // tocco sulla Tile mentre l'app è già aperta, con singleTask +
     // onNewIntent che aggiorna requestedPage in MainActivity) — initialPage
     // di rememberPagerState viene letto solo alla creazione dello stato.
-    LaunchedEffect(startPage) {
+    // Chiave anche su startPageNonce (non solo startPage): se l'utente naviga
+    // manualmente altrove e poi tocca di nuovo la STESSA scorciatoia (stesso
+    // valore di startPage), la sola key "startPage" non basterebbe a far
+    // ripartire l'effetto — bug reale segnalato da Flavio.
+    LaunchedEffect(startPage, startPageNonce) {
         pagerState.scrollToPage(startPage.coerceIn(0, PAGE_COUNT - 1))
     }
 

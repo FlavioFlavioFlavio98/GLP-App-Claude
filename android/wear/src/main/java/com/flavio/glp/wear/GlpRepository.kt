@@ -500,6 +500,130 @@ object GlpRepository {
             .addOnFailureListener(onError)
     }
 
+    // Cache in memoria per la Tile "Abitudini oggi" — stesso motivo e stesso
+    // schema della cache per le task (vedi ensureActiveTasksListening): il
+    // documento è pesante da deserializzare, un listener persistente lo fa
+    // una sola volta per tutta la vita del processo invece che ad ogni
+    // apertura della Tile.
+    @Volatile private var cachedPendingHabits: List<WearHabit>? = null
+    private var pendingHabitsListener: ListenerRegistration? = null
+
+    private fun ensurePendingHabitsListening() {
+        if (pendingHabitsListener != null) return
+        pendingHabitsListener = userRef().addSnapshotListener { doc, error ->
+            if (error != null || doc == null) return@addSnapshotListener
+            cachedPendingHabits = parsePendingHabits(doc)
+        }
+    }
+
+    private fun parsePendingHabits(doc: DocumentSnapshot): List<WearHabit> {
+        val todayStr = today()
+        val (doneIds, failedIds) = todayDoneAndFailed(doc, todayStr)
+        @Suppress("UNCHECKED_CAST")
+        val rawHabits = doc.get("habits") as? List<Map<String, Any>> ?: emptyList()
+        return rawHabits
+            .filter { it["type"] != "single" && it["type"] != "goal" }
+            .filter { isHabitVisibleToday(it, todayStr, doneIds, failedIds) }
+            .map { stableHabitId(it) to it }
+            // Solo quelle ancora "da decidere" oggi — un'abitudine già
+            // completata O già fallita oggi non è più "da fare", anche se
+            // isHabitVisibleToday la considera ancora visibile (serve per il
+            // calcolo punti, non per la lista "cosa mi manca ancora oggi").
+            .filter { (id, _) -> !doneIds.contains(id) && !failedIds.contains(id) }
+            .map { (id, h) ->
+                WearHabit(
+                    id = id,
+                    name = h["name"] as? String ?: "Abitudine",
+                    emoji = h["emoji"] as? String ?: "⭐",
+                    done = false,
+                )
+            }
+    }
+
+    // Abitudini di oggi ancora NÉ completate NÉ fallite — per la Tile
+    // "Abitudini oggi", richiesta esplicita di Flavio. preferCache=true:
+    // stessa ottimizzazione di velocità di loadActiveTasks.
+    fun loadPendingHabits(preferCache: Boolean = false, onResult: (List<WearHabit>) -> Unit, onError: (Exception) -> Unit) {
+        if (preferCache) {
+            ensurePendingHabitsListening()
+            cachedPendingHabits?.let { onResult(it); return }
+            userRef().get(Source.CACHE)
+                .addOnSuccessListener { doc -> onResult(parsePendingHabits(doc)) }
+                .addOnFailureListener {
+                    userRef().get()
+                        .addOnSuccessListener { doc -> onResult(parsePendingHabits(doc)) }
+                        .addOnFailureListener(onError)
+                }
+            return
+        }
+        userRef().get()
+            .addOnSuccessListener { doc -> onResult(parsePendingHabits(doc)) }
+            .addOnFailureListener(onError)
+    }
+
+    // Completa ("done") o fallisce ("failed") un'abitudine — porta su Kotlin
+    // di setHabitStatus() in store.jsx, semplificato (niente livelli min/max:
+    // stessa scelta già fatta per loadHabits/WearHabit). "failed" applica la
+    // stessa logica di penalità della web app (calcolata da computeTodayNet
+    // qui sopra leggendo failedHabits, non serve altro qui). Transazione
+    // (non arrayUnion): modifica un elemento esistente dell'array "habits" e
+    // due liste di id nello stesso dailyLogs — stessa lezione della perdita
+    // dati del 28/8/2026.
+    fun setHabitStatus(habitId: String, action: String, onDone: () -> Unit, onError: (Exception) -> Unit) {
+        val ref = userRef()
+        val todayStr = today()
+        FirebaseFirestore.getInstance().runTransaction { transaction ->
+            val doc = transaction.get(ref)
+            @Suppress("UNCHECKED_CAST")
+            val habitsArr = (doc.get("habits") as? List<Map<String, Any>> ?: emptyList()).toMutableList()
+            @Suppress("UNCHECKED_CAST")
+            val dailyLogs = (doc.get("dailyLogs") as? Map<String, Any>) ?: emptyMap()
+            @Suppress("UNCHECKED_CAST")
+            val todayEntryRaw = dailyLogs[todayStr] as? Map<String, Any>
+            @Suppress("UNCHECKED_CAST")
+            val doneIds = ((todayEntryRaw?.get("habits") as? List<String>) ?: emptyList()).toMutableList()
+            @Suppress("UNCHECKED_CAST")
+            val failedIds = ((todayEntryRaw?.get("failedHabits") as? List<String>) ?: emptyList()).toMutableList()
+            @Suppress("UNCHECKED_CAST")
+            val habitLevels = ((todayEntryRaw?.get("habitLevels") as? Map<String, Any>) ?: emptyMap()).toMutableMap()
+
+            doneIds.remove(habitId)
+            failedIds.remove(habitId)
+            habitLevels.remove(habitId)
+            when (action) {
+                "done" -> {
+                    doneIds.add(habitId)
+                    habitLevels[habitId] = "max"
+                }
+                "failed" -> failedIds.add(habitId)
+            }
+
+            // lastDone riflette solo "completata davvero oggi" — coerente con
+            // setHabitStatus() in store.jsx, altrimenti la cadenza multi-giorno
+            // (isHabitVisibleToday) nasconderebbe l'abitudine anche quando è
+            // stata solo fallita, non completata.
+            val idx = habitsArr.indexOfFirst { stableHabitId(it) == habitId }
+            if (idx >= 0) {
+                habitsArr[idx] = if (doneIds.contains(habitId)) {
+                    habitsArr[idx].toMutableMap().apply { put("lastDone", todayStr) }
+                } else {
+                    habitsArr[idx].toMutableMap().apply { remove("lastDone") }
+                }
+            }
+
+            transaction.update(
+                ref,
+                mapOf(
+                    "dailyLogs.$todayStr.habits" to doneIds,
+                    "dailyLogs.$todayStr.failedHabits" to failedIds,
+                    "dailyLogs.$todayStr.habitLevels" to habitLevels,
+                    "habits" to habitsArr,
+                )
+            )
+        }.addOnSuccessListener { onDone() }
+            .addOnFailureListener(onError)
+    }
+
     // Log dal watch con reps/sforzo scelti dall'utente — stessa formula punti
     // della web app (vedi EFFORT_MULTIPLIERS in workoutStats.js). Math.round
     // invece di un troncamento manuale via toLong(): con virgola mobile binaria

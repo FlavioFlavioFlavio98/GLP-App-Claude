@@ -74,6 +74,22 @@
                 android:resource="@drawable/tile_preview_tasks" />
         </service>
 
+        <!-- Tile "Abitudini oggi" — mini-lista delle abitudini non ancora
+             completate né fallite oggi, tocco su una riga apre un riquadro
+             di conferma con Completa/Fallisci/Annulla, senza aprire l'app.
+             Niente meta-data PREVIEW (nessuno screenshot ancora catturato per
+             questa Tile) — il sistema mostra un'anteprima generica nell'editor
+             del quadrante, non blocca il funzionamento. -->
+        <service
+            android:name="com.flavio.glp.wear.HabitsTileService"
+            android:exported="true"
+            android:label="Abitudini oggi"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+        </service>
+
         <!-- Tile "Nuova task" — tocco apre subito la dettatura vocale, senza
              passare dalla lista task (sostituisce la App Shortcut, non
              supportata dal launcher di Wear OS). -->

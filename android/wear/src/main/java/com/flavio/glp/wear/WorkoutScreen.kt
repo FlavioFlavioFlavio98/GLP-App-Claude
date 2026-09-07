@@ -313,15 +313,29 @@ private fun RepsStep(
         // e il numero reps rimpiccioliti (non servono in evidenza quanto i 4
         // pulsanti, con cui si interagisce davvero); i pulsanti restano alla
         // stessa dimensione.
-        ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
+        // autoCentering=null: di default ScalingLazyColumn aggiunge un
+        // padding automatico in cima/fondo per poter centrare qualsiasi item
+        // scrollando, che con un contenuto già corto come questo lasciava un
+        // vistoso spazio vuoto sopra il primo elemento — disabilitato per far
+        // salire davvero tutto verso il bordo superiore, richiesta esplicita
+        // di Flavio ("sposta molto più in alto icona e nome esercizio, anche
+        // se viene tagliato non fa niente, così il resto sale e fa spazio al
+        // pulsante Aggiungi").
+        ScalingLazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            autoCentering = null,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 4.dp),
+        ) {
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    ExerciseChipIcon(exercise, size = 16.dp)
+                    ExerciseChipIcon(exercise, size = 12.dp)
                     Text(
                         exercise.name,
                         style = MaterialTheme.typography.caption2,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
                         modifier = Modifier.padding(start = 4.dp),
                     )
                 }

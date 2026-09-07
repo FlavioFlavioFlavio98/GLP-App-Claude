@@ -360,7 +360,6 @@ private fun MainPager(
 
     LaunchedEffect(Unit) {
         refreshScore()
-        refreshHabits()
         refreshTasks()
         refreshFoods()
     }
@@ -384,6 +383,19 @@ private fun MainPager(
                 exercisesLoading = false
             },
             onError = { exercisesLoading = false },
+        )
+        onDispose { registration.remove() }
+    }
+
+    // Stesso principio del listener esercizi qui sopra, ma per le abitudini:
+    // senza, un'abitudine completata dalla Tile "Abitudini oggi" mentre
+    // l'app era ferma in background restava "da fare" riaprendo l'app, bug
+    // reale segnalato da Flavio.
+    DisposableEffect(Unit) {
+        habitsLoading = true
+        val registration = GlpRepository.observeHabits(
+            onResult = { habits = it; habitsLoading = false },
+            onError = { habitsLoading = false },
         )
         onDispose { registration.remove() }
     }

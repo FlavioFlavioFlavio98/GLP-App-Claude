@@ -428,29 +428,46 @@ object GlpRepository {
     // rispetta comunque la cadenza multi-giorno (frequency), altrimenti
     // un'abitudine "ogni 3 giorni" restava spuntabile ogni giorno dal watch,
     // guadagnandone la ricompensa più spesso del previsto.
+    private fun parseAllHabits(doc: DocumentSnapshot): List<WearHabit> {
+        val todayStr = today()
+        val (doneIds, failedIds) = todayDoneAndFailed(doc, todayStr)
+        @Suppress("UNCHECKED_CAST")
+        val rawHabits = doc.get("habits") as? List<Map<String, Any>> ?: emptyList()
+        return rawHabits
+            .filter { it["type"] != "single" && it["type"] != "goal" }
+            .filter { isHabitVisibleToday(it, todayStr, doneIds, failedIds) }
+            .map {
+                val id = stableHabitId(it)
+                WearHabit(
+                    id = id,
+                    name = it["name"] as? String ?: "Abitudine",
+                    emoji = it["emoji"] as? String ?: "⭐",
+                    done = doneIds.contains(id),
+                )
+            }
+    }
+
     fun loadHabits(onResult: (List<WearHabit>) -> Unit, onError: (Exception) -> Unit) {
         userRef().get()
-            .addOnSuccessListener { doc ->
-                val todayStr = today()
-                val (doneIds, failedIds) = todayDoneAndFailed(doc, todayStr)
-                @Suppress("UNCHECKED_CAST")
-                val rawHabits = doc.get("habits") as? List<Map<String, Any>> ?: emptyList()
-
-                val habits = rawHabits
-                    .filter { it["type"] != "single" && it["type"] != "goal" }
-                    .filter { isHabitVisibleToday(it, todayStr, doneIds, failedIds) }
-                    .map {
-                        val id = stableHabitId(it)
-                        WearHabit(
-                            id = id,
-                            name = it["name"] as? String ?: "Abitudine",
-                            emoji = it["emoji"] as? String ?: "⭐",
-                            done = doneIds.contains(id),
-                        )
-                    }
-                onResult(habits)
-            }
+            .addOnSuccessListener { doc -> onResult(parseAllHabits(doc)) }
             .addOnFailureListener(onError)
+    }
+
+    // Listener persistente (non un get() singolo) per la pagina Abitudini
+    // dell'app: senza, "habits" restava congelato al valore dell'ultima
+    // apertura dell'Activity — se un'abitudine veniva completata dalla Tile
+    // "Abitudini oggi" mentre l'app era ferma in background, riaprendo l'app
+    // la si vedeva ancora "da fare", bug reale segnalato da Flavio. Stesso
+    // principio già applicato a observeExercises per il Workout.
+    fun observeHabits(onResult: (List<WearHabit>) -> Unit, onError: (Exception) -> Unit): ListenerRegistration {
+        return userRef().addSnapshotListener { doc, error ->
+            if (error != null) {
+                onError(error)
+                return@addSnapshotListener
+            }
+            if (doc == null) return@addSnapshotListener
+            onResult(parseAllHabits(doc))
+        }
     }
 
     fun toggleHabit(habitId: String, currentlyDone: Boolean, onDone: () -> Unit, onError: (Exception) -> Unit) {
@@ -620,8 +637,17 @@ object GlpRepository {
                     "habits" to habitsArr,
                 )
             )
-        }.addOnSuccessListener { onDone() }
-            .addOnFailureListener(onError)
+        }.addOnSuccessListener {
+            // Aggiornamento ottimistico della cache della Tile: la togliamo
+            // subito dalla lista "da fare" invece di aspettare che il
+            // listener persistente riceva l'evento di conferma dal server —
+            // quel roundtrip introduceva un ritardo percepibile prima che
+            // l'abitudine sparisse dalla Tile, segnalato da Flavio. Quando
+            // il listener riceverà comunque l'evento reale, sovrascriverà la
+            // cache con lo stato dal server (che dovrebbe coincidere).
+            cachedPendingHabits = cachedPendingHabits?.filter { it.id != habitId }
+            onDone()
+        }.addOnFailureListener(onError)
     }
 
     // Log dal watch con reps/sforzo scelti dall'utente — stessa formula punti

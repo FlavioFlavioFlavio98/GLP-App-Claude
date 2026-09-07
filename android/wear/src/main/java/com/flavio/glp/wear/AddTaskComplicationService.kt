@@ -29,8 +29,10 @@ class AddTaskComplicationService : SuspendingComplicationDataSourceService() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        // Solo emoji, niente testo accanto — richiesta esplicita di Flavio
+        // per un'icona più pulita sul quadrante.
         return ShortTextComplicationData.Builder(
-            text = PlainComplicationText.Builder("🎤 Task").build(),
+            text = PlainComplicationText.Builder("🎤").build(),
             contentDescription = PlainComplicationText.Builder("Nuova task a voce").build(),
         )
             .setTapAction(pendingIntent)

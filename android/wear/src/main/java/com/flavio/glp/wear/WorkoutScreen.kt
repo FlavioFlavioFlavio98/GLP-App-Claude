@@ -307,11 +307,23 @@ private fun RepsStep(
         timeText = { TimeText() },
         positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
     ) {
+        // Tutto compattato per stare in un'unica schermata senza scroll —
+        // prima bisognava scorrere per raggiungere sforzo/Aggiungi ad ogni
+        // singola serie, richiesta esplicita di Flavio. Icona+nome esercizio
+        // e il numero reps rimpiccioliti (non servono in evidenza quanto i 4
+        // pulsanti, con cui si interagisce davvero); i pulsanti restano alla
+        // stessa dimensione.
         ScalingLazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    ExerciseChipIcon(exercise, size = 32.dp)
-                    Text(exercise.name, textAlign = TextAlign.Center, modifier = Modifier.padding(start = 6.dp))
+                    ExerciseChipIcon(exercise, size = 16.dp)
+                    Text(
+                        exercise.name,
+                        style = MaterialTheme.typography.caption2,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
                 }
             }
             item {
@@ -325,9 +337,9 @@ private fun RepsStep(
             item {
                 Text(
                     "$reps reps",
-                    style = MaterialTheme.typography.display3,
+                    style = MaterialTheme.typography.title3,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
             item {
@@ -356,7 +368,7 @@ private fun RepsStep(
                     onClick = onConfirm,
                     label = { Text("Aggiungi") },
                     colors = ChipDefaults.primaryChipColors(),
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
             item {

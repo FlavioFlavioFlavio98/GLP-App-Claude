@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
@@ -136,6 +137,17 @@ fun TaskListScreen(
             if (now > 0 && now % TASK_TIMER_REMINDER_SEC == 0) vibrate(context)
             delay(1000)
         }
+    }
+
+    // Senza questo, Wear OS considera l'assenza di tocchi sullo schermo
+    // (normale: qui c'è solo un cronometro da guardare) come inattività e
+    // dopo un po' spegne lo schermo/torna al quadrante — richiesta esplicita
+    // di Flavio: il timer deve restare in primo piano finché non lo fermi.
+    // Stesso pattern già usato per il timer del pasto in MealScreen.
+    val view = LocalView.current
+    DisposableEffect(timerSession != null) {
+        view.keepScreenOn = timerSession != null
+        onDispose { view.keepScreenOn = false }
     }
 
     fun startTimer(task: WearTask) {

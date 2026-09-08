@@ -332,6 +332,24 @@ object GlpRepository {
             .addOnFailureListener(onError)
     }
 
+    // Listener persistente (non un get() singolo) per la pagina Task
+    // dell'app: senza, "tasks" restava congelato al valore dell'ultima
+    // apertura dell'Activity — se una task veniva completata dalla web app
+    // (o dal telefono) mentre il watch era già aperto sulla lista task, la
+    // si vedeva ancora presente finché non si compiva un'azione sul watch
+    // stesso, bug reale segnalato da Flavio. Stesso principio già applicato
+    // a observeHabits/observeExercises.
+    fun observeTasks(onResult: (List<WearTask>) -> Unit, onError: (Exception) -> Unit): ListenerRegistration {
+        return userRef().addSnapshotListener { doc, error ->
+            if (error != null) {
+                onError(error)
+                return@addSnapshotListener
+            }
+            if (doc == null) return@addSnapshotListener
+            onResult(parseActiveTasks(doc))
+        }
+    }
+
     // Transazione invece di get()+update(): questa scrittura modifica un
     // elemento esistente dell'array "tasks", quindi arrayUnion da solo non
     // basta — serve una vera lettura atomica con retry in caso di scrittura

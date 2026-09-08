@@ -360,7 +360,6 @@ private fun MainPager(
 
     LaunchedEffect(Unit) {
         refreshScore()
-        refreshTasks()
         refreshFoods()
     }
 
@@ -396,6 +395,17 @@ private fun MainPager(
         val registration = GlpRepository.observeHabits(
             onResult = { habits = it; habitsLoading = false },
             onError = { habitsLoading = false },
+        )
+        onDispose { registration.remove() }
+    }
+
+    // Stesso principio dei due listener qui sopra, ma per le task — vedi
+    // observeTasks in GlpRepository.
+    DisposableEffect(Unit) {
+        tasksLoading = true
+        val registration = GlpRepository.observeTasks(
+            onResult = { tasks = it; tasksLoading = false },
+            onError = { tasksLoading = false },
         )
         onDispose { registration.remove() }
     }
@@ -468,7 +478,7 @@ private fun MainPager(
                         GlpRepository.addTask(
                             title = title,
                             deadline = deadline,
-                            onDone = { refreshTasks() },
+                            onDone = {},
                             onError = {},
                         )
                     },
@@ -476,7 +486,7 @@ private fun MainPager(
                         GlpRepository.addTaskTimeSpent(
                             taskId = task.id,
                             seconds = seconds,
-                            onDone = { refreshTasks() },
+                            onDone = {},
                             onError = {},
                         )
                     },

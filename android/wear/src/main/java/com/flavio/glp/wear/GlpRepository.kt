@@ -24,6 +24,7 @@ data class WearTask(
     val priority: String,
     val reward: Int,
     val deadline: String,
+    val timeSpentSec: Int = 0,
 )
 
 data class WearExercise(
@@ -295,6 +296,7 @@ object GlpRepository {
                     priority = it["priority"] as? String ?: "medium",
                     reward = asDouble(it["reward"]).toInt(),
                     deadline = it["deadline"] as? String ?: todayStr,
+                    timeSpentSec = asDouble(it["timeSpentSec"]).toInt(),
                 )
             }
             .sortedWith(compareBy({ priorityRank(it.priority) }, { it.deadline }))
@@ -352,6 +354,29 @@ object GlpRepository {
                         put("completedAt", nowIso)
                         put("rewardApplied", true)
                     }
+                } else task
+            }
+            transaction.update(ref, "tasks", updated)
+        }.addOnSuccessListener { onDone() }
+            .addOnFailureListener(onError)
+    }
+
+    // Tempo cronometrato su una task (timer avviato/fermato dalla schermata
+    // Task) — accumulato sulla task stessa, non un log per data: qui conta
+    // solo il totale, per capire quanto tempo richiede una task e in futuro
+    // confrontarlo con una stima, richiesta esplicita di Flavio. Transazione
+    // (non arrayUnion): modifica un elemento esistente dell'array "tasks",
+    // stessa lezione della perdita dati del 28/8/2026.
+    fun addTaskTimeSpent(taskId: String, seconds: Int, onDone: () -> Unit, onError: (Exception) -> Unit) {
+        val ref = userRef()
+        FirebaseFirestore.getInstance().runTransaction { transaction ->
+            val doc = transaction.get(ref)
+            @Suppress("UNCHECKED_CAST")
+            val tasks = doc.get("tasks") as? List<Map<String, Any>> ?: emptyList()
+            val updated = tasks.map { task ->
+                if (task["id"]?.toString() == taskId) {
+                    val current = asDouble(task["timeSpentSec"]).toInt()
+                    task.toMutableMap().apply { put("timeSpentSec", current + seconds) }
                 } else task
             }
             transaction.update(ref, "tasks", updated)

@@ -1,5 +1,7 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import TaskSection from '../components/TaskSection'
+import TaskTimerCard, { readTaskTimerSession } from '../components/TaskTimerCard'
+import { useApp } from '../lib/store'
 
 function TaskFab({ actions }) {
   const longPressTimer = useRef(null)
@@ -33,13 +35,40 @@ function TaskFab({ actions }) {
 }
 
 export default function TaskTab({ authUserId, isReadOnly, actions }) {
+  const { state } = useApp()
+  // Stato sollevato qui (non dentro TaskTimerCard) perché serve anche a
+  // TaskSection per disabilitare il pulsante ▶️ sulle altre task mentre un
+  // timer è già attivo — inizializzato da localStorage per ripristinare una
+  // sessione già in corso anche dopo un reload della pagina.
+  const [timerTaskId, setTimerTaskId] = useState(() => readTaskTimerSession()?.taskId || null)
+
   if (authUserId !== 'flavio' || isReadOnly) {
     return <div className="empty-state">Sezione task non disponibile</div>
   }
+
+  const timerTask = (state.globalData?.tasks || []).find(t => t.id === timerTaskId)
+  const timerTaskTitle = timerTask?.title || readTaskTimerSession()?.taskTitle || ''
+
   return (
     <>
-      <TaskSection minimalMode={false} />
+      <TaskSection
+        minimalMode={false}
+        activeTimerTaskId={timerTaskId}
+        onStartTimer={taskId => setTimerTaskId(taskId)}
+      />
       <TaskFab actions={actions} />
+      {timerTaskId && (
+        <TaskTimerCard
+          taskId={timerTaskId}
+          taskTitle={timerTaskTitle}
+          actions={actions}
+          onFinish={seconds => {
+            actions.addTaskTimeSpent(timerTaskId, seconds)
+            setTimerTaskId(null)
+          }}
+          onCancel={() => setTimerTaskId(null)}
+        />
+      )}
     </>
   )
 }

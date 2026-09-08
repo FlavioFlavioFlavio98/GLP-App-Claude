@@ -2139,6 +2139,21 @@ export function AppProvider({ children }) {
       await updateDoc(doc(db, 'users', authUserId), { tasks })
     },
 
+    // Tempo cronometrato su una task (timer avviato/fermato dalla Tab Task)
+    // — accumulato sulla task stessa, non un log per data: qui conta solo il
+    // totale, per capire quanto tempo richiede una task e in futuro
+    // confrontarlo con una stima, richiesta esplicita di Flavio.
+    async addTaskTimeSpent(taskId, seconds) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const numSeconds = parseInt(seconds) || 0
+      if (numSeconds <= 0) return
+      const tasks = (globalData.tasks || []).map(t =>
+        t.id === taskId ? { ...t, timeSpentSec: (t.timeSpentSec || 0) + numSeconds } : t
+      )
+      await updateDoc(doc(db, 'users', authUserId), { tasks })
+    },
+
     // Scorciatoia rapida dal menu ⋮ per posticipare — evita di dover aprire
     // l'editor completo solo per spostare la scadenza di qualche giorno.
     // "days" è relativo alla vecchia scadenza se questa è ancora nel futuro

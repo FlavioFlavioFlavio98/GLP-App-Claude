@@ -24,7 +24,7 @@ function formatDeadline(deadline) {
   return `${d.getDate()} ${months[d.getMonth()]}`
 }
 
-export default function TaskSection({ minimalMode }) {
+export default function TaskSection({ minimalMode, activeTimerTaskId = null, onStartTimer = null }) {
   const { state, actions } = useApp()
   const { globalData, authUserId } = state
   const isReadOnly = state.viewUserId !== state.authUserId
@@ -125,6 +125,8 @@ export default function TaskSection({ minimalMode }) {
                 onEdit={() => actions.openModal('taskEdit', { task })}
                 onDelete={() => actions.deleteTask(task.id)}
                 onPostpone={days => actions.postponeTask(task, days)}
+                onStartTimer={onStartTimer ? () => onStartTimer(task.id) : null}
+                timerDisabled={activeTimerTaskId != null && activeTimerTaskId !== task.id}
               />
             ))}
 
@@ -197,7 +199,7 @@ export default function TaskSection({ minimalMode }) {
   )
 }
 
-function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPostpone }) {
+function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPostpone, onStartTimer, timerDisabled }) {
   const isCompleted = variant === 'completed'
   const isExpired   = variant === 'expired'
   const isActive    = variant === 'active'
@@ -295,6 +297,9 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
             <>
               <span style={{ fontSize: '0.7em', color: accentColor, fontWeight: 600 }}>📅 {deadline}</span>
               <span style={{ fontSize: '0.68em', color: '#555' }}>+{task.reward}pt / -{task.penalty}pt</span>
+              {task.timeSpentSec > 0 && (
+                <span style={{ fontSize: '0.68em', color: '#888' }}>⏱️ {Math.round(task.timeSpentSec / 60)}m</span>
+              )}
               {recurring && (
                 <span style={{ fontSize: '0.68em', color: '#888' }}>
                   · {recurring.intervalDays === 1 ? 'ogni giorno' : `ogni ${recurring.intervalDays}gg`}
@@ -326,6 +331,21 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
             }}
             title={isExpired ? 'Segna come completata (nessun punto)' : 'Completa task'}
           >✓</button>
+          {isActive && onStartTimer && (
+            <button
+              onClick={e => { e.stopPropagation(); onStartTimer() }}
+              onPointerDown={e => e.stopPropagation()}
+              disabled={timerDisabled}
+              style={{
+                width: 36, height: 36, borderRadius: '50%',
+                border: '2px solid rgba(255,255,255,0.15)',
+                background: 'rgba(255,255,255,0.05)', color: timerDisabled ? '#444' : '#888',
+                cursor: timerDisabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: '0.9em', opacity: timerDisabled ? 0.5 : 1,
+              }}
+              title={timerDisabled ? 'Ferma prima il timer sull\'altra task in corso' : 'Avvia timer su questa task'}
+            >▶️</button>
+          )}
           {postponeOpen ? (
             <div style={{ display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
               <button

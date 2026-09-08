@@ -472,6 +472,14 @@ private fun MainPager(
                             onError = {},
                         )
                     },
+                    onAddTaskTime = { task, seconds ->
+                        GlpRepository.addTaskTimeSpent(
+                            taskId = task.id,
+                            seconds = seconds,
+                            onDone = { refreshTasks() },
+                            onError = {},
+                        )
+                    },
                 )
                 3 -> WorkoutScreen(
                     exercises = exercises,

@@ -43,13 +43,32 @@ const penaltyInput = document.getElementById('penalty')
 // precedente — lo stesso bug che habitLogic.js documenta di aver già
 // corretto una volta nel resto dell'app (vedi il commento su toDateString).
 function todayLocal() { return toDateString(new Date()) }
-function tomorrow() {
+function dateOffset(days) {
   const d = new Date()
-  d.setDate(d.getDate() + 1)
+  d.setDate(d.getDate() + days)
   return toDateString(d)
 }
-deadlineInput.value = tomorrow()
+// Default su oggi (non più domani): la maggior parte delle task rapide
+// aggiunte da qui sono per la giornata corrente — richiesta esplicita di
+// Flavio, con i pulsanti rapidi sotto per gli altri casi comuni senza dover
+// aprire il mini-calendario.
+deadlineInput.value = todayLocal()
 deadlineInput.min = todayLocal()
+
+const quickDateBtns = Array.from(document.querySelectorAll('.quick-date-btn'))
+function syncQuickDateActive() {
+  quickDateBtns.forEach(btn => {
+    btn.classList.toggle('active', dateOffset(parseInt(btn.dataset.days, 10)) === deadlineInput.value)
+  })
+}
+quickDateBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    deadlineInput.value = dateOffset(parseInt(btn.dataset.days, 10))
+    syncQuickDateActive()
+  })
+})
+deadlineInput.addEventListener('input', syncQuickDateActive)
+syncQuickDateActive()
 
 function setStatus(msg) { statusEl.textContent = msg }
 
@@ -91,7 +110,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   // .checkValidity() non basta da solo (l'utente può scrivere una data
   // passata a mano nonostante il min sul campo) — controllata esplicitamente
   // qui sotto, stessa logica di addTask in store.jsx.
-  const deadline = deadlineInput.value || tomorrow()
+  const deadline = deadlineInput.value || todayLocal()
   const priority = priorityInput.value
   const reward = Math.max(0, parseInt(rewardInput.value) || 0)
   const penalty = Math.max(0, parseInt(penaltyInput.value) || 0)
@@ -124,7 +143,8 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     setStatus('✅ Aggiunta!')
     titleInput.value = ''
     descriptionInput.value = ''
-    deadlineInput.value = tomorrow()
+    deadlineInput.value = todayLocal()
+    syncQuickDateActive()
     rewardInput.value = '0'
     penaltyInput.value = '0'
     setTimeout(() => window.close(), 700)

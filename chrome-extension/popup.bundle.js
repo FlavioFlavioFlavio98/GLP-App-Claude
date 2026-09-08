@@ -28838,13 +28838,27 @@ This typically indicates that your device does not have a healthy Internet conne
   function todayLocal() {
     return toDateString(/* @__PURE__ */ new Date());
   }
-  function tomorrow() {
+  function dateOffset(days) {
     const d = /* @__PURE__ */ new Date();
-    d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + days);
     return toDateString(d);
   }
-  deadlineInput.value = tomorrow();
+  deadlineInput.value = todayLocal();
   deadlineInput.min = todayLocal();
+  var quickDateBtns = Array.from(document.querySelectorAll(".quick-date-btn"));
+  function syncQuickDateActive() {
+    quickDateBtns.forEach((btn) => {
+      btn.classList.toggle("active", dateOffset(parseInt(btn.dataset.days, 10)) === deadlineInput.value);
+    });
+  }
+  quickDateBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      deadlineInput.value = dateOffset(parseInt(btn.dataset.days, 10));
+      syncQuickDateActive();
+    });
+  });
+  deadlineInput.addEventListener("input", syncQuickDateActive);
+  syncQuickDateActive();
   function setStatus(msg) {
     statusEl.textContent = msg;
   }
@@ -28881,7 +28895,7 @@ This typically indicates that your device does not have a healthy Internet conne
       setStatus("Scrivi cosa devi fare");
       return;
     }
-    const deadline = deadlineInput.value || tomorrow();
+    const deadline = deadlineInput.value || todayLocal();
     const priority = priorityInput.value;
     const reward = Math.max(0, parseInt(rewardInput.value) || 0);
     const penalty = Math.max(0, parseInt(penaltyInput.value) || 0);
@@ -28910,7 +28924,8 @@ This typically indicates that your device does not have a healthy Internet conne
       setStatus("\u2705 Aggiunta!");
       titleInput.value = "";
       descriptionInput.value = "";
-      deadlineInput.value = tomorrow();
+      deadlineInput.value = todayLocal();
+      syncQuickDateActive();
       rewardInput.value = "0";
       penaltyInput.value = "0";
       setTimeout(() => window.close(), 700);

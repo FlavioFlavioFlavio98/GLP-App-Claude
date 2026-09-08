@@ -25,6 +25,13 @@
   button:active { opacity: 0.85; }
   .row { display: flex; gap: 6px; }
   .row > * { flex: 1; }
+  .quick-dates { margin-bottom: 8px; }
+  .quick-date-btn {
+    width: auto; padding: 6px 4px; margin-top: 0;
+    background: #242424; color: #ccc; border: 1px solid #3a3a3a;
+    font-weight: 600; font-size: 11px;
+  }
+  .quick-date-btn.active { background: #3a3a3a; color: #ffca28; border-color: #ffca28; }
   #status { font-size: 11px; color: #888; margin-top: 8px; text-align: center; min-height: 14px; }
   #loginView, #taskView { display: none; }
   .hint { font-size: 10px; color: #666; margin-bottom: 10px; }
@@ -43,6 +50,12 @@
     <input id="title" type="text" placeholder="Cosa devi fare?" autocomplete="off">
     <input id="description" type="text" placeholder="Descrizione (opzionale)" autocomplete="off">
     <input id="deadline" type="date">
+    <div class="row quick-dates">
+      <button type="button" class="quick-date-btn" data-days="0">Oggi</button>
+      <button type="button" class="quick-date-btn" data-days="1">Domani</button>
+      <button type="button" class="quick-date-btn" data-days="2">+2gg</button>
+      <button type="button" class="quick-date-btn" data-days="3">+3gg</button>
+    </div>
     <div class="row">
       <select id="priority">
         <option value="high">Alta</option>

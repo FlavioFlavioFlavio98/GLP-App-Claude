@@ -54,7 +54,7 @@ export default function LifeAreaLogModal() {
         animation: 'slideUp 0.22s ease',
         boxSizing: 'border-box',
       }}>
-        <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 2, margin: '0 auto 18px' }} />
+        <div style={{ width: 40, height: 4, background: 'var(--card-border)', borderRadius: 2, margin: '0 auto 18px' }} />
 
         <div style={{ textAlign: 'center', fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 }}>
           🌱 Sessione area della vita
@@ -79,8 +79,8 @@ export default function LifeAreaLogModal() {
                       onClick={() => setAreaId(a.id)}
                       style={{
                         padding: '8px 14px', borderRadius: 20,
-                        border: active ? `1px solid ${a.color || 'var(--theme-color)'}` : '1px solid rgba(255,255,255,0.12)',
-                        background: active ? `${a.color || 'var(--theme-color)'}22` : 'rgba(255,255,255,0.05)',
+                        border: active ? `1px solid ${a.color || 'var(--theme-color)'}` : '1px solid var(--card-border)',
+                        background: active ? `${a.color || 'var(--theme-color)'}22` : 'var(--surface)',
                         color: active ? (a.color || 'var(--theme-color)') : 'var(--text)',
                         fontSize: '0.9em', fontWeight: active ? 700 : 500,
                         cursor: 'pointer',
@@ -118,7 +118,7 @@ export default function LifeAreaLogModal() {
                 placeholder="Es. Lettura Come trattare gli altri e farseli amici"
                 maxLength={200}
                 rows={2}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.85em', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.85em', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit' }}
               />
             </div>
 
@@ -129,7 +129,7 @@ export default function LifeAreaLogModal() {
                 value={sessionDate}
                 max={toDateString(new Date())}
                 onChange={e => setSessionDate(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
               />
             </div>
 
@@ -150,8 +150,8 @@ export default function LifeAreaLogModal() {
 
 const btnStyle = {
   width: 44, height: 44, borderRadius: '50%',
-  border: '1px solid rgba(255,255,255,0.15)',
-  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid var(--card-border)',
+  background: 'var(--card-border)',
   color: 'var(--text)', fontSize: '0.9em', fontWeight: 700,
   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
 }

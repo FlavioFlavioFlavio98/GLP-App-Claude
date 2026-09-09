@@ -58,7 +58,7 @@ function CoinPicker({ label, value, onChange }) {
             style={{
               width: 64, padding: '5px 8px', borderRadius: 8,
               border: '1px solid var(--theme-color)',
-              background: 'rgba(255,255,255,0.05)', color: 'var(--text)',
+              background: 'var(--surface)', color: 'var(--text)',
               fontSize: '0.88em', textAlign: 'center',
             }}
             autoFocus
@@ -157,7 +157,7 @@ export default function TaskModal() {
         animation: 'slideUp 0.22s ease',
         maxHeight: '90vh', overflowY: 'auto',
       }}>
-        <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 2, margin: '0 auto 18px' }} />
+        <div style={{ width: 40, height: 4, background: 'var(--card-border)', borderRadius: 2, margin: '0 auto 18px' }} />
 
         <div style={{ fontSize: '1em', fontWeight: 700, color: 'var(--text)', marginBottom: 20, textAlign: 'center' }}>
           {isMoveToArea ? '📤 Sposta Task' : isEdit ? '✏️ Modifica Task' : '📋 Nuova Task'}
@@ -171,9 +171,14 @@ export default function TaskModal() {
               onChange={e => setDestination(e.target.value)}
               style={{ ...inputStyle, cursor: 'pointer' }}
             >
-              <option value="tasks">📋 Task generali</option>
+              {/* Il popup delle opzioni di un <select> nativo è disegnato dal
+                  browser/OS, non dal nostro CSS — senza uno style esplicito
+                  su ogni <option>, Chrome su Windows lo renderizza con
+                  sfondo bianco fisso: col tema scuro il testo (bianco,
+                  ereditato) diventava invisibile su sfondo bianco. */}
+              <option value="tasks" style={{ background: 'var(--card-solid)', color: 'var(--text)' }}>📋 Task generali</option>
               {lifeAreas.map(a => (
-                <option key={a.id} value={a.id}>{a.emoji} {a.name} (spunto, senza scadenza)</option>
+                <option key={a.id} value={a.id} style={{ background: 'var(--card-solid)', color: 'var(--text)' }}>{a.emoji} {a.name} (spunto, senza scadenza)</option>
               ))}
             </select>
           </div>
@@ -185,8 +190,8 @@ export default function TaskModal() {
             style={{
               width: '100%', padding: '10px 14px', borderRadius: 12, cursor: 'pointer',
               marginBottom: 16, textAlign: 'left',
-              border: `1px solid ${alreadyDone ? '#4caf50' : 'rgba(255,255,255,0.1)'}`,
-              background: alreadyDone ? 'rgba(76,175,80,0.12)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${alreadyDone ? '#4caf50' : 'var(--card-border)'}`,
+              background: alreadyDone ? 'rgba(76,175,80,0.12)' : 'var(--surface)',
               color: alreadyDone ? '#4caf50' : '#888',
               fontSize: '0.88em', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8,
             }}
@@ -262,8 +267,8 @@ export default function TaskModal() {
                     style={{
                       flex: 1, padding: '9px 4px', borderRadius: 10,
                       cursor: 'pointer', fontSize: '0.82em', fontWeight: 600,
-                      background: priority === v ? `${c}22` : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${priority === v ? c : 'rgba(255,255,255,0.1)'}`,
+                      background: priority === v ? `${c}22` : 'var(--surface)',
+                      border: `1px solid ${priority === v ? c : 'var(--card-border)'}`,
                       color: priority === v ? c : '#666',
                       transition: 'all 0.15s',
                     }}
@@ -279,8 +284,8 @@ export default function TaskModal() {
             onClick={() => actions.closeModal()}
             style={{
               flex: 1, padding: 13, borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid var(--card-border)',
+              background: 'var(--surface)',
               color: '#888', cursor: 'pointer', fontSize: '0.9em',
             }}
           >Annulla</button>
@@ -301,8 +306,8 @@ export default function TaskModal() {
 function presetBtn(active) {
   return {
     minWidth: 36, height: 36, borderRadius: 8, cursor: 'pointer',
-    border: `1px solid ${active ? 'var(--theme-color)' : 'rgba(255,255,255,0.1)'}`,
-    background: active ? 'var(--theme-glow)' : 'rgba(255,255,255,0.04)',
+    border: `1px solid ${active ? 'var(--theme-color)' : 'var(--card-border)'}`,
+    background: active ? 'var(--theme-glow)' : 'var(--surface)',
     color: active ? 'var(--theme-color)' : '#888',
     fontWeight: 700, fontSize: '0.88em', padding: '0 10px',
     transition: 'all 0.15s',
@@ -316,7 +321,7 @@ const labelStyle = {
 
 const inputStyle = {
   width: '100%', padding: '10px 12px', borderRadius: 10,
-  border: '1px solid rgba(255,255,255,0.1)',
-  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid var(--card-border)',
+  background: 'var(--surface)',
   color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box',
 }

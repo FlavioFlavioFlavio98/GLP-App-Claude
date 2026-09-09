@@ -9,6 +9,8 @@ export const THEMES = {
     themeGlow: 'rgba(255,202,40,0.25)',
     accent2: '#d05ce3',
     border: 'rgba(255,255,255,0.07)',
+    surface: 'rgba(255,255,255,0.045)',
+    surface2: 'rgba(255,255,255,0.09)',
     text: '#ffffff',
     textSec: '#b0b0b0',
     glassShadow: '0 4px 24px rgba(0,0,0,0.35)',
@@ -23,6 +25,8 @@ export const THEMES = {
     themeGlow: 'rgba(105,240,174,0.25)',
     accent2: '#4caf50',
     border: 'rgba(105,240,174,0.08)',
+    surface: 'rgba(255,255,255,0.045)',
+    surface2: 'rgba(255,255,255,0.09)',
     text: '#ffffff',
     textSec: '#b0b0b0',
     glassShadow: '0 4px 24px rgba(0,0,0,0.35)',
@@ -37,6 +41,8 @@ export const THEMES = {
     themeGlow: 'rgba(255,112,67,0.25)',
     accent2: '#ff9800',
     border: 'rgba(255,112,67,0.08)',
+    surface: 'rgba(255,255,255,0.045)',
+    surface2: 'rgba(255,255,255,0.09)',
     text: '#ffffff',
     textSec: '#b0b0b0',
     glassShadow: '0 4px 24px rgba(0,0,0,0.35)',
@@ -51,6 +57,8 @@ export const THEMES = {
     themeGlow: 'rgba(121,134,203,0.25)',
     accent2: '#5c6bc0',
     border: 'rgba(121,134,203,0.08)',
+    surface: 'rgba(255,255,255,0.045)',
+    surface2: 'rgba(255,255,255,0.09)',
     text: '#ffffff',
     textSec: '#b0b0b0',
     glassShadow: '0 4px 24px rgba(0,0,0,0.35)',
@@ -65,6 +73,8 @@ export const THEMES = {
     themeGlow: 'rgba(77,182,172,0.25)',
     accent2: '#80cbc4',
     border: 'rgba(77,182,172,0.08)',
+    surface: 'rgba(255,255,255,0.045)',
+    surface2: 'rgba(255,255,255,0.09)',
     text: '#ffffff',
     textSec: '#b0b0b0',
     glassShadow: '0 4px 24px rgba(0,0,0,0.35)',
@@ -79,6 +89,8 @@ export const THEMES = {
     themeGlow: 'rgba(212,146,10,0.18)',
     accent2: '#8e24aa',
     border: 'rgba(0,0,0,0.09)',
+    surface: 'rgba(0,0,0,0.035)',
+    surface2: 'rgba(0,0,0,0.06)',
     text: '#1a1a1a',
     textSec: '#5f6368',
     glassShadow: '0 2px 12px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,0.8) inset',
@@ -100,6 +112,8 @@ export function applyTheme(themeId) {
   r.style.setProperty('--theme-glow', t.themeGlow)
   r.style.setProperty('--accent2', t.accent2)
   r.style.setProperty('--card-border', t.border)
+  r.style.setProperty('--surface', t.surface || 'rgba(255,255,255,0.045)')
+  r.style.setProperty('--surface-2', t.surface2 || 'rgba(255,255,255,0.09)')
   r.style.setProperty('--text', t.text || '#ffffff')
   r.style.setProperty('--text-sec', t.textSec || '#b0b0b0')
   r.style.setProperty('--glass-shadow', t.glassShadow || '0 4px 24px rgba(0,0,0,0.35)')

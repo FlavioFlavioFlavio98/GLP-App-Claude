@@ -16,7 +16,7 @@ const SectionTitle = ({ children }) => (
 )
 
 const StatCard = ({ label, value, sub, color }) => (
-  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
+  <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '12px 8px', textAlign: 'center' }}>
     <div style={{ fontSize: '1.3em', fontWeight: 800, color: color || 'var(--theme-color)' }}>{value}</div>
     {sub && <div style={{ fontSize: '0.6em', color: '#555', marginTop: 2 }}>{sub}</div>}
     <div style={{ fontSize: '0.58em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 }}>{label}</div>
@@ -123,11 +123,11 @@ export default function LifeAreaManageModal() {
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
             onClick={() => setTab('stats')}
-            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: tab === 'stats' ? 'var(--theme-color)' : 'rgba(255,255,255,0.05)', color: tab === 'stats' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
+            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid var(--card-border)', background: tab === 'stats' ? 'var(--theme-color)' : 'var(--surface)', color: tab === 'stats' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
           >📊 Statistiche</button>
           <button
             onClick={() => setTab('manage')}
-            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: tab === 'manage' ? 'var(--theme-color)' : 'rgba(255,255,255,0.05)', color: tab === 'manage' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
+            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid var(--card-border)', background: tab === 'manage' ? 'var(--theme-color)' : 'var(--surface)', color: tab === 'manage' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
           >⚙️ Gestisci</button>
         </div>
 
@@ -158,7 +158,7 @@ export default function LifeAreaManageModal() {
             <SectionTitle>Dettaglio per area</SectionTitle>
             {stats.byArea.length === 0 && <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85em' }}>Nessuna area creata</p>}
             {stats.byArea.map(a => (
-              <div key={a.areaId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div key={a.areaId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--card-border)' }}>
                 <span style={{ fontSize: '1.3em' }}>{a.emoji}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: '0.9em' }}>{a.name}</div>
@@ -178,7 +178,7 @@ export default function LifeAreaManageModal() {
             {!showAddForm ? (
               <>
                 {lifeAreas.map(a => (
-                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', opacity: a.active === false ? 0.5 : 1 }}>
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--card-border)', opacity: a.active === false ? 0.5 : 1 }}>
                     <span style={{ fontSize: '1.3em' }}>{a.emoji}</span>
                     <div style={{ flex: 1, fontWeight: 700, fontSize: '0.9em' }}>
                       {a.name}{a.active === false && <span style={{ fontSize: '0.75em', color: '#666', fontWeight: 400 }}> (archiviata)</span>}
@@ -203,7 +203,7 @@ export default function LifeAreaManageModal() {
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="Es. Relazioni"
                     maxLength={40}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div style={{ marginBottom: 12 }}>
@@ -212,7 +212,7 @@ export default function LifeAreaManageModal() {
                     type="text"
                     value={form.emoji}
                     onChange={e => setForm(f => ({ ...f, emoji: e.target.value.slice(0, 4) }))}
-                    style={{ width: 60, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '1.2em', textAlign: 'center', boxSizing: 'border-box' }}
+                    style={{ width: 60, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '1.2em', textAlign: 'center', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div style={{ marginBottom: 12 }}>
@@ -223,7 +223,7 @@ export default function LifeAreaManageModal() {
                     value={form.weeklyTargetMin}
                     onChange={e => setForm(f => ({ ...f, weeklyTargetMin: e.target.value }))}
                     placeholder="Es. 60"
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div style={{ marginBottom: 16 }}>
@@ -233,7 +233,7 @@ export default function LifeAreaManageModal() {
                       <button
                         key={c}
                         onClick={() => setForm(f => ({ ...f, color: c }))}
-                        style={{ width: 32, height: 32, borderRadius: '50%', background: c, border: form.color === c ? '3px solid #fff' : '1px solid rgba(255,255,255,0.2)', cursor: 'pointer' }}
+                        style={{ width: 32, height: 32, borderRadius: '50%', background: c, border: form.color === c ? '3px solid #fff' : '1px solid var(--card-border)', cursor: 'pointer' }}
                       />
                     ))}
                   </div>
@@ -257,7 +257,7 @@ export default function LifeAreaManageModal() {
 
 const iconBtnStyle = {
   width: 34, height: 34, borderRadius: 8,
-  border: '1px solid rgba(255,255,255,0.1)',
-  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid var(--card-border)',
+  background: 'var(--surface)',
   cursor: 'pointer', fontSize: '0.9em',
 }

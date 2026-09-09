@@ -55,7 +55,7 @@ function WeeklyTrendChart({ lifeAreaLog }) {
 
 function StatCell({ label, value, color }) {
   return (
-    <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
       <div style={{ fontSize: '1.15em', fontWeight: 800, color: color || 'var(--theme-color)' }}>{value}</div>
       <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>{label}</div>
     </div>
@@ -136,7 +136,7 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
             key={a.id}
             style={{
               padding: '10px 14px', marginBottom: 8,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12,
+              background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 12,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -170,20 +170,20 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
                     className="btn-icon"
                     title="Diario"
                     onClick={() => actions.openModal('lifeAreaDetail', { areaId: a.id })}
-                    style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1em' }}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--surface)', cursor: 'pointer', fontSize: '1em' }}
                   >📓</button>
                   <button
                     className="btn-icon"
                     title="Aggiungi sessione"
                     onClick={() => actions.openModal('lifeAreaLog', { areaId: a.id })}
-                    style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1.1em' }}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--surface)', cursor: 'pointer', fontSize: '1.1em' }}
                   >+</button>
                 </div>
               )}
             </div>
             {hasTarget && (
               <div style={{ marginTop: 10 }}>
-                <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-2)', overflow: 'hidden' }}>
                   <div style={{
                     height: '100%', width: `${targetPct}%`, borderRadius: 3,
                     background: byArea.weekTargetPct >= 100 ? 'var(--success)' : (a.color || 'var(--theme-color)'),
@@ -195,7 +195,7 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
               </div>
             )}
             {isExpanded && (
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--card-border)' }}>
                 {areaIdeas.length === 0 ? (
                   <p style={{ fontSize: '0.76em', color: '#666', margin: '0 0 8px' }}>Ancora nessuno spunto qui.</p>
                 ) : (
@@ -241,7 +241,7 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
               <div key={s.id} style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '5px 8px', marginBottom: 4,
-                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8,
+                background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 8,
               }}>
                 <span style={{ fontSize: '0.95em' }}>{area?.emoji || '❔'}</span>
                 <span style={{ fontSize: '0.68em', color: '#666', minWidth: 36 }}>{s.time?.slice(0, 5) || ''}</span>
@@ -287,11 +287,11 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           <button
             onClick={() => actions.openModal('lifeAreaLog')}
-            style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontWeight: 700, fontSize: '0.88em', cursor: 'pointer' }}
+            style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontSize: '0.88em', cursor: 'pointer' }}
           >+ Sessione manuale</button>
           <button
             onClick={() => actions.openModal('lifeAreaManage')}
-            style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontWeight: 700, fontSize: '0.88em', cursor: 'pointer' }}
+            style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontSize: '0.88em', cursor: 'pointer' }}
           >⚙️ Gestisci aree</button>
         </div>
       )}

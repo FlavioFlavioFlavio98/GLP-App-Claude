@@ -144,7 +144,7 @@ export default function LifeAreaTimerCard({ areas, actions }) {
           placeholder="Nota (opzionale)"
           maxLength={200}
           rows={2}
-          style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.85em', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', marginBottom: 10 }}
+          style={{ width: '100%', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.85em', boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', marginBottom: 10 }}
         />
         <button className="btn-main" style={{ width: '100%', padding: '12px' }} onClick={confirmSave} disabled={saving}>
           {saving ? '⏳ Salvataggio...' : 'Salva sessione'}
@@ -177,8 +177,8 @@ export default function LifeAreaTimerCard({ areas, actions }) {
               onClick={() => setPickerAreaId(a.id)}
               style={{
                 padding: '8px 14px', borderRadius: 20,
-                border: active ? `1px solid ${a.color || 'var(--theme-color)'}` : '1px solid rgba(255,255,255,0.12)',
-                background: active ? `${a.color || 'var(--theme-color)'}22` : 'rgba(255,255,255,0.05)',
+                border: active ? `1px solid ${a.color || 'var(--theme-color)'}` : '1px solid var(--card-border)',
+                background: active ? `${a.color || 'var(--theme-color)'}22` : 'var(--surface)',
                 color: active ? (a.color || 'var(--theme-color)') : 'var(--text)',
                 fontSize: '0.85em', fontWeight: active ? 700 : 500, cursor: 'pointer',
               }}
@@ -196,13 +196,13 @@ export default function LifeAreaTimerCard({ areas, actions }) {
 }
 
 const cardStyle = {
-  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+  background: 'var(--surface)', border: '1px solid var(--card-border)',
   borderRadius: 14, padding: 16, marginBottom: 16,
 }
 
 const smallBtnStyle = {
   width: 40, height: 40, borderRadius: '50%',
-  border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)',
+  border: '1px solid var(--card-border)', background: 'var(--card-border)',
   color: 'var(--text)', fontSize: '1.2em', fontWeight: 700,
   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
 }

@@ -92,7 +92,7 @@ export default function LifeAreaDetailModal() {
 
   function IdeaRow({ i }) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', marginBottom: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, opacity: i.done ? 0.55 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', marginBottom: 6, background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, opacity: i.done ? 0.55 : 1 }}>
         <button
           className="btn-icon"
           style={{ padding: 0, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -124,11 +124,11 @@ export default function LifeAreaDetailModal() {
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button
             onClick={() => setTab('diario')}
-            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: tab === 'diario' ? 'var(--theme-color)' : 'rgba(255,255,255,0.05)', color: tab === 'diario' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
+            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid var(--card-border)', background: tab === 'diario' ? 'var(--theme-color)' : 'var(--surface)', color: tab === 'diario' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
           >📝 Diario</button>
           <button
             onClick={() => setTab('idee')}
-            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: tab === 'idee' ? 'var(--theme-color)' : 'rgba(255,255,255,0.05)', color: tab === 'idee' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
+            style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid var(--card-border)', background: tab === 'idee' ? 'var(--theme-color)' : 'var(--surface)', color: tab === 'idee' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
           >💡 Spunti{pendingIdeas.length > 0 ? ` (${pendingIdeas.length})` : ''}</button>
         </div>
 
@@ -145,7 +145,7 @@ export default function LifeAreaDetailModal() {
                 value={noteDate}
                 max={toDateString(new Date())}
                 onChange={e => setNoteDate(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box', colorScheme: 'dark' }}
               />
             </div>
 
@@ -155,7 +155,7 @@ export default function LifeAreaDetailModal() {
               placeholder="Cosa hai fatto, letto, provato, capito..."
               maxLength={1000}
               rows={5}
-              style={{ width: '100%', padding: 14, borderRadius: 14, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.95em', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5, marginBottom: 10 }}
+              style={{ width: '100%', padding: 14, borderRadius: 14, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.95em', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5, marginBottom: 10 }}
             />
             <button className="btn-main" style={{ width: '100%', padding: 12, marginBottom: 20, opacity: text.trim() ? 1 : 0.5 }} onClick={handleAddNote} disabled={saving || !text.trim()}>
               {saving ? '⏳' : '+ Aggiungi nota'}
@@ -164,7 +164,7 @@ export default function LifeAreaDetailModal() {
             <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Note passate</div>
             {notes.length === 0 && <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85em', padding: '10px 0' }}>Ancora nessuna nota qui.</p>}
             {notes.map(n => (
-              <div key={n.id} style={{ padding: '12px 14px', marginBottom: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
+              <div key={n.id} style={{ padding: '12px 14px', marginBottom: 8, background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <span style={{ fontSize: '0.68em', color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{fmtNoteDate(n.date)}</span>
                   {editingId !== n.id && (
@@ -185,7 +185,7 @@ export default function LifeAreaDetailModal() {
                       onChange={e => setEditingText(e.target.value)}
                       maxLength={1000}
                       rows={4}
-                      style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.88em', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', marginBottom: 8 }}
+                      style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.88em', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', marginBottom: 8 }}
                     />
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn-sec" style={{ flex: 1, marginTop: 0 }} onClick={() => setEditingId(null)}>Annulla</button>
@@ -213,7 +213,7 @@ export default function LifeAreaDetailModal() {
                 onKeyDown={e => { if (e.key === 'Enter') handleAddIdea() }}
                 placeholder="Es. Video YouTube esercizi a corpo libero"
                 maxLength={200}
-                style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.88em', boxSizing: 'border-box' }}
+                style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.88em', boxSizing: 'border-box' }}
               />
               <button
                 onClick={handleAddIdea}

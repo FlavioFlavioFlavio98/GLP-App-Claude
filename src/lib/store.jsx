@@ -138,7 +138,12 @@ const initialState = {
   userColors: {
     flavio: localStorage.getItem('glp_color_flavio') || '#ffca28',
   },
-  density: localStorage.getItem('glp_density') || 'normal',
+  // Il selettore "compact/normal/expanded" (classi habit-density-* già in
+  // index.css) non è mai stato collegato a nessuna UI in Impostazioni — di
+  // fatto rimaneva sempre 'normal'. Default a 'compact' su richiesta di
+  // Flavio: lista abitudini troppo alta, stesso trattamento già fatto per
+  // la lista Task.
+  density: localStorage.getItem('glp_density') || 'compact',
   minimalMode: localStorage.getItem('glp_minimal_mode') === 'true',
   wakeLockEnabled: localStorage.getItem('glp_wake_lock') === 'true',
 }

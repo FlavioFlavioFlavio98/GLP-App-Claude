@@ -15,6 +15,13 @@
   --theme-glow: rgba(255, 202, 40, 0.25);
   --accent2: #d05ce3;
   --card-border: rgba(255, 255, 255, 0.07);
+  /* Overlay per superfici annidate (righe dentro una card, badge, hover) —
+     bianco a bassa opacità nei temi scuri, nero a bassa opacità nel tema
+     chiaro (altrimenti un overlay bianco sparisce su sfondo già chiaro):
+     stesso principio già usato da --card-border qui sopra. Overridden da
+     applyTheme() in lib/themes.js. */
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-2: rgba(255, 255, 255, 0.09);
 
   /* User colors (overridden by JS) */
   --flavio-color: #ffca28;
@@ -279,6 +286,15 @@ body.offline .offline-badge { display: block; }
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
   opacity: 0; cursor: pointer; z-index: 2;
 }
+.date-nav-warning {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; margin: -6px 0 14px; padding: 7px 10px;
+  background: rgba(229,57,53,0.1); border: 1px solid rgba(229,57,53,0.3);
+  border-radius: 30px; color: #e53935; font-size: 0.78em; font-weight: 700;
+  cursor: pointer; transition: background var(--transition);
+}
+.date-nav-warning:hover { background: rgba(229,57,53,0.18); }
+.date-nav-warning:active { transform: scale(0.98); }
 
 /* =============================================
    DAILY SUMMARY
@@ -1397,11 +1413,13 @@ input[type="color"] {
 /* =============================================
    DENSITY VARIANTS (Fix 4)
    ============================================= */
-.habit-density-compact .item { padding: 8px 12px; margin-bottom: 6px; }
-.habit-density-compact .item h3 { font-size: 0.9em; }
-.habit-density-compact .item-desc { font-size: 0.68em; }
-.habit-density-compact .vals { margin-top: 3px; font-size: 0.78em; }
-.habit-density-compact .btn-status { width: 36px; height: 36px; border-radius: 10px; }
+.habit-density-compact .item { padding: 7px 10px; margin-bottom: 6px; }
+.habit-density-compact .item h3 { font-size: 0.86em; }
+.habit-density-compact .item-desc { font-size: 0.66em; margin-top: 2px; }
+.habit-density-compact .vals { margin-top: 2px; font-size: 0.75em; }
+.habit-density-compact .actions-group { gap: 4px; }
+.habit-density-compact .btn-status { width: 32px; height: 32px; border-radius: 9px; }
+.habit-density-compact .btn-icon { padding: 4px; }
 .habit-density-compact .drag-handle .material-icons-round { font-size: 18px; }
 
 .habit-density-expanded .item { padding: 20px; margin-bottom: 14px; }

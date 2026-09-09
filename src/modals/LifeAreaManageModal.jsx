@@ -30,7 +30,7 @@ export default function LifeAreaManageModal() {
   const [tab, setTab] = useState('stats') // 'stats' | 'manage'
   const [showAddForm, setShowAddForm] = useState(false)
   const [editArea, setEditArea] = useState(null)
-  const [form, setForm] = useState({ name: '', emoji: '⭐', color: COLOR_OPTIONS[0] })
+  const [form, setForm] = useState({ name: '', emoji: '⭐', color: COLOR_OPTIONS[0], weeklyTargetMin: 0 })
   const [saving, setSaving] = useState(false)
   const doughnutCanvasRef = useRef(null)
   const doughnutChartRef = useRef(null)
@@ -88,23 +88,25 @@ export default function LifeAreaManageModal() {
   async function handleSaveArea() {
     if (!form.name.trim()) return
     setSaving(true)
-    const data = editArea ? { ...editArea, name: form.name.trim(), emoji: form.emoji, color: form.color } : { name: form.name.trim(), emoji: form.emoji, color: form.color }
+    const data = editArea
+      ? { ...editArea, name: form.name.trim(), emoji: form.emoji, color: form.color, weeklyTargetMin: form.weeklyTargetMin }
+      : { name: form.name.trim(), emoji: form.emoji, color: form.color, weeklyTargetMin: form.weeklyTargetMin }
     await actions.saveLifeArea(data)
     setSaving(false)
     setShowAddForm(false)
     setEditArea(null)
-    setForm({ name: '', emoji: '⭐', color: COLOR_OPTIONS[0] })
+    setForm({ name: '', emoji: '⭐', color: COLOR_OPTIONS[0], weeklyTargetMin: 0 })
   }
 
   function openEdit(area) {
     setEditArea(area)
-    setForm({ name: area.name, emoji: area.emoji, color: area.color || COLOR_OPTIONS[0] })
+    setForm({ name: area.name, emoji: area.emoji, color: area.color || COLOR_OPTIONS[0], weeklyTargetMin: area.weeklyTargetMin || 0 })
     setShowAddForm(true)
   }
 
   function openAdd() {
     setEditArea(null)
-    setForm({ name: '', emoji: '⭐', color: COLOR_OPTIONS[0] })
+    setForm({ name: '', emoji: '⭐', color: COLOR_OPTIONS[0], weeklyTargetMin: 0 })
     setShowAddForm(true)
   }
 
@@ -211,6 +213,17 @@ export default function LifeAreaManageModal() {
                     value={form.emoji}
                     onChange={e => setForm(f => ({ ...f, emoji: e.target.value.slice(0, 4) }))}
                     style={{ width: 60, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '1.2em', textAlign: 'center', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Obiettivo settimanale (minuti, 0 = nessuno)</div>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.weeklyTargetMin}
+                    onChange={e => setForm(f => ({ ...f, weeklyTargetMin: e.target.value }))}
+                    placeholder="Es. 60"
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.9em', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div style={{ marginBottom: 16 }}>

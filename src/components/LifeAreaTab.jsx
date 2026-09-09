@@ -1,7 +1,57 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { toDateString } from '../lib/habitLogic'
-import { computeLifeAreaStats } from '../lib/lifeAreaStats'
+import { computeLifeAreaStats, computeLifeAreaDailyTotals } from '../lib/lifeAreaStats'
+import { Chart } from '../lib/chartSetup'
 import LifeAreaTimerCard from './LifeAreaTimerCard'
+
+// Soglia oltre la quale un'area "ferma" merita un avviso in UI — non troppo
+// aggressiva (le aree della vita non sono abitudini quotidiane), ma abbastanza
+// da farla notare prima che passi una settimana intera senza attenzione.
+const NEGLECT_WARNING_DAYS = 4
+
+function fmtDayLabel(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T00:00:00')
+  return ['D', 'L', 'M', 'M', 'G', 'V', 'S'][d.getDay()]
+}
+
+function WeeklyTrendChart({ lifeAreaLog }) {
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+  const dailyTotals = computeLifeAreaDailyTotals(lifeAreaLog, 7)
+
+  useEffect(() => {
+    if (!canvasRef.current) return
+    if (chartRef.current) chartRef.current.destroy()
+    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim() || '#ffca28'
+    chartRef.current = new Chart(canvasRef.current, {
+      type: 'bar',
+      data: {
+        labels: dailyTotals.map(d => fmtDayLabel(d.date)),
+        datasets: [{ data: dailyTotals.map(d => d.totalMin), backgroundColor: themeColor, borderRadius: 3, barPercentage: 0.6 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { title: () => '', label: ctx => `${ctx.raw}m` } } },
+        scales: {
+          y: { display: false, beginAtZero: true },
+          x: { grid: { display: false }, ticks: { color: '#666', font: { size: 9 } } },
+        },
+      },
+    })
+    return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null } }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(dailyTotals)])
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Andamento settimanale</div>
+      <div style={{ height: 60, position: 'relative' }}>
+        <canvas ref={canvasRef} />
+      </div>
+    </div>
+  )
+}
 
 function StatCell({ label, value, color }) {
   return (
@@ -21,9 +71,18 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
   }, [])
 
   const lifeAreas = globalData?.lifeAreas || []
-  const activeAreas = lifeAreas.filter(a => a.active !== false)
   const lifeAreaLog = globalData?.lifeAreaLog || {}
   const stats = computeLifeAreaStats(lifeAreaLog, lifeAreas)
+  // Più trascurata prima (area mai loggata = massima priorità): la tab deve
+  // spingere a riequilibrare, non solo elencare in ordine di creazione.
+  const activeAreas = lifeAreas
+    .filter(a => a.active !== false)
+    .slice()
+    .sort((x, y) => {
+      const dx = stats.byArea.find(b => b.areaId === x.id)?.daysSinceLastSession
+      const dy = stats.byArea.find(b => b.areaId === y.id)?.daysSinceLastSession
+      return (dy ?? Infinity) - (dx ?? Infinity)
+    })
   const todayStr = toDateString(new Date())
   const todaySessions = (lifeAreaLog[todayStr] || []).slice().sort((a, b) => (b.time || '').localeCompare(a.time || ''))
 
@@ -45,6 +104,8 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
         <StatCell label="Streak" value={`${stats.streak}gg`} color={stats.streak > 0 ? 'var(--success)' : undefined} />
       </div>
 
+      <WeeklyTrendChart lifeAreaLog={lifeAreaLog} />
+
       {!isReadOnly && <LifeAreaTimerCard areas={lifeAreas} actions={actions} />}
 
       <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Aree</div>
@@ -53,26 +114,68 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
       )}
       {activeAreas.map(a => {
         const byArea = stats.byArea.find(x => x.areaId === a.id)
+        const neglected = byArea?.daysSinceLastSession != null && byArea.daysSinceLastSession >= NEGLECT_WARNING_DAYS
+        const hasTarget = byArea?.weeklyTargetMin > 0
+        const targetPct = hasTarget ? Math.min(100, byArea.weekTargetPct || 0) : 0
+        const pendingIdeasCount = (globalData?.lifeAreaIdeas || []).filter(i => i.areaId === a.id && !i.done).length
         return (
           <div
             key={a.id}
             style={{
-              display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', marginBottom: 8,
+              padding: '12px 14px', marginBottom: 8,
               background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12,
             }}
           >
-            <span style={{ fontSize: '1.4em' }}>{a.emoji}</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: '0.9em' }}>{a.name}</div>
-              <div style={{ fontSize: '0.72em', color: '#888' }}>{byArea?.todayMin || 0}m oggi · {byArea?.weekMin || 0}m settimana</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '1.4em' }}>{a.emoji}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {a.name}
+                  {neglected && <span title={`Ferma da ${byArea.daysSinceLastSession} giorni`}>⚠️</span>}
+                </div>
+                <div style={{ fontSize: '0.72em', color: neglected ? '#f2994a' : '#888' }}>
+                  {byArea?.todayMin || 0}m oggi · {byArea?.weekMin || 0}m settimana
+                  {neglected && ` · ferma da ${byArea.daysSinceLastSession}g`}
+                </div>
+              </div>
+              {!isReadOnly && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    className="btn-icon"
+                    title="Diario e idee"
+                    onClick={() => actions.openModal('lifeAreaDetail', { areaId: a.id })}
+                    style={{ position: 'relative', width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1em' }}
+                  >
+                    📓
+                    {pendingIdeasCount > 0 && (
+                      <span style={{
+                        position: 'absolute', top: -4, right: -4, minWidth: 14, height: 14, padding: '0 3px',
+                        borderRadius: 7, background: 'var(--theme-color)', color: '#000',
+                        fontSize: '0.55em', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>{pendingIdeasCount}</span>
+                    )}
+                  </button>
+                  <button
+                    className="btn-icon"
+                    title="Aggiungi sessione"
+                    onClick={() => actions.openModal('lifeAreaLog', { areaId: a.id })}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1.1em' }}
+                  >+</button>
+                </div>
+              )}
             </div>
-            {!isReadOnly && (
-              <button
-                className="btn-icon"
-                title="Aggiungi sessione"
-                onClick={() => actions.openModal('lifeAreaLog', { areaId: a.id })}
-                style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1.1em' }}
-              >+</button>
+            {hasTarget && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: `${targetPct}%`, borderRadius: 3,
+                    background: byArea.weekTargetPct >= 100 ? 'var(--success)' : (a.color || 'var(--theme-color)'),
+                  }} />
+                </div>
+                <div style={{ fontSize: '0.65em', color: '#666', marginTop: 4 }}>
+                  {byArea.weekMin}/{byArea.weeklyTargetMin} min obiettivo{byArea.weekTargetPct >= 100 ? ' 🎉' : ''}
+                </div>
+              </div>
             )}
           </div>
         )

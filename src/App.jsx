@@ -61,7 +61,7 @@ const MENTE_MODALS = ['willpowerEntry', 'willpowerStats', 'discoveries']
 const NUTRITION_MODALS = ['proteinEntry', 'proteinFoodsManage']
 const TASK_MODALS = ['taskAdd', 'taskEdit', 'taskHistory', 'recurringTasks']
 const GLOBAL_SEARCH_MODALS = ['globalSearch']
-const LIFEAREA_MODALS = ['lifeAreaLog', 'lifeAreaManage']
+const LIFEAREA_MODALS = ['lifeAreaLog', 'lifeAreaManage', 'lifeAreaDetail']
 
 function TabLoadingFallback() {
   return (

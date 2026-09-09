@@ -101,12 +101,44 @@ export function computeLifeAreaDailyTotals(lifeAreaLog, days = 14, areaId = null
   return result
 }
 
+// Ultima data con almeno una sessione per l'area (null se mai loggata) — usata
+// sia per l'avviso "area ferma da Xg" sia per ordinare le card mettendo prima
+// quella più trascurata, così la tab spinge a riequilibrare invece di limitarsi
+// a registrare a posteriori.
+function lastSessionDate(lifeAreaLog, areaId) {
+  const dates = Object.keys(lifeAreaLog || {})
+    .filter(d => getDayLifeAreaEffort(lifeAreaLog, d, areaId) > 0)
+    .sort()
+  return dates.length > 0 ? dates[dates.length - 1] : null
+}
+
+function daysBetween(fromDateStr, toDateStr) {
+  const a = new Date(fromDateStr + 'T00:00:00')
+  const b = new Date(toDateStr + 'T00:00:00')
+  return Math.round((b - a) / 86400000)
+}
+
 function flattenEntries(lifeAreaLog) {
   const entries = []
   Object.entries(lifeAreaLog || {}).forEach(([date, sessions]) => {
     (sessions || []).forEach(e => entries.push({ ...e, date }))
   })
   return entries
+}
+
+// Note libere del "Diario" per area — stessa forma per-data di lifeAreaLog
+// (lifeAreaNotes: {dateStr: [{id, areaId, text, time}]}), ma senza durata/pt:
+// qui l'obiettivo è solo tenere traccia di cosa si è fatto, in parole proprie.
+// areaId=null restituisce le note di tutte le aree (non usato oggi, ma
+// coerente con getDayLifeAreaEffort qui sopra).
+export function getLifeAreaNotes(lifeAreaNotes, areaId = null) {
+  const entries = []
+  Object.entries(lifeAreaNotes || {}).forEach(([date, notes]) => {
+    (notes || []).forEach(n => {
+      if (!areaId || n.areaId === areaId) entries.push({ ...n, date })
+    })
+  })
+  return entries.sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')))
 }
 
 // Aggregato principale, consumato dalla Tab e dal modal statistiche: totali
@@ -137,6 +169,8 @@ export function computeLifeAreaStats(lifeAreaLog, lifeAreas) {
       const areaWeekEntries = weekEntries.filter(e => e.areaId === a.id)
       const areaAll = all.filter(e => e.areaId === a.id)
       const weekMin = sum(areaWeekEntries, 'duration')
+      const lastDate = lastSessionDate(lifeAreaLog, a.id)
+      const weeklyTargetMin = a.weeklyTargetMin || 0
       return {
         areaId: a.id,
         name: a.name,
@@ -150,6 +184,10 @@ export function computeLifeAreaStats(lifeAreaLog, lifeAreas) {
         sessionCount: areaAll.length,
         ...computeLifeAreaStreak(lifeAreaLog, a.id),
         pctOfWeekTotal: weekMinutes > 0 ? Math.round((weekMin / weekMinutes) * 100) : 0,
+        weeklyTargetMin,
+        weekTargetPct: weeklyTargetMin > 0 ? Math.round((weekMin / weeklyTargetMin) * 100) : null,
+        lastSessionDate: lastDate,
+        daysSinceLastSession: lastDate ? daysBetween(lastDate, todayStr) : null,
       }
     })
 

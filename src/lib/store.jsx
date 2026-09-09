@@ -1145,16 +1145,18 @@ export function AppProvider({ children }) {
       if (!gd) return
       const existing = gd.lifeAreas || []
       const idx = existing.findIndex(a => a.id === area.id)
+      const weeklyTargetMin = Math.max(0, parseInt(area.weeklyTargetMin) || 0)
       let updated
       if (idx === -1) {
         const newArea = {
           id: Date.now().toString(36),
           name: area.name, emoji: area.emoji || '⭐', color: area.color || '#ffca28',
+          weeklyTargetMin,
           active: true, createdAt: toDateString(new Date()),
         }
         updated = [...existing, newArea]
       } else {
-        updated = existing.map(a => a.id === area.id ? { ...a, name: area.name, emoji: area.emoji, color: area.color } : a)
+        updated = existing.map(a => a.id === area.id ? { ...a, name: area.name, emoji: area.emoji, color: area.color, weeklyTargetMin } : a)
       }
       await updateDoc(doc(db, 'users', 'flavio'), { lifeAreas: updated })
       actions.showToast('Area salvata', '✅')
@@ -1223,6 +1225,88 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { [`lifeAreaLog.${dateStr}`]: newLog })
       actions.showToast('Sessione modificata ✏️', '✏️')
+    },
+
+    // ─── Diario aree della vita ── note libere (niente durata/punti), per
+    // scrivere a cosa ci si è dedicati in un giorno preciso — richiesta
+    // esplicita di Flavio: "uno spazio ordinato e bello per scrivere e
+    // tenere traccia", separato dalle sessioni cronometrate/manuali.
+    async addLifeAreaNote(areaId, text, dateStr) {
+      if (state.authUserId !== 'flavio') return
+      const trimmed = (text || '').trim().slice(0, 1000)
+      if (!trimmed) { actions.showToast('Scrivi qualcosa', '⚠️'); return }
+      if (!areaId) { actions.showToast('Scegli un\'area', '⚠️'); return }
+      const logDate = dateStr || toDateString(new Date())
+      const noteEntry = {
+        id: Date.now().toString(),
+        areaId,
+        text: trimmed,
+        time: new Date().toTimeString().slice(0, 8),
+      }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`lifeAreaNotes.${logDate}`]: arrayUnion(noteEntry) })
+      actions.showToast('Nota salvata', '📝')
+    },
+
+    async editLifeAreaNote(dateStr, noteId, newText) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const trimmed = (newText || '').trim().slice(0, 1000)
+      if (!trimmed) { actions.showToast('Scrivi qualcosa', '⚠️'); return }
+      const dayNotes = (gd.lifeAreaNotes?.[dateStr] || [])
+      const newNotes = dayNotes.map(n => n.id === noteId ? { ...n, text: trimmed } : n)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`lifeAreaNotes.${dateStr}`]: newNotes })
+      actions.showToast('Nota modificata ✏️', '✏️')
+    },
+
+    async deleteLifeAreaNote(dateStr, noteId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const dayNotes = (gd.lifeAreaNotes?.[dateStr] || [])
+      const newNotes = dayNotes.filter(n => n.id !== noteId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { [`lifeAreaNotes.${dateStr}`]: newNotes })
+      actions.showToast('Nota eliminata', '🗑️')
+    },
+
+    // ─── Idee per area ── checklist di idee/miglioramenti senza scadenza,
+    // volutamente separata dall'array "tasks" principale (niente punti,
+    // niente scadenza) — richiesta esplicita di Flavio: le task vere hanno
+    // una scadenza, queste sono spunti da riprendere quando capita tempo
+    // libero per una specifica area, non vuole che si mescolino.
+    async addLifeAreaIdea(areaId, text) {
+      if (state.authUserId !== 'flavio') return
+      const trimmed = (text || '').trim().slice(0, 200)
+      if (!trimmed) { actions.showToast('Scrivi un\'idea', '⚠️'); return }
+      if (!areaId) { actions.showToast('Scegli un\'area', '⚠️'); return }
+      const idea = { id: Date.now().toString(36), areaId, text: trimmed, done: false, createdAt: toDateString(new Date()) }
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { lifeAreaIdeas: arrayUnion(idea) })
+      actions.showToast('Idea aggiunta', '💡')
+    },
+
+    async toggleLifeAreaIdea(ideaId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const updated = (gd.lifeAreaIdeas || []).map(i =>
+        i.id === ideaId ? { ...i, done: !i.done, doneAt: !i.done ? toDateString(new Date()) : null } : i
+      )
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { lifeAreaIdeas: updated })
+    },
+
+    async deleteLifeAreaIdea(ideaId) {
+      if (state.authUserId !== 'flavio') return
+      const gd = state.allUsersData?.flavio
+      if (!gd) return
+      const updated = (gd.lifeAreaIdeas || []).filter(i => i.id !== ideaId)
+      const ref = doc(db, 'users', 'flavio')
+      await updateDoc(ref, { lifeAreaIdeas: updated })
+      actions.showToast('Idea eliminata', '🗑️')
     },
 
     // ─── Willpower ── log rapido +/- , non una sessione con durata: si registra

@@ -89,8 +89,8 @@ export default function TaskSection({ minimalMode, activeTimerTaskId = null, onS
     : `📋 Task (${activeTasks.length}/${totalCount})${dayLabel}`
 
   return (
-    <div style={{ marginTop: 28, marginBottom: 8 }}>
-      <div className="section-header" style={{ marginBottom: 10 }}>
+    <div style={{ marginTop: 18, marginBottom: 6 }}>
+      <div className="section-header" style={{ marginBottom: 8 }}>
         <button
           onClick={toggle}
           style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--theme-color)' }}
@@ -114,7 +114,7 @@ export default function TaskSection({ minimalMode, activeTimerTaskId = null, onS
             {isToday ? 'Nessuna task attiva — aggiungine una con +' : 'Nessuna task programmata per questo giorno'}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {activeTasks.map(task => (
               <TaskItem
                 key={task.id}
@@ -238,9 +238,9 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
   return (
     <div
       style={{
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'flex', alignItems: 'center', gap: 8,
         background: bgColor,
-        borderRadius: 12, padding: '10px 12px',
+        borderRadius: 10, padding: '7px 10px',
         border: `1px solid ${borderColor}`,
         overflow: 'hidden',
         opacity: isCompleted ? 0.75 : 1,
@@ -250,13 +250,10 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
       onPointerUp={onPU}
       onPointerLeave={onPL}
     >
-      {/* Barra colorata sinistra */}
-      <div style={{ width: 4, minHeight: 44, borderRadius: 2, background: accentColor, flexShrink: 0 }} />
-
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{
-            fontWeight: 600, fontSize: '0.9em', color: 'var(--text)',
+            fontWeight: 600, fontSize: '0.86em', color: 'var(--text)',
             textDecoration: isCompleted ? 'line-through' : 'none',
           }}>{task.title}</span>
 
@@ -287,12 +284,12 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
         </div>
 
         {task.description && (
-          <div style={{ fontSize: '0.72em', color: '#555', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: '0.7em', color: '#555', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {task.description}
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
           {isActive && (
             <>
               <span style={{ fontSize: '0.7em', color: accentColor, fontWeight: 600 }}>📅 {deadline}</span>
@@ -316,18 +313,21 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
         </div>
       </div>
 
-      {/* Azioni destra */}
+      {/* Azioni destra — riga orizzontale (non più colonna impilata): la
+          colonna verticale di 2-3 pulsanti da 36px era la vera causa delle
+          card troppo alte segnalata da Flavio, molto più della spaziatura
+          in sé. */}
       {(isActive || isExpired) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'row', gap: 4, flexShrink: 0, alignItems: 'center' }}>
           <button
             onClick={e => { e.stopPropagation(); onComplete() }}
             onPointerDown={e => e.stopPropagation()}
             style={{
-              width: 36, height: 36, borderRadius: '50%',
+              width: 28, height: 28, borderRadius: '50%',
               border: '2px solid rgba(255,255,255,0.15)',
               background: 'rgba(255,255,255,0.05)', color: '#888',
               cursor: 'pointer', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: '1em',
+              justifyContent: 'center', fontSize: '0.85em', flexShrink: 0,
             }}
             title={isExpired ? 'Segna come completata (nessun punto)' : 'Completa task'}
           >✓</button>
@@ -337,11 +337,11 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
               onPointerDown={e => e.stopPropagation()}
               disabled={timerDisabled}
               style={{
-                width: 36, height: 36, borderRadius: '50%',
+                width: 28, height: 28, borderRadius: '50%',
                 border: '2px solid rgba(255,255,255,0.15)',
                 background: 'rgba(255,255,255,0.05)', color: timerDisabled ? '#444' : '#888',
                 cursor: timerDisabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', fontSize: '0.9em', opacity: timerDisabled ? 0.5 : 1,
+                justifyContent: 'center', fontSize: '0.75em', opacity: timerDisabled ? 0.5 : 1, flexShrink: 0,
               }}
               title={timerDisabled ? 'Ferma prima il timer sull\'altra task in corso' : 'Avvia timer su questa task'}
             >▶️</button>
@@ -370,23 +370,23 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
               >+3gg</button>
             </div>
           ) : menuOpen ? (
-            <div style={{ display: 'flex', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 3 }}>
               <button
                 onClick={e => { e.stopPropagation(); setMenuOpen(false); setPostponeOpen(true) }}
                 onPointerDown={e => e.stopPropagation()}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95em', padding: 2 }}
                 title="Posticipa"
               >📅</button>
               <button
                 onClick={e => { e.stopPropagation(); closeMenus(); onEdit() }}
                 onPointerDown={e => e.stopPropagation()}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95em', padding: 2 }}
                 title="Modifica"
               >✏️</button>
               <button
                 onClick={e => { e.stopPropagation(); closeMenus(); onDelete() }}
                 onPointerDown={e => e.stopPropagation()}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: 2 }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95em', padding: 2 }}
                 title="Elimina"
               >🗑️</button>
             </div>
@@ -396,7 +396,7 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
               onPointerDown={e => e.stopPropagation()}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: '#555', fontSize: '1.1em', padding: 2, lineHeight: 1,
+                color: '#555', fontSize: '1.05em', padding: 2, lineHeight: 1, flexShrink: 0,
               }}
               title="Azioni"
             >⋮</button>
@@ -409,11 +409,11 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
           onClick={e => { e.stopPropagation(); onComplete?.() }}
           onPointerDown={e => e.stopPropagation()}
           style={{
-            width: 36, height: 36, borderRadius: '50%',
+            width: 28, height: 28, borderRadius: '50%',
             border: '2px solid rgba(76,175,80,0.4)',
             background: 'rgba(76,175,80,0.1)', color: '#4caf50',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, fontSize: '1em', cursor: onComplete ? 'pointer' : 'default',
+            flexShrink: 0, fontSize: '0.85em', cursor: onComplete ? 'pointer' : 'default',
           }}
           title="Completata per errore? Tocca per annullare"
         >✓</button>

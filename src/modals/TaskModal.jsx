@@ -92,12 +92,14 @@ export default function TaskModal() {
   const [saving, setSaving] = useState(false)
   const [alreadyDone, setAlreadyDone] = useState(false)
   // 'tasks' = task generale (con scadenza/punti), oppure l'id di un'area
-  // della vita — in quel caso diventa un'"idea" di quell'area (senza
+  // della vita — in quel caso diventa uno "spunto" di quell'area (senza
   // scadenza, visibile solo nella tab Aree della vita), non una task vera e
-  // propria. Richiesta esplicita di Flavio: poter scegliere subito la
-  // destinazione in creazione, da qualunque piattaforma usi per aggiungerla.
+  // propria. Richiesta esplicita di Flavio: poter scegliere la destinazione
+  // sia in creazione sia modificando una task già esistente, per spostare
+  // in un'area una task aggiunta per errore tra quelle generali.
   const [destination, setDestination] = useState('tasks')
-  const isIdea = !isEdit && destination !== 'tasks'
+  const isIdea = destination !== 'tasks'
+  const isMoveToArea = isEdit && isIdea
 
   useEffect(() => {
     if (isEdit && editTask) {
@@ -121,6 +123,10 @@ export default function TaskModal() {
     setSaving(true)
     if (isIdea) {
       await actions.addLifeAreaIdea(destination, title.trim())
+      // Sposta = crea lo spunto nell'area + rimuove la task originale dalle
+      // task generali, non una semplice modifica — la task com'era (con
+      // scadenza/punti) non ha più senso una volta diventata uno spunto.
+      if (isMoveToArea) await actions.deleteTask(editTask.id)
       setSaving(false)
       actions.closeModal()
       return
@@ -154,10 +160,10 @@ export default function TaskModal() {
         <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 2, margin: '0 auto 18px' }} />
 
         <div style={{ fontSize: '1em', fontWeight: 700, color: 'var(--text)', marginBottom: 20, textAlign: 'center' }}>
-          {isEdit ? '✏️ Modifica Task' : '📋 Nuova Task'}
+          {isMoveToArea ? '📤 Sposta Task' : isEdit ? '✏️ Modifica Task' : '📋 Nuova Task'}
         </div>
 
-        {!isEdit && lifeAreas.length > 0 && (
+        {lifeAreas.length > 0 && (
           <div style={{ marginBottom: 14 }}>
             <div style={labelStyle}>DESTINAZIONE</div>
             <select
@@ -202,7 +208,9 @@ export default function TaskModal() {
 
         {isIdea ? (
           <p style={{ fontSize: '0.78em', color: '#888', margin: '0 0 20px' }}>
-            Gli spunti non hanno scadenza né punti — li trovi nella tab "Aree della vita", dentro l'area scelta, pronti da riprendere quando hai tempo.
+            {isMoveToArea
+              ? 'Verrà rimossa dalle task generali e diventerà uno spunto di quell\'area (senza scadenza né punti), nella tab "Aree della vita".'
+              : 'Gli spunti non hanno scadenza né punti — li trovi nella tab "Aree della vita", dentro l\'area scelta, pronti da riprendere quando hai tempo.'}
           </p>
         ) : (
           <>
@@ -282,7 +290,7 @@ export default function TaskModal() {
             className="btn-main"
             style={{ flex: 2, padding: 13, fontSize: '0.95em' }}
           >
-            {saving ? '⏳ Salvataggio...' : isEdit ? 'Salva modifiche' : isIdea ? '💡 Aggiungi spunto' : alreadyDone ? '✅ Registra come completata' : 'Crea Task'}
+            {saving ? '⏳ Salvataggio...' : isMoveToArea ? '📤 Sposta nell\'area' : isEdit ? 'Salva modifiche' : isIdea ? '💡 Aggiungi spunto' : alreadyDone ? '✅ Registra come completata' : 'Crea Task'}
           </button>
         </div>
       </div>

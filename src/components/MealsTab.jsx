@@ -169,6 +169,7 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
   const [showLevelPicker, setShowLevelPicker] = useState(false)
   const [pendingDuration, setPendingDuration] = useState(0)
   const [showHistory, setShowHistory] = useState(false)
+  const [showStats, setShowStats] = useState(false)
   const [showDetailedStats, setShowDetailedStats] = useState(false)
   // Flusso "pasto non tracciato": null (chiuso) → 'count' (quanti pasti) →
   // 'reason' (perché non tracciati) — due passi separati invece di un unico
@@ -710,62 +711,87 @@ export default function MealsTab({ globalData, authUserId, isReadOnly, actions }
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 14 }}>
-          <StatCell label="Streak" value={`${stats.streak}g`} color={stats.streak > 0 ? 'var(--success, #4caf50)' : undefined} />
-          <StatCell label="Record streak" value={`${stats.bestStreak}g`} />
-          <StatCell
-            label="Media min."
-            value={stats.avgDuration || '–'}
-            sub={stats.durationTrend != null && stats.durationTrend !== 0
-              ? (stats.durationTrend > 0 ? `▲ +${stats.durationTrend}` : `▼ ${Math.abs(stats.durationTrend)}`)
-              : null}
-            subColor={stats.durationTrend > 0 ? '#4caf50' : (stats.durationTrend < 0 ? '#e53935' : undefined)}
-          />
-          <StatCell label="Con calma" value={`${stats.calmPct}%`} color="#4caf50" />
-          <StatCell label="Pasto più lungo" value={stats.longestMeal ? `${stats.longestMeal}m` : '–'} />
-          {stats.targetHitPct != null && <StatCell label="Obiettivo centrato" value={`${stats.targetHitPct}%`} color="#4caf50" />}
-          <StatCell label="Punti 7gg" value={stats.netPts >= 0 ? `+${stats.netPts}` : stats.netPts} color={stats.netPts < 0 ? '#e53935' : undefined} />
-          <StatCell label="Totale pasti" value={stats.lifetimeTotal} />
-          {stats.trackingCoveragePct != null && (
-            <StatCell label="% Tracciato" value={`${stats.trackingCoveragePct}%`} color={stats.trackingCoveragePct >= 90 ? '#4caf50' : (stats.trackingCoveragePct >= 70 ? undefined : '#e53935')} />
-          )}
-          {stats.untrackedCount7d > 0 && <StatCell label="Non tracciati 7gg" value={stats.untrackedCount7d} color="#e53935" />}
+        {/* Riepilogo leggero, sempre visibile — la griglia intera di 9+
+            statistiche sotto era troppo pesante da tenere sempre a schermo
+            (richiesta esplicita di Flavio), spostata dietro un tocco. Qui
+            resta solo l'essenziale: da quanto tracci con costanza e quanti
+            pasti hai registrato in totale. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78em', color: 'var(--text-sec)', marginBottom: 10 }}>
+          <span>🔥 Registri pasti da <strong style={{ color: stats.streak > 0 ? 'var(--success, #4caf50)' : 'var(--text)' }}>{stats.streak}g</strong></span>
+          <span style={{ opacity: 0.4 }}>·</span>
+          <span>in totale hai registrato <strong style={{ color: 'var(--text)' }}>{stats.lifetimeTotal}</strong> pasti</span>
         </div>
 
         <button
-          onClick={() => setShowDetailedStats(v => !v)}
+          onClick={() => setShowStats(v => !v)}
           style={{
             width: '100%', textAlign: 'left', background: 'none', border: 'none',
             color: 'var(--text-sec)', fontSize: '0.72em', fontWeight: 700, cursor: 'pointer',
-            padding: '6px 2px', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: showDetailedStats ? 8 : 0,
+            padding: '6px 2px', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: showStats ? 8 : 0,
           }}
         >
-          {showDetailedStats ? '▾' : '▸'} Statistiche dettagliate
+          {showStats ? '▾' : '▸'} Statistiche
         </button>
-        {showDetailedStats && (
-          <div style={{ marginBottom: 14 }}>
-            {/* Distribuzione veloce/normale/con calma — una barra sola divisa
-                in tre invece di solo la % "con calma" isolata. */}
-            <div style={{ fontSize: '0.6em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Distribuzione ritmo (7gg)</div>
-            <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 4 }}>
-              {stats.levelDistribution[1] > 0 && <div style={{ width: `${stats.levelDistribution[1]}%`, background: '#e53935' }} title={`Veloce ${stats.levelDistribution[1]}%`} />}
-              {stats.levelDistribution[2] > 0 && <div style={{ width: `${stats.levelDistribution[2]}%`, background: '#ffca28' }} title={`Normale ${stats.levelDistribution[2]}%`} />}
-              {stats.levelDistribution[3] > 0 && <div style={{ width: `${stats.levelDistribution[3]}%`, background: '#4caf50' }} title={`Con calma ${stats.levelDistribution[3]}%`} />}
-              {stats.levelDistribution[1] + stats.levelDistribution[2] + stats.levelDistribution[3] === 0 && <div style={{ width: '100%', background: 'rgba(255,255,255,0.06)' }} />}
-            </div>
-            <div style={{ display: 'flex', gap: 10, fontSize: '0.6em', color: '#888', marginBottom: 12 }}>
-              <span>🔴 Veloce {stats.levelDistribution[1]}%</span>
-              <span>🟡 Normale {stats.levelDistribution[2]}%</span>
-              <span>🟢 Con calma {stats.levelDistribution[3]}%</span>
+        {showStats && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 14 }}>
+              <StatCell label="Streak" value={`${stats.streak}g`} color={stats.streak > 0 ? 'var(--success, #4caf50)' : undefined} />
+              <StatCell label="Record streak" value={`${stats.bestStreak}g`} />
+              <StatCell
+                label="Media min."
+                value={stats.avgDuration || '–'}
+                sub={stats.durationTrend != null && stats.durationTrend !== 0
+                  ? (stats.durationTrend > 0 ? `▲ +${stats.durationTrend}` : `▼ ${Math.abs(stats.durationTrend)}`)
+                  : null}
+                subColor={stats.durationTrend > 0 ? '#4caf50' : (stats.durationTrend < 0 ? '#e53935' : undefined)}
+              />
+              <StatCell label="Con calma" value={`${stats.calmPct}%`} color="#4caf50" />
+              <StatCell label="Pasto più lungo" value={stats.longestMeal ? `${stats.longestMeal}m` : '–'} />
+              {stats.targetHitPct != null && <StatCell label="Obiettivo centrato" value={`${stats.targetHitPct}%`} color="#4caf50" />}
+              <StatCell label="Punti 7gg" value={stats.netPts >= 0 ? `+${stats.netPts}` : stats.netPts} color={stats.netPts < 0 ? '#e53935' : undefined} />
+              <StatCell label="Totale pasti" value={stats.lifetimeTotal} />
+              {stats.trackingCoveragePct != null && (
+                <StatCell label="% Tracciato" value={`${stats.trackingCoveragePct}%`} color={stats.trackingCoveragePct >= 90 ? '#4caf50' : (stats.trackingCoveragePct >= 70 ? undefined : '#e53935')} />
+              )}
+              {stats.untrackedCount7d > 0 && <StatCell label="Non tracciati 7gg" value={stats.untrackedCount7d} color="#e53935" />}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
-              <StatCell label="Record giorno" value={stats.bestDay ? `${stats.bestDay.totalMin}m` : '–'} />
-              <StatCell label="Pasto più breve" value={stats.shortestMeal ? `${stats.shortestMeal}m` : '–'} />
-              <StatCell label="Pasti/giorno" value={stats.avgMealsPerDay || '–'} />
-              <StatCell label="Min. totali (sempre)" value={stats.lifetimeTotalMin} />
-            </div>
-          </div>
+            <button
+              onClick={() => setShowDetailedStats(v => !v)}
+              style={{
+                width: '100%', textAlign: 'left', background: 'none', border: 'none',
+                color: 'var(--text-sec)', fontSize: '0.72em', fontWeight: 700, cursor: 'pointer',
+                padding: '6px 2px', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: showDetailedStats ? 8 : 0,
+              }}
+            >
+              {showDetailedStats ? '▾' : '▸'} Statistiche dettagliate
+            </button>
+            {showDetailedStats && (
+              <div style={{ marginBottom: 14 }}>
+                {/* Distribuzione veloce/normale/con calma — una barra sola divisa
+                    in tre invece di solo la % "con calma" isolata. */}
+                <div style={{ fontSize: '0.6em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Distribuzione ritmo (7gg)</div>
+                <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 4 }}>
+                  {stats.levelDistribution[1] > 0 && <div style={{ width: `${stats.levelDistribution[1]}%`, background: '#e53935' }} title={`Veloce ${stats.levelDistribution[1]}%`} />}
+                  {stats.levelDistribution[2] > 0 && <div style={{ width: `${stats.levelDistribution[2]}%`, background: '#ffca28' }} title={`Normale ${stats.levelDistribution[2]}%`} />}
+                  {stats.levelDistribution[3] > 0 && <div style={{ width: `${stats.levelDistribution[3]}%`, background: '#4caf50' }} title={`Con calma ${stats.levelDistribution[3]}%`} />}
+                  {stats.levelDistribution[1] + stats.levelDistribution[2] + stats.levelDistribution[3] === 0 && <div style={{ width: '100%', background: 'rgba(255,255,255,0.06)' }} />}
+                </div>
+                <div style={{ display: 'flex', gap: 10, fontSize: '0.6em', color: '#888', marginBottom: 12 }}>
+                  <span>🔴 Veloce {stats.levelDistribution[1]}%</span>
+                  <span>🟡 Normale {stats.levelDistribution[2]}%</span>
+                  <span>🟢 Con calma {stats.levelDistribution[3]}%</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
+                  <StatCell label="Record giorno" value={stats.bestDay ? `${stats.bestDay.totalMin}m` : '–'} />
+                  <StatCell label="Pasto più breve" value={stats.shortestMeal ? `${stats.shortestMeal}m` : '–'} />
+                  <StatCell label="Pasti/giorno" value={stats.avgMealsPerDay || '–'} />
+                  <StatCell label="Min. totali (sempre)" value={stats.lifetimeTotalMin} />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {history.length > 0 && (

@@ -81,6 +81,7 @@ export default function TaskModal() {
   if (!isOpen) return null
 
   const editTask = isEdit ? modalPayload?.task : null
+  const lifeAreas = (state.globalData?.lifeAreas || []).filter(a => a.active !== false)
 
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -90,6 +91,13 @@ export default function TaskModal() {
   const [priority, setPriority] = useState('medium')
   const [saving, setSaving] = useState(false)
   const [alreadyDone, setAlreadyDone] = useState(false)
+  // 'tasks' = task generale (con scadenza/punti), oppure l'id di un'area
+  // della vita — in quel caso diventa un'"idea" di quell'area (senza
+  // scadenza, visibile solo nella tab Aree della vita), non una task vera e
+  // propria. Richiesta esplicita di Flavio: poter scegliere subito la
+  // destinazione in creazione, da qualunque piattaforma usi per aggiungerla.
+  const [destination, setDestination] = useState('tasks')
+  const isIdea = !isEdit && destination !== 'tasks'
 
   useEffect(() => {
     if (isEdit && editTask) {
@@ -104,14 +112,21 @@ export default function TaskModal() {
       setReward(5); setPenalty(3); setPriority('medium')
     }
     setAlreadyDone(false)
+    setDestination('tasks')
     setSaving(false)
   }, [modal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSave() {
     if (!title.trim()) { actions.showToast('Inserisci un nome', '⚠️'); return }
-    if (!deadline) { actions.showToast('Seleziona una data', '⚠️'); return }
-    if (reward < 0 || penalty < 0) { actions.showToast('I punti non possono essere negativi', '⚠️'); return }
     setSaving(true)
+    if (isIdea) {
+      await actions.addLifeAreaIdea(destination, title.trim())
+      setSaving(false)
+      actions.closeModal()
+      return
+    }
+    if (!deadline) { actions.showToast('Seleziona una data', '⚠️'); setSaving(false); return }
+    if (reward < 0 || penalty < 0) { actions.showToast('I punti non possono essere negativi', '⚠️'); setSaving(false); return }
     if (isEdit) {
       await actions.editTask({ ...editTask, title: title.trim(), description: desc.trim(), deadline, reward, penalty, priority })
     } else if (alreadyDone) {
@@ -142,7 +157,23 @@ export default function TaskModal() {
           {isEdit ? '✏️ Modifica Task' : '📋 Nuova Task'}
         </div>
 
-        {!isEdit && (
+        {!isEdit && lifeAreas.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={labelStyle}>DESTINAZIONE</div>
+            <select
+              value={destination}
+              onChange={e => setDestination(e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="tasks">📋 Task generali</option>
+              {lifeAreas.map(a => (
+                <option key={a.id} value={a.id}>{a.emoji} {a.name} (idea, senza scadenza)</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {!isEdit && !isIdea && (
           <button
             onClick={() => setAlreadyDone(v => !v)}
             style={{
@@ -160,72 +191,80 @@ export default function TaskModal() {
         )}
 
         <div style={{ marginBottom: 14 }}>
-          <div style={labelStyle}>NOME TASK *</div>
+          <div style={labelStyle}>{isIdea ? "NOME IDEA *" : 'NOME TASK *'}</div>
           <input
             value={title} onChange={e => setTitle(e.target.value)}
-            placeholder="Es. Studia per l'esame..."
+            placeholder={isIdea ? "Es. Video YouTube esercizi a corpo libero" : "Es. Studia per l'esame..."}
             style={inputStyle}
             autoFocus
           />
         </div>
 
-        <div style={{ marginBottom: 14 }}>
-          <div style={labelStyle}>DESCRIZIONE (opzionale)</div>
-          <textarea
-            value={desc} onChange={e => setDesc(e.target.value)}
-            placeholder="Dettagli..."
-            rows={2}
-            style={{ ...inputStyle, resize: 'none' }}
-          />
-        </div>
+        {isIdea ? (
+          <p style={{ fontSize: '0.78em', color: '#888', margin: '0 0 20px' }}>
+            Le idee non hanno scadenza né punti — le trovi nella tab "Aree della vita", dentro l'area scelta, pronte da riprendere quando hai tempo.
+          </p>
+        ) : (
+          <>
+            <div style={{ marginBottom: 14 }}>
+              <div style={labelStyle}>DESCRIZIONE (opzionale)</div>
+              <textarea
+                value={desc} onChange={e => setDesc(e.target.value)}
+                placeholder="Dettagli..."
+                rows={2}
+                style={{ ...inputStyle, resize: 'none' }}
+              />
+            </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={labelStyle}>{alreadyDone ? 'DATA COMPLETAMENTO *' : 'DATA SCADENZA *'}</div>
-          <input
-            type="date" value={deadline}
-            onChange={e => setDeadline(e.target.value)}
-            min={alreadyDone ? undefined : undefined}
-            style={{ ...inputStyle, colorScheme: 'dark' }}
-          />
-        </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={labelStyle}>{alreadyDone ? 'DATA COMPLETAMENTO *' : 'DATA SCADENZA *'}</div>
+              <input
+                type="date" value={deadline}
+                onChange={e => setDeadline(e.target.value)}
+                min={alreadyDone ? undefined : undefined}
+                style={{ ...inputStyle, colorScheme: 'dark' }}
+              />
+            </div>
 
-        <CoinPicker
-          label="🪙 COIN GUADAGNATE *"
-          value={reward}
-          onChange={setReward}
-        />
+            <CoinPicker
+              label="🪙 COIN GUADAGNATE *"
+              value={reward}
+              onChange={setReward}
+            />
 
-        {!alreadyDone && (
-          <CoinPicker
-            label="💀 COIN PERSE SE SCADE *"
-            value={penalty}
-            onChange={setPenalty}
-          />
+            {!alreadyDone && (
+              <CoinPicker
+                label="💀 COIN PERSE SE SCADE *"
+                value={penalty}
+                onChange={setPenalty}
+              />
+            )}
+
+            <div style={{ marginBottom: 22 }}>
+              <div style={labelStyle}>PRIORITÀ *</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  ['high', '● Alta', PRIORITY_COLORS.high],
+                  ['medium', '● Media', PRIORITY_COLORS.medium],
+                  ['low', '● Bassa', PRIORITY_COLORS.low],
+                ].map(([v, l, c]) => (
+                  <button
+                    key={v}
+                    onClick={() => setPriority(v)}
+                    style={{
+                      flex: 1, padding: '9px 4px', borderRadius: 10,
+                      cursor: 'pointer', fontSize: '0.82em', fontWeight: 600,
+                      background: priority === v ? `${c}22` : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${priority === v ? c : 'rgba(255,255,255,0.1)'}`,
+                      color: priority === v ? c : '#666',
+                      transition: 'all 0.15s',
+                    }}
+                  >{l}</button>
+                ))}
+              </div>
+            </div>
+          </>
         )}
-
-        <div style={{ marginBottom: 22 }}>
-          <div style={labelStyle}>PRIORITÀ *</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[
-              ['high', '● Alta', PRIORITY_COLORS.high],
-              ['medium', '● Media', PRIORITY_COLORS.medium],
-              ['low', '● Bassa', PRIORITY_COLORS.low],
-            ].map(([v, l, c]) => (
-              <button
-                key={v}
-                onClick={() => setPriority(v)}
-                style={{
-                  flex: 1, padding: '9px 4px', borderRadius: 10,
-                  cursor: 'pointer', fontSize: '0.82em', fontWeight: 600,
-                  background: priority === v ? `${c}22` : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${priority === v ? c : 'rgba(255,255,255,0.1)'}`,
-                  color: priority === v ? c : '#666',
-                  transition: 'all 0.15s',
-                }}
-              >{l}</button>
-            ))}
-          </div>
-        </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button
@@ -243,7 +282,7 @@ export default function TaskModal() {
             className="btn-main"
             style={{ flex: 2, padding: 13, fontSize: '0.95em' }}
           >
-            {saving ? '⏳ Salvataggio...' : isEdit ? 'Salva modifiche' : alreadyDone ? '✅ Registra come completata' : 'Crea Task'}
+            {saving ? '⏳ Salvataggio...' : isEdit ? 'Salva modifiche' : isIdea ? '💡 Aggiungi idea' : alreadyDone ? '✅ Registra come completata' : 'Crea Task'}
           </button>
         </div>
       </div>

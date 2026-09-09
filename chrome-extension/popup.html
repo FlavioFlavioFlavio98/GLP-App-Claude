@@ -47,26 +47,32 @@
   </div>
 
   <div id="taskView">
+    <select id="destination">
+      <option value="tasks">📋 Task generali</option>
+    </select>
     <input id="title" type="text" placeholder="Cosa devi fare?" autocomplete="off">
     <input id="description" type="text" placeholder="Descrizione (opzionale)" autocomplete="off">
-    <input id="deadline" type="date">
-    <div class="row quick-dates">
-      <button type="button" class="quick-date-btn" data-days="0">Oggi</button>
-      <button type="button" class="quick-date-btn" data-days="1">Domani</button>
-      <button type="button" class="quick-date-btn" data-days="2">+2gg</button>
-      <button type="button" class="quick-date-btn" data-days="3">+3gg</button>
+    <div id="taskOnlyFields">
+      <input id="deadline" type="date">
+      <div class="row quick-dates">
+        <button type="button" class="quick-date-btn" data-days="0">Oggi</button>
+        <button type="button" class="quick-date-btn" data-days="1">Domani</button>
+        <button type="button" class="quick-date-btn" data-days="2">+2gg</button>
+        <button type="button" class="quick-date-btn" data-days="3">+3gg</button>
+      </div>
+      <div class="row">
+        <select id="priority">
+          <option value="high">Alta</option>
+          <option value="medium" selected>Media</option>
+          <option value="low">Bassa</option>
+        </select>
+      </div>
+      <div class="row">
+        <input id="reward" type="number" placeholder="Ricompensa pt" value="0" min="0">
+        <input id="penalty" type="number" placeholder="Penalità pt" value="0" min="0">
+      </div>
     </div>
-    <div class="row">
-      <select id="priority">
-        <option value="high">Alta</option>
-        <option value="medium" selected>Media</option>
-        <option value="low">Bassa</option>
-      </select>
-    </div>
-    <div class="row">
-      <input id="reward" type="number" placeholder="Ricompensa pt" value="0" min="0">
-      <input id="penalty" type="number" placeholder="Penalità pt" value="0" min="0">
-    </div>
+    <div id="ideaHint" class="hint" style="display: none; margin-top: 2px;">Le idee non hanno scadenza né punti — le trovi nella tab "Aree della vita".</div>
     <button id="saveBtn">Aggiungi</button>
   </div>
 

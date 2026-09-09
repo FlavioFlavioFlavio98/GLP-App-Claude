@@ -239,7 +239,7 @@ export default function LifeAreaManageModal() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn-secondary" style={{ flex: 1, padding: '12px' }} onClick={() => { setShowAddForm(false); setEditArea(null) }}>Annulla</button>
+                  <button className="btn-sec" style={{ flex: 1 }} onClick={() => { setShowAddForm(false); setEditArea(null) }}>Annulla</button>
                   <button className="btn-main" style={{ flex: 1, padding: '12px' }} onClick={handleSaveArea} disabled={saving || !form.name.trim()}>
                     {saving ? '⏳' : 'Salva'}
                   </button>
@@ -249,7 +249,7 @@ export default function LifeAreaManageModal() {
           </>
         )}
 
-        <button className="btn-secondary" style={{ width: '100%', padding: '12px', marginTop: 16 }} onClick={actions.closeModal}>Chiudi</button>
+        <button className="btn-sec" style={{ marginTop: 16 }} onClick={actions.closeModal}>Chiudi</button>
       </div>
     </div>
   )

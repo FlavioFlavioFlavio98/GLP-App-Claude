@@ -234,8 +234,14 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
 
       {!isReadOnly && (
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-          <button className="btn-secondary" style={{ flex: 1, padding: 12 }} onClick={() => actions.openModal('lifeAreaLog')}>+ Sessione manuale</button>
-          <button className="btn-secondary" style={{ flex: 1, padding: 12 }} onClick={() => actions.openModal('lifeAreaManage')}>⚙️ Gestisci aree</button>
+          <button
+            onClick={() => actions.openModal('lifeAreaLog')}
+            style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontWeight: 700, fontSize: '0.88em', cursor: 'pointer' }}
+          >+ Sessione manuale</button>
+          <button
+            onClick={() => actions.openModal('lifeAreaManage')}
+            style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontWeight: 700, fontSize: '0.88em', cursor: 'pointer' }}
+          >⚙️ Gestisci aree</button>
         </div>
       )}
     </div>

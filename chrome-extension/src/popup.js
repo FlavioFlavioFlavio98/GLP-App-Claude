@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth'
-import { getFirestore, doc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { toDateString } from '../../src/lib/habitLogic'
 
 // Stessa config del progetto Firebase della web app (src/lib/firebase.js) —
@@ -37,6 +37,9 @@ const deadlineInput = document.getElementById('deadline')
 const priorityInput = document.getElementById('priority')
 const rewardInput = document.getElementById('reward')
 const penaltyInput = document.getElementById('penalty')
+const destinationSelect = document.getElementById('destination')
+const taskOnlyFields = document.getElementById('taskOnlyFields')
+const ideaHint = document.getElementById('ideaHint')
 
 // toDateString usa la data locale, non UTC: alle 00:xx ora italiana
 // new Date().toISOString().slice(0,10) restituisce ancora il giorno UTC
@@ -72,11 +75,43 @@ syncQuickDateActive()
 
 function setStatus(msg) { statusEl.textContent = msg }
 
+// Mostra/nasconde i campi che non hanno senso per un'idea di area della vita
+// (niente scadenza, priorità o punti — vedi addLifeAreaIdea in store.jsx,
+// stessa scelta di design della web app in TaskModal.jsx).
+function updateDestinationUI() {
+  const isIdea = destinationSelect.value !== 'tasks'
+  taskOnlyFields.style.display = isIdea ? 'none' : ''
+  ideaHint.style.display = isIdea ? 'block' : 'none'
+  titleInput.placeholder = isIdea ? 'Es. Video YouTube esercizi a corpo libero' : 'Cosa devi fare?'
+}
+destinationSelect.addEventListener('change', updateDestinationUI)
+
+// Popolate una sola volta dopo il login: stessa fonte (users/flavio) usata
+// dal watch e dalla web app per le aree della vita — richiesta esplicita di
+// Flavio di poter scegliere subito la destinazione anche da qui, dato che
+// aggiunge spesso task/idee proprio dall'estensione.
+let areasLoaded = false
+async function loadLifeAreas() {
+  if (areasLoaded) return
+  try {
+    const snap = await getDoc(doc(db, 'users', 'flavio'))
+    const areas = (snap.data()?.lifeAreas || []).filter(a => a.active !== false)
+    areas.forEach(a => {
+      const opt = document.createElement('option')
+      opt.value = a.id
+      opt.textContent = `${a.emoji} ${a.name} (idea, senza scadenza)`
+      destinationSelect.appendChild(opt)
+    })
+    areasLoaded = true
+  } catch (e) { /* select resta con la sola opzione "Task generali" */ }
+}
+
 onAuthStateChanged(auth, user => {
   if (user) {
     loginView.style.display = 'none'
     taskView.style.display = 'block'
     titleInput.focus()
+    loadLifeAreas()
   } else {
     loginView.style.display = 'block'
     taskView.style.display = 'none'
@@ -107,39 +142,56 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   if (saving) return
   const title = titleInput.value.trim()
   if (!title) { setStatus('Scrivi cosa devi fare'); return }
-  // .checkValidity() non basta da solo (l'utente può scrivere una data
-  // passata a mano nonostante il min sul campo) — controllata esplicitamente
-  // qui sotto, stessa logica di addTask in store.jsx.
-  const deadline = deadlineInput.value || todayLocal()
-  const priority = priorityInput.value
-  const reward = Math.max(0, parseInt(rewardInput.value) || 0)
-  const penalty = Math.max(0, parseInt(penaltyInput.value) || 0)
+
+  const destination = destinationSelect.value
+  const ref = doc(db, 'users', 'flavio')
 
   saving = true
   setStatus('Salvataggio...')
   try {
-    const ref = doc(db, 'users', 'flavio')
-    const today = todayLocal()
-    const isPast = deadline < today
-    const newTask = {
-      id: `task_${Date.now().toString(36)}`,
-      title,
-      description: descriptionInput.value.trim(),
-      deadline,
-      reward,
-      penalty,
-      priority,
-      status: isPast ? 'expired' : 'active',
-      createdAt: new Date().toISOString(),
-      completedAt: null,
-      expiredAt: isPast ? new Date().toISOString() : null,
-      rewardApplied: false,
-      penaltyApplied: isPast,
+    if (destination !== 'tasks') {
+      // Idea di un'area della vita: niente scadenza/priorità/punti, stessa
+      // forma di addLifeAreaIdea in store.jsx (web) — arrayUnion va bene
+      // anche qui, è una vera aggiunta, non una modifica di un elemento
+      // esistente.
+      const newIdea = {
+        id: `idea_${Date.now().toString(36)}`,
+        areaId: destination,
+        text: title,
+        done: false,
+        createdAt: todayLocal(),
+      }
+      await updateDoc(ref, { lifeAreaIdeas: arrayUnion(newIdea) })
+    } else {
+      // .checkValidity() non basta da solo (l'utente può scrivere una data
+      // passata a mano nonostante il min sul campo) — controllata
+      // esplicitamente qui sotto, stessa logica di addTask in store.jsx.
+      const deadline = deadlineInput.value || todayLocal()
+      const priority = priorityInput.value
+      const reward = Math.max(0, parseInt(rewardInput.value) || 0)
+      const penalty = Math.max(0, parseInt(penaltyInput.value) || 0)
+      const today = todayLocal()
+      const isPast = deadline < today
+      const newTask = {
+        id: `task_${Date.now().toString(36)}`,
+        title,
+        description: descriptionInput.value.trim(),
+        deadline,
+        reward,
+        penalty,
+        priority,
+        status: isPast ? 'expired' : 'active',
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        expiredAt: isPast ? new Date().toISOString() : null,
+        rewardApplied: false,
+        penaltyApplied: isPast,
+      }
+      // arrayUnion invece di get()+update(): niente lettura, niente race con
+      // scritture concorrenti da web/telefono nella stessa finestra (stessa
+      // classe di bug della perdita dati del 28/8/2026).
+      await updateDoc(ref, { tasks: arrayUnion(newTask) })
     }
-    // arrayUnion invece di get()+update(): niente lettura, niente race con
-    // scritture concorrenti da web/telefono nella stessa finestra (stessa
-    // classe di bug della perdita dati del 28/8/2026).
-    await updateDoc(ref, { tasks: arrayUnion(newTask) })
     setStatus('✅ Aggiunta!')
     titleInput.value = ''
     descriptionInput.value = ''
@@ -147,6 +199,8 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     syncQuickDateActive()
     rewardInput.value = '0'
     penaltyInput.value = '0'
+    destinationSelect.value = 'tasks'
+    updateDestinationUI()
     setTimeout(() => window.close(), 700)
   } catch (e) {
     setStatus('Errore: ' + e.message)

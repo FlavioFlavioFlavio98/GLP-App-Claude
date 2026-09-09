@@ -1,4 +1,4 @@
-export const APP_VERSION = '2.25.0'
+export const APP_VERSION = '2.26.0'
 export const APP_UPDATED = '2026-09-09'
 
 // Iniettati da vite.config.js al momento della build

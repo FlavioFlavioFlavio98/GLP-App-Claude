@@ -101,7 +101,7 @@ export default function TaskTimerCard({ taskId, taskTitle, actions, onFinish, on
       <button className="btn-main" style={{ width: 220, padding: '14px', fontSize: '1.05em', marginBottom: 10 }} onClick={finish}>
         ⏹ Fine
       </button>
-      <button className="btn-secondary" style={{ width: 220, padding: '10px' }} onClick={cancel}>
+      <button className="btn-sec" style={{ width: 220 }} onClick={cancel}>
         Annulla
       </button>
     </div>

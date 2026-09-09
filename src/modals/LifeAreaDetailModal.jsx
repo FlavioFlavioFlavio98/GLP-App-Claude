@@ -187,7 +187,7 @@ export default function LifeAreaDetailModal() {
                       style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.88em', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', marginBottom: 8 }}
                     />
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn-secondary" style={{ flex: 1, padding: 8 }} onClick={() => setEditingId(null)}>Annulla</button>
+                      <button className="btn-sec" style={{ flex: 1, marginTop: 0 }} onClick={() => setEditingId(null)}>Annulla</button>
                       <button className="btn-main" style={{ flex: 1, padding: 8 }} onClick={() => saveEdit(n)}>Salva</button>
                     </div>
                   </>
@@ -212,9 +212,17 @@ export default function LifeAreaDetailModal() {
                 onKeyDown={e => { if (e.key === 'Enter') handleAddIdea() }}
                 placeholder="Es. Video YouTube esercizi a corpo libero"
                 maxLength={200}
-                style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.88em', boxSizing: 'border-box' }}
+                style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', fontSize: '0.88em', boxSizing: 'border-box' }}
               />
-              <button className="btn-main" style={{ padding: '0 18px', fontSize: '1.2em' }} onClick={handleAddIdea} disabled={savingIdea || !ideaText.trim()}>+</button>
+              <button
+                onClick={handleAddIdea}
+                disabled={savingIdea || !ideaText.trim()}
+                style={{
+                  flexShrink: 0, width: 44, padding: 0, fontSize: '1.2em', fontWeight: 700,
+                  background: 'var(--theme-color)', color: '#000', border: 'none', borderRadius: 10,
+                  cursor: 'pointer', opacity: ideaText.trim() ? 1 : 0.5,
+                }}
+              >+</button>
             </div>
 
             {pendingIdeas.length === 0 && doneIdeas.length === 0 && (
@@ -230,7 +238,7 @@ export default function LifeAreaDetailModal() {
           </>
         )}
 
-        <button className="btn-secondary" style={{ width: '100%', padding: '12px', marginTop: 16 }} onClick={actions.closeModal}>Chiudi</button>
+        <button className="btn-sec" style={{ marginTop: 16 }} onClick={actions.closeModal}>Chiudi</button>
       </div>
     </div>
   )

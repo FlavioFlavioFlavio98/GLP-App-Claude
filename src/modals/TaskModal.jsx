@@ -167,7 +167,7 @@ export default function TaskModal() {
             >
               <option value="tasks">📋 Task generali</option>
               {lifeAreas.map(a => (
-                <option key={a.id} value={a.id}>{a.emoji} {a.name} (idea, senza scadenza)</option>
+                <option key={a.id} value={a.id}>{a.emoji} {a.name} (spunto, senza scadenza)</option>
               ))}
             </select>
           </div>
@@ -191,7 +191,7 @@ export default function TaskModal() {
         )}
 
         <div style={{ marginBottom: 14 }}>
-          <div style={labelStyle}>{isIdea ? "NOME IDEA *" : 'NOME TASK *'}</div>
+          <div style={labelStyle}>{isIdea ? "NOME SPUNTO *" : 'NOME TASK *'}</div>
           <input
             value={title} onChange={e => setTitle(e.target.value)}
             placeholder={isIdea ? "Es. Video YouTube esercizi a corpo libero" : "Es. Studia per l'esame..."}
@@ -202,7 +202,7 @@ export default function TaskModal() {
 
         {isIdea ? (
           <p style={{ fontSize: '0.78em', color: '#888', margin: '0 0 20px' }}>
-            Le idee non hanno scadenza né punti — le trovi nella tab "Aree della vita", dentro l'area scelta, pronte da riprendere quando hai tempo.
+            Gli spunti non hanno scadenza né punti — li trovi nella tab "Aree della vita", dentro l'area scelta, pronti da riprendere quando hai tempo.
           </p>
         ) : (
           <>
@@ -282,7 +282,7 @@ export default function TaskModal() {
             className="btn-main"
             style={{ flex: 2, padding: 13, fontSize: '0.95em' }}
           >
-            {saving ? '⏳ Salvataggio...' : isEdit ? 'Salva modifiche' : isIdea ? '💡 Aggiungi idea' : alreadyDone ? '✅ Registra come completata' : 'Crea Task'}
+            {saving ? '⏳ Salvataggio...' : isEdit ? 'Salva modifiche' : isIdea ? '💡 Aggiungi spunto' : alreadyDone ? '✅ Registra come completata' : 'Crea Task'}
           </button>
         </div>
       </div>

@@ -114,7 +114,7 @@ export default function TaskSection({ minimalMode, activeTimerTaskId = null, onS
             {isToday ? 'Nessuna task attiva — aggiungine una con +' : 'Nessuna task programmata per questo giorno'}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {activeTasks.map(task => (
               <TaskItem
                 key={task.id}
@@ -292,7 +292,14 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
           {isActive && (
             <>
-              <span style={{ fontSize: '0.7em', color: accentColor, fontWeight: 600 }}>📅 {deadline}</span>
+              {/* "oggi" è ridondante quando si sta già guardando la vista di
+                  oggi — resta visibile ma discreto, invece di gridare in
+                  rosso/arancio come una scadenza reale in arrivo. */}
+              {deadline === 'oggi' ? (
+                <span style={{ fontSize: '0.66em', color: '#555' }}>oggi</span>
+              ) : (
+                <span style={{ fontSize: '0.7em', color: accentColor, fontWeight: 600 }}>📅 {deadline}</span>
+              )}
               <span style={{ fontSize: '0.68em', color: '#555' }}>+{task.reward}pt / -{task.penalty}pt</span>
               {task.timeSpentSec > 0 && (
                 <span style={{ fontSize: '0.68em', color: '#888' }}>⏱️ {Math.round(task.timeSpentSec / 60)}m</span>

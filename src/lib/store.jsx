@@ -1285,7 +1285,7 @@ export function AppProvider({ children }) {
       const idea = { id: Date.now().toString(36), areaId, text: trimmed, done: false, createdAt: toDateString(new Date()) }
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { lifeAreaIdeas: arrayUnion(idea) })
-      actions.showToast('Idea aggiunta', '💡')
+      actions.showToast('Spunto aggiunto', '💡')
     },
 
     async toggleLifeAreaIdea(ideaId) {
@@ -1306,7 +1306,7 @@ export function AppProvider({ children }) {
       const updated = (gd.lifeAreaIdeas || []).filter(i => i.id !== ideaId)
       const ref = doc(db, 'users', 'flavio')
       await updateDoc(ref, { lifeAreaIdeas: updated })
-      actions.showToast('Idea eliminata', '🗑️')
+      actions.showToast('Spunto eliminato', '🗑️')
     },
 
     // ─── Willpower ── log rapido +/- , non una sessione con durata: si registra

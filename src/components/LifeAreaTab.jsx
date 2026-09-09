@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toDateString } from '../lib/habitLogic'
 import { computeLifeAreaStats, computeLifeAreaDailyTotals } from '../lib/lifeAreaStats'
 import { Chart } from '../lib/chartSetup'
@@ -70,8 +70,17 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Card ad accordion: un solo tocco sul nome area espande la lista degli
+  // "spunti" di quell'area (invece di dover aprire il modal ogni volta) —
+  // richiesta esplicita di Flavio per accedervi più in fretta quando ha
+  // tempo libero da dedicare a un'area specifica. Un solo accordion aperto
+  // alla volta, come una normale lista a fisarmonica.
+  const [expandedAreaId, setExpandedAreaId] = useState(null)
+  const [sessionsExpanded, setSessionsExpanded] = useState(false)
+
   const lifeAreas = globalData?.lifeAreas || []
   const lifeAreaLog = globalData?.lifeAreaLog || {}
+  const lifeAreaIdeas = globalData?.lifeAreaIdeas || []
   const stats = computeLifeAreaStats(lifeAreaLog, lifeAreas)
   // Più trascurata prima (area mai loggata = massima priorità): la tab deve
   // spingere a riequilibrare, non solo elencare in ordine di creazione.
@@ -117,44 +126,52 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
         const neglected = byArea?.daysSinceLastSession != null && byArea.daysSinceLastSession >= NEGLECT_WARNING_DAYS
         const hasTarget = byArea?.weeklyTargetMin > 0
         const targetPct = hasTarget ? Math.min(100, byArea.weekTargetPct || 0) : 0
-        const pendingIdeasCount = (globalData?.lifeAreaIdeas || []).filter(i => i.areaId === a.id && !i.done).length
+        const areaIdeas = lifeAreaIdeas
+          .filter(i => i.areaId === a.id)
+          .sort((x, y) => (x.done === y.done) ? 0 : (x.done ? 1 : -1))
+        const pendingIdeasCount = areaIdeas.filter(i => !i.done).length
+        const isExpanded = expandedAreaId === a.id
         return (
           <div
             key={a.id}
             style={{
-              padding: '12px 14px', marginBottom: 8,
+              padding: '10px 14px', marginBottom: 8,
               background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: '1.4em' }}>{a.emoji}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.9em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {a.name}
-                  {neglected && <span title={`Ferma da ${byArea.daysSinceLastSession} giorni`}>⚠️</span>}
+              <div
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, cursor: 'pointer' }}
+                onClick={() => setExpandedAreaId(id => id === a.id ? null : a.id)}
+              >
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {a.name}
+                    {neglected && <span title={`Ferma da ${byArea.daysSinceLastSession} giorni`}>⚠️</span>}
+                    {pendingIdeasCount > 0 && (
+                      <span style={{ fontSize: '0.62em', fontWeight: 800, color: '#000', background: 'var(--theme-color)', borderRadius: 8, padding: '1px 6px' }}>
+                        💡{pendingIdeasCount}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.72em', color: neglected ? '#f2994a' : '#888' }}>
+                    {byArea?.todayMin || 0}m oggi · {byArea?.weekMin || 0}m settimana
+                    {neglected && ` · ferma da ${byArea.daysSinceLastSession}g`}
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.72em', color: neglected ? '#f2994a' : '#888' }}>
-                  {byArea?.todayMin || 0}m oggi · {byArea?.weekMin || 0}m settimana
-                  {neglected && ` · ferma da ${byArea.daysSinceLastSession}g`}
-                </div>
+                <span className="material-icons-round" style={{ fontSize: 20, color: '#666', flexShrink: 0 }}>
+                  {isExpanded ? 'expand_less' : 'expand_more'}
+                </span>
               </div>
               {!isReadOnly && (
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     className="btn-icon"
-                    title="Diario e idee"
+                    title="Diario"
                     onClick={() => actions.openModal('lifeAreaDetail', { areaId: a.id })}
-                    style={{ position: 'relative', width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1em' }}
-                  >
-                    📓
-                    {pendingIdeasCount > 0 && (
-                      <span style={{
-                        position: 'absolute', top: -4, right: -4, minWidth: 14, height: 14, padding: '0 3px',
-                        borderRadius: 7, background: 'var(--theme-color)', color: '#000',
-                        fontSize: '0.55em', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>{pendingIdeasCount}</span>
-                    )}
-                  </button>
+                    style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '1em' }}
+                  >📓</button>
                   <button
                     className="btn-icon"
                     title="Aggiungi sessione"
@@ -177,33 +194,67 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
                 </div>
               </div>
             )}
+            {isExpanded && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                {areaIdeas.length === 0 ? (
+                  <p style={{ fontSize: '0.76em', color: '#666', margin: '0 0 8px' }}>Ancora nessuno spunto qui.</p>
+                ) : (
+                  areaIdeas.map(i => (
+                    <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                      <button
+                        className="btn-icon"
+                        style={{ padding: 0, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        onClick={() => actions.toggleLifeAreaIdea(i.id)}
+                      >
+                        <span className="material-icons-round" style={{ fontSize: 18, color: i.done ? 'var(--success)' : '#666' }}>
+                          {i.done ? 'check_box' : 'check_box_outline_blank'}
+                        </span>
+                      </button>
+                      <span style={{ flex: 1, fontSize: '0.82em', textDecoration: i.done ? 'line-through' : 'none', opacity: i.done ? 0.5 : 1 }}>{i.text}</span>
+                    </div>
+                  ))
+                )}
+                {!isReadOnly && (
+                  <button
+                    onClick={() => actions.openModal('lifeAreaDetail', { areaId: a.id })}
+                    style={{ background: 'none', border: 'none', color: 'var(--theme-color)', fontSize: '0.76em', fontWeight: 700, cursor: 'pointer', padding: '4px 0 0' }}
+                  >Gestisci spunti →</button>
+                )}
+              </div>
+            )}
           </div>
         )
       })}
 
       {todaySessions.length > 0 && (
         <>
-          <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, margin: '20px 0 10px' }}>Sessioni di oggi</div>
-          {todaySessions.map(s => {
+          <button
+            onClick={() => setSessionsExpanded(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, margin: '16px 0 6px' }}
+          >
+            <span style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>Sessioni di oggi ({todaySessions.length})</span>
+            <span className="material-icons-round" style={{ fontSize: 16, color: '#666' }}>{sessionsExpanded ? 'expand_less' : 'expand_more'}</span>
+          </button>
+          {sessionsExpanded && todaySessions.map(s => {
             const area = areaFor(s.areaId)
             return (
               <div key={s.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 10px', marginBottom: 6,
-                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 8px', marginBottom: 4,
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8,
               }}>
-                <span style={{ fontSize: '1.1em' }}>{area?.emoji || '❔'}</span>
-                <span style={{ fontSize: '0.72em', color: '#666', minWidth: 40 }}>{s.time?.slice(0, 5) || ''}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.82em' }}>{area?.name || 'Area rimossa'} · {s.duration} min</div>
-                  {s.note && <div style={{ fontSize: '0.7em', color: '#888' }}>{s.note}</div>}
+                <span style={{ fontSize: '0.95em' }}>{area?.emoji || '❔'}</span>
+                <span style={{ fontSize: '0.68em', color: '#666', minWidth: 36 }}>{s.time?.slice(0, 5) || ''}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.78em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{area?.name || 'Area rimossa'} · {s.duration} min</div>
+                  {s.note && <div style={{ fontSize: '0.66em', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.note}</div>}
                 </div>
-                <span style={{ fontSize: '0.75em', color: 'var(--success)', fontWeight: 600 }}>+{s.pts}pt</span>
+                <span style={{ fontSize: '0.72em', color: 'var(--success)', fontWeight: 600 }}>+{s.pts}pt</span>
                 {!isReadOnly && (
                   <>
                     <button
                       className="btn-icon"
-                      style={{ padding: 2 }}
+                      style={{ padding: 1 }}
                       title="Modifica durata"
                       onClick={async () => {
                         const val = window.prompt(`Durata in minuti (attuale: ${s.duration}):`, s.duration)
@@ -211,18 +262,18 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
                         await actions.editLifeAreaSession(todayStr, s.id, s.areaId, val, s.note)
                       }}
                     >
-                      <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>edit</span>
+                      <span className="material-icons-round" style={{ fontSize: 14, color: '#555' }}>edit</span>
                     </button>
                     <button
                       className="btn-icon"
-                      style={{ padding: 2 }}
+                      style={{ padding: 1 }}
                       title="Elimina sessione"
                       onClick={async () => {
                         if (!window.confirm(`Eliminare la sessione da ${s.duration} minuti?`)) return
                         await actions.deleteLifeAreaSession(todayStr, s.id)
                       }}
                     >
-                      <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>delete</span>
+                      <span className="material-icons-round" style={{ fontSize: 14, color: '#555' }}>delete</span>
                     </button>
                   </>
                 )}

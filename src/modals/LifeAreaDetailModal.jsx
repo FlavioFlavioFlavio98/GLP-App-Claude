@@ -6,10 +6,11 @@ import { getLifeAreaNotes } from '../lib/lifeAreaStats'
 // Vista di dettaglio di una singola area, con due sezioni distinte:
 // - Diario: note libere e datate ("a cosa mi sono dedicato il giorno X"),
 //   per riflettere a posteriori.
-// - Idee: checklist senza scadenza ("cose da fare quando ho tempo per
-//   quest'area"), volutamente separata dal sistema Task principale — niente
-//   punti/scadenze, richiesta esplicita di Flavio per non mischiarle con le
-//   task vere e proprie.
+// - Spunti: checklist senza scadenza ("cose da approfondire quando ho tempo
+//   per quest'area"), volutamente separata dal sistema Task principale —
+//   niente punti/scadenze. Chiamati "spunti" e non "idee"/"task" su
+//   richiesta esplicita di Flavio: non sono cose da fare con un'urgenza,
+//   sono suggerimenti di approfondimento da riprendere con calma.
 // Un'unica modale con due tab (stesso pattern di LifeAreaManageModal) invece
 // di due modali separate, per tenere tutto ciò che riguarda un'area a un
 // solo tocco di distanza quando la si apre con tempo libero da dedicarle.
@@ -106,7 +107,7 @@ export default function LifeAreaDetailModal() {
         <button
           className="btn-icon"
           style={{ padding: 2 }}
-          title="Elimina idea"
+          title="Elimina spunto"
           onClick={() => actions.deleteLifeAreaIdea(i.id)}
         >
           <span className="material-icons-round" style={{ fontSize: 15, color: '#555' }}>delete</span>
@@ -128,7 +129,7 @@ export default function LifeAreaDetailModal() {
           <button
             onClick={() => setTab('idee')}
             style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: tab === 'idee' ? 'var(--theme-color)' : 'rgba(255,255,255,0.05)', color: tab === 'idee' ? '#000' : 'var(--text)', fontWeight: 700, cursor: 'pointer' }}
-          >💡 Idee{pendingIdeas.length > 0 ? ` (${pendingIdeas.length})` : ''}</button>
+          >💡 Spunti{pendingIdeas.length > 0 ? ` (${pendingIdeas.length})` : ''}</button>
         </div>
 
         {tab === 'diario' && (
@@ -202,7 +203,7 @@ export default function LifeAreaDetailModal() {
         {tab === 'idee' && (
           <>
             <p style={{ fontSize: '0.78em', color: '#888', marginTop: 0, marginBottom: 14 }}>
-              Idee e piccoli miglioramenti per quest'area, senza scadenza — le prendi quando hai tempo da dedicarle.
+              Spunti e piccoli miglioramenti per quest'area, senza scadenza — li prendi quando hai tempo da dedicarci.
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <input
@@ -226,7 +227,7 @@ export default function LifeAreaDetailModal() {
             </div>
 
             {pendingIdeas.length === 0 && doneIdeas.length === 0 && (
-              <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85em', padding: '10px 0' }}>Ancora nessuna idea qui.</p>
+              <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85em', padding: '10px 0' }}>Ancora nessuno spunto qui.</p>
             )}
             {pendingIdeas.map(i => <IdeaRow key={i.id} i={i} />)}
             {doneIdeas.length > 0 && (

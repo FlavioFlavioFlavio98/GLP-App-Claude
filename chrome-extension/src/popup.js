@@ -99,7 +99,7 @@ async function loadLifeAreas() {
     areas.forEach(a => {
       const opt = document.createElement('option')
       opt.value = a.id
-      opt.textContent = `${a.emoji} ${a.name} (idea, senza scadenza)`
+      opt.textContent = `${a.emoji} ${a.name} (spunto, senza scadenza)`
       destinationSelect.appendChild(opt)
     })
     areasLoaded = true

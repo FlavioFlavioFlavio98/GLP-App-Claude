@@ -23,6 +23,7 @@ import { getDayRecapRate } from './dayRecapStats'
 import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
 import { computeSocialPts } from './mindStats'
+import { countWords } from './diaryMarkdown'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -1897,6 +1898,27 @@ export function AppProvider({ children }) {
       const ref = doc(db, 'users', authUserId)
       const journalEntries = { ...(globalData.journalEntries || {}), [dateStr]: { ...entry, createdAt: Date.now() } }
       await updateDoc(ref, { journalEntries })
+    },
+
+    // ─── Diario ── voce di scrittura libera per giorno (diaryLog), diversa
+    // da journalEntries qui sopra: quella è una domanda fissa del giorno con
+    // risposta breve, questa è pagina libera che si riscrive nel tempo.
+    // timeSpentSec si accumula ad ogni "sessione di scrittura" (stessa idea
+    // del tempo per task/aree della vita) — il chiamante passa solo i
+    // secondi della sessione appena conclusa, non il totale.
+    async saveDiaryEntry(dateStr, text, addSeconds = 0) {
+      if (isReadOnly()) return
+      const { authUserId, globalData } = state
+      const trimmed = (text || '').slice(0, 20000)
+      const prevSeconds = globalData?.diaryLog?.[dateStr]?.timeSpentSec || 0
+      const entry = {
+        text: trimmed,
+        wordCount: countWords(trimmed),
+        timeSpentSec: prevSeconds + Math.max(0, Math.round(addSeconds) || 0),
+        updatedAt: new Date().toISOString(),
+      }
+      const ref = doc(db, 'users', authUserId)
+      await updateDoc(ref, { [`diaryLog.${dateStr}`]: entry })
     },
 
     // ─── Energy ───────────────────────────────────────────────────────────────

@@ -30,6 +30,7 @@ const NutritionTab = lazy(() => import('./components/NutritionTab'))
 const MealsTab = lazy(() => import('./components/MealsTab'))
 const StatsTabContent = lazy(() => import('./components/StatsTabContent'))
 const LifeAreaTab = lazy(() => import('./components/LifeAreaTab'))
+const DiaryTab = lazy(() => import('./components/DiaryTab'))
 
 // ── Gruppi di modali: caricati on-demand al primo accesso, raggruppati per contesto d'uso ──
 const HabitCoreModals = lazy(() => import('./modalGroups/HabitCoreModals'))
@@ -382,7 +383,7 @@ export default function App() {
       {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout/Benessere/
           Mente: l'economia generale di task/abitudini non è rilevante lì, dove
           ogni tab mostra già le proprie statistiche specifiche ── */}
-      {!['workout', 'body', 'mente', 'nutrizione', 'pasti', 'aree'].includes(currentTab) && (
+      {!['workout', 'body', 'mente', 'nutrizione', 'pasti', 'aree', 'diario'].includes(currentTab) && (
         <DailySummaryPanel
           authUserId={authUserId}
           globalData={globalData}
@@ -482,6 +483,13 @@ export default function App() {
         {currentTab === 'aree' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <LifeAreaTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
+          </Suspense>
+        )}
+
+        {/* ───────── TAB: DIARIO ───────── */}
+        {currentTab === 'diario' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <DiaryTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
           </Suspense>
         )}
 

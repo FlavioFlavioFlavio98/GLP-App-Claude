@@ -101,6 +101,12 @@ export default function App() {
   const isNative = window.Capacitor?.isNativePlatform?.() || false
 
   const [focusMode, toggleFocusMode] = useFocusMode(viewDate)
+  // Zen mode del Diario: mentre si scrive, nasconde header/date-nav/bottom-nav
+  // per togliere ogni distrazione dalla pagina — richiesta esplicita di
+  // Flavio. Diverso da focusMode qui sopra (quello filtra le abitudini già
+  // fatte, questo nasconde la chrome dell'app); nome deliberatamente
+  // diverso per non confonderli.
+  const [diaryZenMode, setDiaryZenMode] = useState(false)
   const [levelUpInfo, setLevelUpInfo] = useState(null)
   const [showPsychPage, setShowPsychPage] = useState(false)
   const [showReadings, setShowReadings] = useState(false)
@@ -363,22 +369,26 @@ export default function App() {
     <>
       <WeeklyRecapCheck globalData={isReadOnly ? null : globalData} actions={actions} authUserId={authUserId} />
 
-      {/* ── HEADER FISSO (sempre visibile su tutte le tab) ── */}
-      <Header isReadOnly={isReadOnly} />
+      {!diaryZenMode && (
+        <>
+          {/* ── HEADER FISSO (sempre visibile su tutte le tab) ── */}
+          <Header isReadOnly={isReadOnly} />
 
-      {!isReadOnly && authUserId === 'flavio' && (
-        <BackupReminderBanner lastDataExportAt={globalData?.lastDataExportAt} actions={actions} />
+          {!isReadOnly && authUserId === 'flavio' && (
+            <BackupReminderBanner lastDataExportAt={globalData?.lastDataExportAt} actions={actions} />
+          )}
+
+          {minimalMode && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 12px', background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 10, fontSize: '0.75em', color: '#EF9F27' }}>
+              <span className="material-icons-round" style={{ fontSize: 14 }}>filter_list</span>
+              <span style={{ flex: 1 }}>Modalità minimalista attiva</span>
+              <button onClick={() => actions.setMinimalMode(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF9F27', fontWeight: 700, fontSize: '0.9em', padding: 0 }}>Mostra tutto</button>
+            </div>
+          )}
+
+          <DateNav />
+        </>
       )}
-
-      {minimalMode && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 12px', background: 'rgba(255,202,40,0.08)', border: '1px solid rgba(255,202,40,0.2)', borderRadius: 10, fontSize: '0.75em', color: '#EF9F27' }}>
-          <span className="material-icons-round" style={{ fontSize: 14 }}>filter_list</span>
-          <span style={{ flex: 1 }}>Modalità minimalista attiva</span>
-          <button onClick={() => actions.setMinimalMode(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF9F27', fontWeight: 700, fontSize: '0.9em', padding: 0 }}>Mostra tutto</button>
-        </div>
-      )}
-
-      <DateNav />
 
       {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout/Benessere/
           Mente: l'economia generale di task/abitudini non è rilevante lì, dove
@@ -489,14 +499,14 @@ export default function App() {
         {/* ───────── TAB: DIARIO ───────── */}
         {currentTab === 'diario' && (
           <Suspense fallback={<TabLoadingFallback />}>
-            <DiaryTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />
+            <DiaryTab actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} onZenModeChange={setDiaryZenMode} />
           </Suspense>
         )}
 
       </div>
 
-      {/* ── BOTTOM NAV ── */}
-      <BottomNav currentTab={currentTab} onTabChange={changeTab} />
+      {/* ── BOTTOM NAV (nascosta durante la scrittura nel Diario) ── */}
+      {!diaryZenMode && <BottomNav currentTab={currentTab} onTabChange={changeTab} />}
 
       <Toast />
 

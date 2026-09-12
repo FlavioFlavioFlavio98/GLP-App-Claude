@@ -5,8 +5,9 @@ import { renderDiaryMarkdown, countWords } from '../lib/diaryMarkdown'
 // Dopo tanti secondi senza digitare si considera la sessione di scrittura
 // conclusa: il timer si ferma, il tempo va nel totale del giorno, la voce
 // viene salvata e la vista passa in anteprima formattata — richiesta
-// esplicita di Flavio.
-const INACTIVITY_MS = 6000
+// esplicita di Flavio. Alzato da 6 a 30s: si fermava troppo presto, capita
+// di sostare qualche secondo a pensare prima di riprendere a scrivere.
+const INACTIVITY_MS = 30000
 
 function fmtElapsed(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -28,13 +29,21 @@ function fmtDayLabel(dateStr) {
   return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long' })
 }
 
-export default function DiaryTab({ actions, authUserId, isReadOnly, globalData }) {
+export default function DiaryTab({ actions, authUserId, isReadOnly, globalData, onZenModeChange }) {
   const todayStr = toDateString(new Date())
   const [selectedDate, setSelectedDate] = useState(todayStr)
   const [text, setText] = useState('')
   const [mode, setMode] = useState('write') // 'write' | 'preview'
   const [writing, setWriting] = useState(false)
   const [elapsedSec, setElapsedSec] = useState(0)
+  // Zen mode: attivo quando il campo di scrittura ha il focus — nasconde
+  // titolo/date-nav/statistiche/storico QUI, e (via onZenModeChange, gestito
+  // da App.jsx) anche header/date-nav globale/bottom-nav, per togliere ogni
+  // distrazione mentre si scrive. Indipendente dal timer di scrittura sotto:
+  // uscire dallo zen mode (tasto ✕ o tap fuori) non ferma il conteggio del
+  // tempo, solo l'inattività di 30s lo fa.
+  const [isFocused, setIsFocused] = useState(false)
+  const textareaRef = useRef(null)
 
   // Refs invece di stato per tutto ciò che serve dentro i timeout/cleanup —
   // evita closure "stantie" quando il salvataggio scatta con un ritardo
@@ -44,6 +53,8 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData }
   const burstStartRef = useRef(null)
   const tickIntervalRef = useRef(null)
   const inactivityTimeoutRef = useRef(null)
+
+  useEffect(() => { onZenModeChange?.(isFocused) }, [isFocused, onZenModeChange])
 
   const diaryLog = globalData?.diaryLog || {}
   const canEdit = authUserId === 'flavio' && !isReadOnly
@@ -75,15 +86,21 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData }
     stopTicking()
     setWriting(false)
     setElapsedSec(0)
+    setIsFocused(false)
     actions.saveDiaryEntry(selectedDateRef.current, textRef.current, burstSec)
     setMode('preview')
   }
 
   // Salva anche lasciando la tab a metà scrittura (cambio pagina, chiusura
   // dell'app) — altrimenti quei minuti/quelle parole andrebbero perse senza
-  // che l'utente se ne accorga.
+  // che l'utente se ne accorga. Ripristina anche la chrome dell'app (zen
+  // mode), altrimenti uscendo dalla tab mentre si scrive header/bottom-nav
+  // resterebbero nascosti anche nelle altre tab.
   useEffect(() => {
-    return () => { if (burstStartRef.current != null) flushBurst() }
+    return () => {
+      if (burstStartRef.current != null) flushBurst()
+      onZenModeChange?.(false)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -132,63 +149,91 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData }
 
   return (
     <div style={{ padding: '16px 16px 90px' }}>
-      <h2 style={{ fontSize: '1.1em', fontWeight: 800, marginBottom: 4 }}>📔 Diario</h2>
-      <p style={{ fontSize: '0.78em', color: '#888', marginTop: 0, marginBottom: 16 }}>
-        Scrivi liberamente — il timer parte da solo mentre scrivi e si ferma quando ti fermi tu.
-      </p>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 16 }}>
+      {isFocused && (
         <button
-          onClick={() => changeDay(-1)}
-          style={{ background: 'none', border: 'none', color: '#888', fontSize: '1.3em', cursor: 'pointer', padding: '0 8px' }}
-        >&#8249;</button>
-        <div style={{ position: 'relative', textAlign: 'center', minWidth: 140 }}>
-          <span style={{ fontWeight: 700, color: 'var(--theme-color)', fontSize: '1em' }}>{fmtDayLabel(selectedDate)}</span>
-          <input
-            type="date"
-            value={selectedDate}
-            max={todayStr}
-            onChange={e => e.target.value && selectDate(e.target.value)}
-            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-          />
-        </div>
-        <button
-          onClick={() => changeDay(1)}
-          disabled={selectedDate === todayStr}
-          style={{ background: 'none', border: 'none', color: selectedDate === todayStr ? '#333' : '#888', fontSize: '1.3em', cursor: selectedDate === todayStr ? 'default' : 'pointer', padding: '0 8px' }}
-        >&#8250;</button>
-      </div>
+          onClick={() => textareaRef.current?.blur()}
+          title="Esci dalla modalità scrittura"
+          style={{
+            position: 'fixed', top: 10, right: 14, zIndex: 50,
+            width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--card-solid)', border: '1px solid var(--card-border)', color: 'var(--text-sec)',
+            cursor: 'pointer', fontSize: '1em', boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+          }}
+        >✕</button>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.15em', fontWeight: 800, color: writing ? 'var(--theme-color)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-            {writing ? fmtElapsed(elapsedSec) : fmtElapsed(0)}
+      {!isFocused && (
+        <>
+          <h2 style={{ fontSize: '1.1em', fontWeight: 800, marginBottom: 4 }}>📔 Diario</h2>
+          <p style={{ fontSize: '0.78em', color: '#888', marginTop: 0, marginBottom: 16 }}>
+            Scrivi liberamente — il timer parte da solo mentre scrivi e si ferma quando ti fermi tu.
+          </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 16 }}>
+            <button
+              onClick={() => changeDay(-1)}
+              style={{ background: 'none', border: 'none', color: '#888', fontSize: '1.3em', cursor: 'pointer', padding: '0 8px' }}
+            >&#8249;</button>
+            <div style={{ position: 'relative', textAlign: 'center', minWidth: 140 }}>
+              <span style={{ fontWeight: 700, color: 'var(--theme-color)', fontSize: '1em' }}>{fmtDayLabel(selectedDate)}</span>
+              <input
+                type="date"
+                value={selectedDate}
+                max={todayStr}
+                onChange={e => e.target.value && selectDate(e.target.value)}
+                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+              />
+            </div>
+            <button
+              onClick={() => changeDay(1)}
+              disabled={selectedDate === todayStr}
+              style={{ background: 'none', border: 'none', color: selectedDate === todayStr ? '#333' : '#888', fontSize: '1.3em', cursor: selectedDate === todayStr ? 'default' : 'pointer', padding: '0 8px' }}
+            >&#8250;</button>
           </div>
-          <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>
-            {writing ? '✍️ In scrittura' : 'Timer scrittura'}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15em', fontWeight: 800, color: writing ? 'var(--theme-color)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                {writing ? fmtElapsed(elapsedSec) : fmtElapsed(0)}
+              </div>
+              <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>
+                {writing ? '✍️ In scrittura' : 'Timer scrittura'}
+              </div>
+            </div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15em', fontWeight: 800, color: 'var(--text)' }}>{liveWordCount}</div>
+              <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Parole</div>
+            </div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15em', fontWeight: 800, color: 'var(--text)' }}>{fmtMinutes(totalTodaySec)}</div>
+              <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Scritto oggi</div>
+            </div>
           </div>
+        </>
+      )}
+
+      {isFocused && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, fontSize: '0.78em', color: 'var(--text-sec)', margin: '4px 0 12px', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ color: writing ? 'var(--theme-color)' : 'var(--text-sec)', fontWeight: 700 }}>{writing ? `✍️ ${fmtElapsed(elapsedSec)}` : '⏸️ in pausa'}</span>
+          <span style={{ opacity: 0.4 }}>·</span>
+          <span>{liveWordCount} parole</span>
         </div>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.15em', fontWeight: 800, color: 'var(--text)' }}>{liveWordCount}</div>
-          <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Parole</div>
-        </div>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.15em', fontWeight: 800, color: 'var(--text)' }}>{fmtMinutes(totalTodaySec)}</div>
-          <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Scritto oggi</div>
-        </div>
-      </div>
+      )}
 
       {mode === 'write' ? (
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={handleChange}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder="Scrivi qui... (- per un elenco puntato, 1. per uno numerato)"
-          rows={12}
-          autoFocus={selectedDate === todayStr}
+          rows={isFocused ? 22 : 12}
           style={{
             width: '100%', padding: 14, borderRadius: 14, border: '1px solid var(--card-border)',
             background: 'var(--surface)', color: 'var(--text)', fontSize: '0.95em', boxSizing: 'border-box',
             resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6, marginBottom: 10,
+            transition: 'height 0.15s ease',
           }}
         />
       ) : (
@@ -202,13 +247,20 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData }
             dangerouslySetInnerHTML={{ __html: renderDiaryMarkdown(text) || '<span style="color:#666">Ancora nulla scritto per questo giorno.</span>' }}
           />
           <button
-            onClick={() => setMode('write')}
+            onClick={() => {
+              setMode('write')
+              // Focus subito il campo: qui l'intenzione di scrivere è
+              // esplicita (tasto premuto apposta), a differenza dell'apertura
+              // della tab — lì niente autofocus, altrimenti la modalità zen
+              // scatterebbe appena entri senza che tu l'abbia chiesto.
+              setTimeout(() => textareaRef.current?.focus(), 0)
+            }}
             style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text)', fontWeight: 700, fontSize: '0.85em', cursor: 'pointer' }}
           >✏️ Continua a scrivere</button>
         </div>
       )}
 
-      {historyDates.length > 0 && (
+      {!isFocused && historyDates.length > 0 && (
         <>
           <div style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1, margin: '20px 0 10px' }}>Giorni passati</div>
           {historyDates.map(d => {

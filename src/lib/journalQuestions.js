@@ -82,6 +82,16 @@ export function getQuestionForDate(dateStr) {
   return JOURNAL_QUESTIONS[idx]
 }
 
+// Spunto "a chiamata" per il Diario (a differenza di getQuestionForDate qui
+// sopra, che è la domanda fissa del giorno per l'altra feature journalEntries)
+// — usata quando non si sa cosa scrivere, quindi va bene anche ripetuta più
+// volte nella stessa giornata. excludeId evita di ripescare subito la stessa
+// domanda cliccando "un'altra".
+export function getRandomQuestion(excludeId) {
+  const pool = excludeId ? JOURNAL_QUESTIONS.filter(q => q.id !== excludeId) : JOURNAL_QUESTIONS
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
 export const CAT_LABELS = {
   riflessione: '🔍 Riflessione',
   gratitudine: '🙏 Gratitudine',

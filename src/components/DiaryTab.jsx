@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { toDateString } from '../lib/habitLogic'
 import { renderDiaryMarkdown, countWords } from '../lib/diaryMarkdown'
+import { computeDiaryStats } from '../lib/diaryStats'
+import { getRandomQuestion } from '../lib/journalQuestions'
 
 // Dopo tanti secondi senza digitare si considera la sessione di scrittura
 // conclusa: il timer si ferma, il tempo va nel totale del giorno, la voce
@@ -44,6 +46,10 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData, 
   // tempo, solo l'inattività di 30s lo fa.
   const [isFocused, setIsFocused] = useState(false)
   const textareaRef = useRef(null)
+  // Spunto "a chiamata" per quando non si sa cosa scrivere — null finché non
+  // lo si chiede esplicitamente, non deve intromettersi nei giorni in cui
+  // si sa già cosa scrivere.
+  const [prompt, setPrompt] = useState(null)
 
   // Refs invece di stato per tutto ciò che serve dentro i timeout/cleanup —
   // evita closure "stantie" quando il salvataggio scatta con un ritardo
@@ -69,6 +75,7 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData, 
     setText(initialText)
     textRef.current = initialText
     setMode(initialText ? 'preview' : 'write')
+    setPrompt(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate])
 
@@ -87,6 +94,7 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData, 
     setWriting(false)
     setElapsedSec(0)
     setIsFocused(false)
+    setPrompt(null)
     actions.saveDiaryEntry(selectedDateRef.current, textRef.current, burstSec)
     setMode('preview')
   }
@@ -137,6 +145,8 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData, 
   const savedSeconds = entry?.timeSpentSec || 0
   const totalTodaySec = savedSeconds + (writing ? elapsedSec : 0)
   const liveWordCount = countWords(text)
+
+  const stats = computeDiaryStats(diaryLog)
 
   const historyDates = Object.keys(diaryLog)
     .filter(d => diaryLog[d]?.text && d !== selectedDate)
@@ -191,6 +201,25 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData, 
             >&#8250;</button>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15em', fontWeight: 800, color: stats.streak > 0 ? 'var(--success, #4caf50)' : 'var(--text)' }}>{stats.streak}g</div>
+              <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Streak</div>
+            </div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15em', fontWeight: 800, color: 'var(--text)' }}>{stats.bestStreak}g</div>
+              <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Record</div>
+            </div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15em', fontWeight: 800, color: 'var(--text)' }}>{stats.lifetimeWords}</div>
+              <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Parole totali</div>
+            </div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15em', fontWeight: 800, color: 'var(--text)' }}>{stats.lifetimeDays}</div>
+              <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Giorni scritti</div>
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
               <div style={{ fontSize: '1.15em', fontWeight: 800, color: writing ? 'var(--theme-color)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
@@ -209,6 +238,32 @@ export default function DiaryTab({ actions, authUserId, isReadOnly, globalData, 
               <div style={{ fontSize: '0.56em', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>Scritto oggi</div>
             </div>
           </div>
+
+          {mode === 'write' && (
+            <div style={{ marginBottom: 14 }}>
+              {prompt ? (
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--card-border)', borderRadius: 12, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ fontSize: '0.88em', color: 'var(--text)', lineHeight: 1.4 }}>💡 {prompt.text}</div>
+                    <button
+                      onClick={() => setPrompt(null)}
+                      title="Chiudi"
+                      style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.9em', padding: 0, flexShrink: 0 }}
+                    >✕</button>
+                  </div>
+                  <button
+                    onClick={() => setPrompt(p => getRandomQuestion(p?.id))}
+                    style={{ background: 'none', border: 'none', color: 'var(--theme-color)', cursor: 'pointer', fontSize: '0.76em', fontWeight: 700, padding: '6px 0 0' }}
+                  >🔄 Un'altra domanda</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setPrompt(getRandomQuestion())}
+                  style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--surface)', color: 'var(--text-sec)', fontWeight: 600, fontSize: '0.82em', cursor: 'pointer' }}
+                >💡 Non so cosa scrivere...</button>
+              )}
+            </div>
+          )}
         </>
       )}
 

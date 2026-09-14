@@ -7,7 +7,11 @@
  *  3. Run: firebase deploy --only functions
  */
 
-import { getToken, onMessage } from 'firebase/messaging'
+// firebase/messaging NON è importato qui in cima — questo file è raggiunto
+// eager da store.jsx (via updatePersistentNotification, che non ne ha
+// bisogno), quindi un import statico qui vanificherebbe il lazy-loading già
+// fatto in firebase.js. getToken/onMessage vengono importati dinamicamente
+// dentro le funzioni che li usano, sotto.
 import { doc, setDoc, collection, getDocs } from 'firebase/firestore'
 import { db, getMessagingInstance } from './firebase'
 
@@ -33,6 +37,7 @@ export async function saveFcmToken(userId) {
   try {
     const messaging = await getMessagingInstance()
     if (!messaging) return null
+    const { getToken } = await import('firebase/messaging')
 
     const registration = window.__swRegistration
     const token = await getToken(messaging, {
@@ -61,6 +66,7 @@ export async function saveFcmToken(userId) {
 export async function setupForegroundMessages(callback) {
   const messaging = await getMessagingInstance()
   if (!messaging) return () => {}
+  const { onMessage } = await import('firebase/messaging')
   return onMessage(messaging, payload => callback?.(payload))
 }
 

@@ -79,7 +79,7 @@ const SECTION_LABELS = {
   recurringTasks: 'Task ricorrenti', globalSearch: 'Ricerca globale', singleHabit: 'Dettaglio abitudine',
   singleReward: 'Dettaglio reward', settings: 'Impostazioni', avatar: 'Avatar', insights: 'Insight',
   appUsage: 'Uso app', analytics: 'Analytics', stats: 'Stats', statsPage: 'Pagina stats',
-  weeklyView: 'Vista settimanale', weeklyRecap: 'Riepilogo settimanale', mobility: 'Mobility',
+  weeklyView: 'Vista settimanale', mobility: 'Mobility',
   study: 'Studio', willpowerEntry: 'Voce willpower',
   willpowerStats: 'Statistiche willpower', weight: 'Peso', proteinEntry: 'Aggiungi alimento',
   proteinFoodsManage: 'Gestione alimenti', eveningReview: 'Revisione serale', pdfReport: 'Report PDF',

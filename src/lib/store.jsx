@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useReducer, useRef } from 'react'
-import { db, auth, storage, ALLOWED_EMAILS, EMAIL_TO_USER } from './firebase'
-import { getFunctions, httpsCallable } from 'firebase/functions'
+import { db, auth, ALLOWED_EMAILS, EMAIL_TO_USER, getStorageInstance } from './firebase'
 import { app } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
@@ -8,7 +7,11 @@ import {
   arrayUnion, arrayRemove, collection, getDocs, increment, runTransaction,
   addDoc, serverTimestamp, deleteField,
 } from 'firebase/firestore'
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
+// firebase/functions e firebase/storage sono importati dinamicamente al
+// punto d'uso (dentro le singole azioni più sotto), non qui in cima — store.jsx
+// è caricato eager all'avvio dell'app, e questi due SDK servono solo per
+// azioni specifiche (Cloud Functions AI, upload file), mai al primo avvio.
+// Richiesta esplicita di Flavio: PWA più veloce ad aprirsi.
 import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
 import { updatePersistentNotification } from './fcm'
 import { trackSectionUsage } from './trackAppOpen'
@@ -656,6 +659,8 @@ export function AppProvider({ children }) {
       const realUid = auth.currentUser?.uid
       if (realUid) {
         try {
+          const { ref: storageRef, listAll, deleteObject } = await import('firebase/storage')
+          const storage = await getStorageInstance()
           const list = await listAll(storageRef(storage, `pdfs/${realUid}`))
           const results = await Promise.allSettled(list.items.map(item => deleteObject(item)))
           results.forEach((r, i) => {
@@ -761,6 +766,7 @@ export function AppProvider({ children }) {
       } catch (e) { console.error(e) }
     },
     async sendBackupNow(userId, email) {
+      const { getFunctions, httpsCallable } = await import('firebase/functions')
       const functions = getFunctions(app, 'europe-west1')
       const fn = httpsCallable(functions, 'sendBackupNow')
       const result = await fn({ userId, email })
@@ -772,6 +778,7 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       const { authUserId, globalData } = state
       actions.showToast('Trascrizione in corso...', '🎤')
+      const { getFunctions, httpsCallable } = await import('firebase/functions')
       const functions = getFunctions(app, 'europe-west1')
       const cleanupTranscriptionFn = httpsCallable(functions, 'cleanupTranscription', { timeout: 30000 })
       const result = await cleanupTranscriptionFn({ rawText })
@@ -867,6 +874,8 @@ export function AppProvider({ children }) {
       trackSectionUsage('actions', 'bodyPhotos')
       const realUid = auth.currentUser?.uid
       if (!realUid) { actions.showToast('Utente non autenticato', '❌'); return }
+      const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage')
+      const storage = await getStorageInstance()
       const ts = Date.now()
       const photos = []
       for (let i = 0; i < files.length; i++) {
@@ -889,6 +898,8 @@ export function AppProvider({ children }) {
 
     async deleteBodyPhotoEntry(entry) {
       if (state.authUserId !== 'flavio') return
+      const { ref: storageRef, deleteObject } = await import('firebase/storage')
+      const storage = await getStorageInstance()
       for (const p of (entry.photos || [])) {
         try { await deleteObject(storageRef(storage, p.storagePath)) } catch { /* già eliminato */ }
       }
@@ -1515,6 +1526,7 @@ export function AppProvider({ children }) {
       const gd = state.allUsersData?.flavio
       const alreadyGenerated = !!gd?.dayRecapLog?.[logDate]
 
+      const { getFunctions, httpsCallable } = await import('firebase/functions')
       const functions = getFunctions(app, 'europe-west1')
       const fn = httpsCallable(functions, 'generateDayRecap', { timeout: 60000 })
       const result = await fn({ transcript: trimmed.slice(0, 8000) })
@@ -1576,6 +1588,7 @@ export function AppProvider({ children }) {
       if (gd?.proteinFoods?.length > 0) return
 
       try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions')
         const functions = getFunctions(app, 'europe-west1')
         const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 60000 })
         const result = await fn({ foods: SEED_FOODS.map(f => f.name) })
@@ -1610,6 +1623,7 @@ export function AppProvider({ children }) {
       if (!trimmed) { actions.showToast('Nome alimento mancante', '⚠️'); return null }
 
       try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions')
         const functions = getFunctions(app, 'europe-west1')
         const fn = httpsCallable(functions, 'estimateFoodProtein', { timeout: 30000 })
         const result = await fn({ foods: [trimmed] })
@@ -2851,6 +2865,8 @@ export function AppProvider({ children }) {
       if (!authUserId) return
       const realUid = auth.currentUser?.uid
       if (!realUid) { actions.showToast('Utente non autenticato', '❌'); return }
+      const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage')
+      const storage = await getStorageInstance()
       const ts = Date.now()
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const path = `pdfs/${realUid}/${ts}_${safeName}`
@@ -2903,6 +2919,8 @@ export function AppProvider({ children }) {
       // Elimina da Storage
       if (reading.storagePath) {
         try {
+          const { ref: storageRef, deleteObject } = await import('firebase/storage')
+          const storage = await getStorageInstance()
           await deleteObject(storageRef(storage, reading.storagePath))
         } catch (e) {
           // Ignora se già eliminato

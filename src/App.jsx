@@ -55,7 +55,7 @@ const HabitDiaryPage = lazy(() => import('./modals/HabitDiaryPage'))
 const HABIT_CORE_MODALS = ['add', 'edit', 'tags', 'rewardCategories', 'singleHabit', 'singleReward']
 const SETTINGS_MODALS = ['settings', 'themeModal', 'notifications', 'achievements', 'avatar', 'backup', 'appUsage', 'quotesModal']
 const STATS_MODALS = ['analytics', 'stats', 'statsPage', 'purchaseHistory', 'weeklyView', 'pdfReport', 'activityLog']
-const JOURNAL_MOOD_MODALS = ['eveningReview', 'mood', 'insights', 'weeklyRecap', 'journal', 'journalView']
+const JOURNAL_MOOD_MODALS = ['eveningReview', 'mood', 'insights', 'journal', 'journalView']
 const FITNESS_MODALS = ['quickExercise', 'exerciseStats', 'exerciseSingle', 'weight', 'coach', 'mobility', 'study']
 const BODY_MODALS = ['barefoot', 'hang']
 const MENTE_MODALS = ['willpowerEntry', 'willpowerStats', 'discoveries']
@@ -367,7 +367,6 @@ export default function App() {
 
   return (
     <>
-      <WeeklyRecapCheck globalData={isReadOnly ? null : globalData} actions={actions} authUserId={authUserId} />
 
       {!diaryZenMode && (
         <>
@@ -609,20 +608,3 @@ function BuildInfo() {
   )
 }
 
-function WeeklyRecapCheck({ globalData, actions, authUserId }) {
-  useEffect(() => {
-    if (!globalData || !authUserId) return
-    const now = new Date()
-    if (now.getDay() !== 0) return
-    const yr = now.getFullYear()
-    const d = new Date(Date.UTC(yr, now.getMonth(), now.getDate()))
-    const dayN = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - dayN)
-    const wk = Math.ceil(((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7)
-    const key = `glp_weekly_recap_${yr}-W${wk}`
-    if (!localStorage.getItem(key)) {
-      localStorage.setItem(key, '1')
-      setTimeout(() => actions.openModal('weeklyRecap'), 1200)
-    }
-  }, [globalData])
-  return null
-}

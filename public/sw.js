@@ -35,17 +35,45 @@ self.addEventListener('fetch', event => {
   const isCacheableExternal = EXTERNAL_CACHE_HOSTS.includes(url.hostname)
   if (!isSameOrigin && !isCacheableExternal) return
 
-  // Navigation (index.html): network-only, cache: 'no-store' — always get
-  // fresh HTML with current asset hashes. fetch(event.request) alone still
-  // consults the browser's own HTTP cache (separate from this SW's Cache
-  // Storage above, and outside its control) if the host sends a permissive
-  // Cache-Control — GitHub Pages does exactly that, which left a real client
-  // stuck on an old build indefinitely despite CACHE_NAME being versioned
-  // correctly on every deploy. Rebuilding the request with cache:'no-store'
-  // forces an actual network round-trip every time, bypassing that layer too.
+  // Navigation (index.html): cache-first, revalidate in background — serve
+  // istantaneamente dalla Cache Storage di QUESTA build (install() l'ha
+  // precacheata sotto CACHE_NAME insieme a tutti gli asset con gli hash
+  // corrispondenti, quindi è sempre internamente coerente), invece di
+  // bloccare ogni apertura dell'app su un giro di rete completo — era
+  // questo il vero collo di bottiglia della PWA "lenta ad aprirsi"
+  // segnalato da Flavio, non tanto la dimensione del bundle.
+  //
+  // Prima era network-only con cache:'no-store' per bypassare l'HTTP cache
+  // del browser (GitHub Pages manda un Cache-Control permissivo che una
+  // volta ha lasciato un client bloccato su una build vecchia). Ma quel
+  // bug riguardava sw.js stesso, già risolto a un livello diverso (query
+  // string ?v=<hash> sulla registrazione in main.jsx forza il browser a
+  // ri-scaricare lo script del service worker ad ogni deploy). Una volta
+  // che il nuovo sw.js viene installato, precachea la sua PROPRIA versione
+  // di index.html sotto un CACHE_NAME diverso — non c'è modo che la cache
+  // qui sotto serva un index.html non coerente con gli asset già scaricati.
+  // L'aggiornamento a una build più recente resta gestito dal normale
+  // ciclo di vita del service worker (registration.update() in main.jsx +
+  // banner di aggiornamento), non da questo fetch.
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request.url, { cache: 'no-store' }).catch(() => caches.match('/GLP-App-Claude/index.html'))
+      caches.match('/GLP-App-Claude/index.html').then(cached => {
+        if (cached) {
+          // Rinfresca la cache in background per i prossimi avvii, senza
+          // far aspettare questo.
+          event.waitUntil(
+            fetch(event.request.url, { cache: 'no-store' })
+              .then(response => {
+                if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put('/GLP-App-Claude/index.html', response))
+              })
+              .catch(() => {})
+          )
+          return cached
+        }
+        // Nessuna cache (primissima visita, o cache svuotata): comportamento
+        // originale, un giro di rete è inevitabile qui.
+        return fetch(event.request.url, { cache: 'no-store' }).catch(() => caches.match('/GLP-App-Claude/index.html'))
+      })
     )
     return
   }

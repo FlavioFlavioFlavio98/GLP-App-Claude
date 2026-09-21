@@ -10,6 +10,7 @@ admin.initializeApp()
 const anthropicKey = defineSecret('ANTHROPIC_KEY')
 const geminiKey = defineSecret('GEMINI_KEY')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
+const shared = require('./sharedHabits')
 const ALLOWED_EMAIL = 'flavio.rossi94@gmail.com'
 const REGION = 'europe-west1'
 
@@ -724,6 +725,93 @@ exports.syncWidgetsOnUserDataChange = onDocumentWritten(
         admin.firestore().collection('users').doc('flavio').collection('fcmTokens').doc(t).delete()
       ))
     }
+  }
+)
+
+// ── Abitudini condivise Flavio + Simona ─────────────────────────────────────
+// users/flavio è un documento monolitico (diario, psicologo, task, peso…):
+// Simona NON ha alcun accesso a quel documento (vedi firestore.rules). Legge
+// invece sharedHabits/flavio, una copia in sola lettura con i soli dati delle
+// abitudini (vedi buildSharedHabits in sharedHabits.js per cosa include ed
+// esclude), tenuta allineata da questo trigger.
+exports.mirrorSharedHabits = onDocumentWritten(
+  { document: 'users/flavio', region: REGION },
+  async (event) => {
+    const mirrorRef = admin.firestore().collection('sharedHabits').doc('flavio')
+    const after = event.data && event.data.after
+    if (!after || !after.exists) {
+      await mirrorRef.delete().catch(() => {})
+      return
+    }
+    const payload = shared.buildSharedHabits(after.data(), new Date().toISOString().slice(0, 10))
+    const hash = shared.hashPayload(payload)
+    // users/flavio viene scritto continuamente (timer, task, diario…): si
+    // riscrive il mirror solo se il sottoinsieme condiviso è davvero cambiato.
+    const current = await mirrorRef.get()
+    if (current.exists && current.data().hash === hash) return
+    await mirrorRef.set({ ...payload, hash, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+  }
+)
+
+// Completa/annulla/fallisce l'abitudine DELL'ALTRO (Flavio → Simona, Simona →
+// Flavio). Il chiamante non scrive mai direttamente sul documento dell'altro:
+// niente regole Firestore "a metà" e niente sovrascritture accidentali di
+// campi che non vede (note vocali, lastDone…) — qui la transazione lavora sul
+// documento completo con l'Admin SDK, con la stessa logica di setHabitStatus.
+exports.setPartnerHabitStatus = onCall(
+  { region: REGION, invoker: 'public' },
+  async (request) => {
+    const token = request.auth && request.auth.token
+    if (!token || !token.email) throw new HttpsError('unauthenticated', 'Login richiesto')
+    const caller = shared.EMAIL_TO_USER[token.email]
+    if (!caller || token.email_verified !== true) throw new HttpsError('permission-denied', 'Non autorizzato')
+
+    const { habitId, date, action } = request.data || {}
+    if (typeof habitId !== 'string' || !habitId || habitId.length > 200) {
+      throw new HttpsError('invalid-argument', 'Abitudine non valida')
+    }
+    if (!shared.validateDate(date, new Date().toISOString().slice(0, 10))) {
+      throw new HttpsError('invalid-argument', 'Data non valida (non nel futuro, max 30 giorni indietro)')
+    }
+    if (action !== 'next' && action !== 'failed') throw new HttpsError('invalid-argument', 'Azione non valida')
+
+    const target = shared.PARTNER_OF[caller]
+    const db = admin.firestore()
+    const targetRef = db.collection('users').doc(target)
+    const mirrorRef = db.collection('sharedHabits').doc('flavio')
+
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(targetRef)
+      if (!snap.exists) throw new HttpsError('not-found', 'Utente non trovato')
+      const data = snap.data()
+      const r = shared.applyHabitAction(data, habitId, date, action)
+      if (r.error) throw new HttpsError('failed-precondition', r.error)
+
+      const rawDay = data.dailyLogs && data.dailyLogs[date]
+      if (Array.isArray(rawDay)) {
+        // Formato legacy (array di id): un aggiornamento "a campo" non è
+        // possibile dentro un array, si riscrive l'intero giorno.
+        tx.update(targetRef, { [`dailyLogs.${date}`]: { ...r.entry, purchases: [] }, habits: r.habits })
+      } else {
+        tx.update(targetRef, {
+          [`dailyLogs.${date}.habits`]: r.entry.habits,
+          [`dailyLogs.${date}.failedHabits`]: r.entry.failedHabits,
+          [`dailyLogs.${date}.habitLevels`]: r.entry.habitLevels,
+          habits: r.habits,
+        })
+      }
+
+      if (target === 'flavio') {
+        // Aggiorna subito anche il mirror (il trigger lo farebbe comunque,
+        // ma con qualche secondo di ritardo): Simona vede il risultato quasi
+        // istantaneamente.
+        const dayObj = (rawDay && !Array.isArray(rawDay)) ? rawDay : {}
+        const newData = { ...data, habits: r.habits, dailyLogs: { ...(data.dailyLogs || {}), [date]: { ...dayObj, ...r.entry } } }
+        const payload = shared.buildSharedHabits(newData, new Date().toISOString().slice(0, 10))
+        tx.set(mirrorRef, { ...payload, hash: shared.hashPayload(payload), updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      }
+      return { actionType: r.actionType }
+    })
   }
 )
 

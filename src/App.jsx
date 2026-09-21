@@ -115,9 +115,17 @@ export default function App() {
   const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
   const [bonusExpanded, setBonusExpanded] = useState(() => localStorage.getItem('glp_bonus_expanded') === 'true')
   const [voiceNoteHabit, setVoiceNoteHabit] = useState(null)
-  const [currentTab, setCurrentTab] = useState(() => localStorage.getItem('glp_tab') || 'oggi')
+  const [storedTab, setCurrentTab] = useState(() => localStorage.getItem('glp_tab') || 'oggi')
+  // Simona (fidanzata) ha accesso SOLO alla sezione Abitudini: qualunque tab
+  // sia salvata in localStorage, per lei è sempre e solo questa. Le regole
+  // Firestore sono il vero controllo di accesso; questo è il filtro di UI.
+  const currentTab = authUserId === 'simona' ? 'abitudini' : storedTab
+  const homeTab = authUserId === 'simona' ? 'abitudini' : 'oggi'
 
   function changeTab(tab) {
+    // Lasciando la tab Abitudini si esce dalla vista del partner: tutte le
+    // altre tab mostrerebbero i dati dell'altro utente.
+    if (viewUserId !== authUserId) actions.restoreOwnUser()
     setCurrentTab(tab)
     localStorage.setItem('glp_tab', tab)
     trackSectionUsage('tabs', tab)
@@ -153,11 +161,12 @@ export default function App() {
       if (showReadings) { setShowReadings(false); return true }
       if (showPsychPage) { setShowPsychPage(false); return true }
       if (modal) { actions.closeModal(); return true }
-      if (currentTab !== 'oggi') { changeTab('oggi'); return true }
+      if (viewUserId !== authUserId) { actions.restoreOwnUser(); return true }
+      if (currentTab !== homeTab) { changeTab(homeTab); return true }
       return false
     }
     return () => { delete window.__nativeBackHandler }
-  }, [modal, currentTab, showReadings, showPsychPage])
+  }, [modal, currentTab, showReadings, showPsychPage, viewUserId, authUserId])
 
   // Beep di recupero — polling qui (livello App, sempre montato) invece che dentro
   // WorkoutRestTimer, così i beep continuano anche navigando su un'altra tab
@@ -208,7 +217,7 @@ export default function App() {
 
   // Level-up detection
   useEffect(() => {
-    if (!globalData || !authUserId) return
+    if (!globalData || !authUserId || viewUserId !== authUserId) return
     const { level, name } = getLevel(globalData.score)
     const storageKey = `glp_celebrated_level_${authUserId}`
     const celebrated = parseInt(localStorage.getItem(storageKey) || '0')
@@ -216,7 +225,7 @@ export default function App() {
       localStorage.setItem(storageKey, String(level))
       if (celebrated > 0) setLevelUpInfo({ level, name })
     }
-  }, [globalData?.score, authUserId])
+  }, [globalData?.score, authUserId, viewUserId])
 
   // Online/offline detection
   useEffect(() => {
@@ -340,7 +349,7 @@ export default function App() {
     habitValues: entry.habitValues,
     tagsMap, isToday, globalData,
     isReadOnly,
-    onOpenVoiceNote: setVoiceNoteHabit,
+    onOpenVoiceNote: (authUserId === 'flavio' && !isReadOnly) ? setVoiceNoteHabit : undefined,
   }
 
   const allRegularDone = regular.length > 0 && filteredRegular.length === 0
@@ -348,7 +357,7 @@ export default function App() {
   // ── Props condivise dal componente HabitsSection (lazy, riusato in oggi + abitudini) ──
   const habitsSectionProps = {
     doneRegularCount, regular, bonus,
-    habitsExpanded,
+    habitsExpanded: habitsExpanded || authUserId !== 'flavio' || isReadOnly,
     onToggleHabitsExpanded: () => { const next = !habitsExpanded; setHabitsExpanded(next); localStorage.setItem('glp_habits_expanded', String(next)) },
     habitSortMode,
     onToggleHabitSortMode: () => setHabitSortMode(v => !v),
@@ -505,7 +514,7 @@ export default function App() {
       </div>
 
       {/* ── BOTTOM NAV (nascosta durante la scrittura nel Diario) ── */}
-      {!diaryZenMode && <BottomNav currentTab={currentTab} onTabChange={changeTab} />}
+      {!diaryZenMode && authUserId !== 'simona' && <BottomNav currentTab={currentTab} onTabChange={changeTab} />}
 
       <Toast />
 

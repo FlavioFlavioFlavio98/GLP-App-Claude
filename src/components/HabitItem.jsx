@@ -88,6 +88,21 @@ function NumericWidget({ habit, stableId, viewDate, entry, isToday }) {
   )
 }
 
+// Valore di un'abitudine numerica in vista partner: solo lettura (i valori
+// numerici li inserisce soltanto il proprietario).
+function NumericReadOnly({ habit, stableId, habitValues }) {
+  const cfg = habit.numericConfig
+  const v = habitValues?.[stableId]
+  if (v === undefined) return <span style={{ fontSize: '0.75em', color: '#666', padding: '0 6px' }}>—</span>
+  const pts = calcNumericPoints(parseFloat(v), cfg)
+  return (
+    <div style={{ textAlign: 'right', flexShrink: 0, padding: '0 6px' }}>
+      <div style={{ fontWeight: 700, fontSize: '0.9em', color: 'var(--theme-color)' }}>{v} {cfg?.unit}</div>
+      <div style={{ fontSize: '0.7em', fontWeight: 700, color: pts >= 0 ? 'var(--success)' : 'var(--danger)' }}>{pts >= 0 ? '+' : ''}{pts} pt</div>
+    </div>
+  )
+}
+
 function TagIcon({ tag }) {
   if (!tag) return null
   const icon = tag.emoji
@@ -107,7 +122,7 @@ const SWIPE_THRESHOLD = 80
 
 export default function HabitItem({
   habit, viewDate, doneHabits, failedHabits, habitLevels, habitNotes, habitValues, tagsMap, isToday,
-  dragHandleProps, isDragOverlay, globalData, sortMode, onOpenVoiceNote,
+  dragHandleProps, isDragOverlay, globalData, sortMode, onOpenVoiceNote, isReadOnly,
 }) {
   const { actions } = useApp()
   // Quality dot — compute only for non-numeric, non-if habits
@@ -320,13 +335,19 @@ export default function HabitItem({
           </div>
 
           <div className="actions-group" style={sortMode ? { opacity: 0.25, pointerEvents: 'none' } : {}}>
-            <button className="btn-icon" onClick={() => actions.openModal('singleHabit', habit.id)}>
-              <span className="material-icons-round" style={{ fontSize: 18 }}>insights</span>
-            </button>
-            <button className="btn-icon" onClick={() => actions.openModal('edit', { id: habit.id, type: 'habit' })}>
-              <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
-            </button>
-            {isNumeric ? (
+            {!isReadOnly && (
+              <>
+                <button className="btn-icon" onClick={() => actions.openModal('singleHabit', habit.id)}>
+                  <span className="material-icons-round" style={{ fontSize: 18 }}>insights</span>
+                </button>
+                <button className="btn-icon" onClick={() => actions.openModal('edit', { id: habit.id, type: 'habit' })}>
+                  <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
+                </button>
+              </>
+            )}
+            {isNumeric && isReadOnly ? (
+              <NumericReadOnly habit={habit} stableId={stableId} habitValues={habitValues} />
+            ) : isNumeric ? (
               <NumericWidget
                 habit={habit}
                 stableId={stableId}

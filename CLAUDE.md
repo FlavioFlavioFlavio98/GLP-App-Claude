@@ -34,9 +34,18 @@ Per modifiche **solo Kotlin** (`android/app/src/main/java/com/flavio/glp/*.kt`),
 
 Dopo build+sync web, **esegui sempre anche `npm run deploy`** senza chiederlo — l'utente vuole vedere le modifiche live su GitHub Pages ad ogni sessione di lavoro (preferenza confermata più volte). Se una sessione tocca `functions/index.js`, quello richiede un deploy **separato** (`firebase deploy --only functions`) — chiedere conferma prima di eseguirlo, non è coperto dall'istruzione automatica di deploy.
 
-## Utente unico
+## Utenti e abitudini condivise (Flavio + Simona)
 
-L'app è ad uso esclusivo di **Flavio** (`flavio.rossi94@gmail.com`). L'accesso per un secondo utente (Simona) è stato **rimosso deliberatamente** (whitelist auth, Firestore rules, storage rules, tutte le sezioni comparative Flavio-vs-Simona nel codice). Non reintrodurre funzionalità multi-utente, selettori di account, o riferimenti a un secondo utente senza richiesta esplicita.
+L'app è di **Flavio** (`flavio.rossi94@gmail.com`, accesso totale). Su richiesta esplicita di Flavio (settembre 2026) la fidanzata **Simona** (`simonaballini2000@gmail.com`) ha accesso **solo alla sezione Abitudini**, per tracciare le abitudini insieme: ognuno vede quelle dell'altro e può completarle/fallirle per l'altro. Nient'altro va mai esposto a Simona (task, diario, psicologo, workout, negozio premi, impostazioni avanzate). Non aggiungere altri utenti né altre sezioni condivise senza richiesta esplicita.
+
+Architettura (perché `users/flavio` è un documento monolitico con tutto, Simona NON può leggerlo):
+- `users/simona`: suo documento (solo abitudini), lettura/scrittura sua e di Flavio.
+- `sharedHabits/flavio`: copia in **sola lettura** delle sole abitudini di Flavio, scritta dalla Cloud Function `mirrorSharedHabits` (trigger su `users/flavio`). Esclude note vocali (`voiceNotes`/`notes`), `why`, obiettivi, note per giorno e ogni altro campo dei log oltre a habits/failedHabits/habitLevels/habitValues (ultimi 365 giorni). La logica pura è in `functions/sharedHabits.js`.
+- Completare l'abitudine dell'altro passa SEMPRE dalla callable `setPartnerHabitStatus` (Admin SDK, transazione, stessa logica di `setHabitStatus`): Simona non ha alcuna scrittura su `users/flavio`. Le abitudini numeriche le inserisce solo il proprietario; date ≤ oggi e max 30 giorni indietro. Copia client per l'aggiornamento ottimistico: `src/lib/partnerHabits.js` (deve restare identica alla copia server — la verifica `node src/lib/partnerHabits.test.mjs`).
+- `firestore.rules`: `isFlavio()` (rossi94 + rossi95 watch/estensione), `isSimona()` (email + `email_verified`). Storage rules e Cloud Functions AI restano solo di Flavio.
+- Client: `store.jsx` (Flavio ascolta `users/flavio`+`users/simona`; Simona `users/simona`+`sharedHabits/flavio`), `PartnerBar`/`CoupleStatsPanel` (statistiche in `lib/coupleStats.js`), Simona vede solo la tab Abitudini (`App.jsx`). Ogni funzionalità nuova per Flavio va gated con `authUserId === 'flavio'`.
+- Test: `node --test functions/sharedHabits.test.js`, `node src/lib/coupleStats.test.mjs`, e2e su emulatori `scripts/test-shared-habits-e2e.mjs` (richiede JDK 21: `firebase emulators:start --only auth,firestore,functions --project demo-glp`).
+- Deploy: regole e functions NON partono da `git push`: `firebase deploy --only firestore:rules` e `firebase deploy --only functions:setPartnerHabitStatus,functions:mirrorSharedHabits` (chiedere conferma a Flavio prima).
 
 ## Indicatore versione
 

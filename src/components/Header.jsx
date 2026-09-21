@@ -39,9 +39,12 @@ function VersionBadge() {
 
 export default function Header({ isReadOnly }) {
   const { state, actions } = useApp()
-  const { currentUser, authUserId, userColors, globalData, allUsersData, theme } = state
-  const color = userColors[currentUser]
-  const score = globalData?.score ?? 0
+  const { authUserId, userColors, allUsersData, theme } = state
+  // L'header mostra sempre l'utente LOGGATO (punteggio e colore propri), anche
+  // mentre nella tab Abitudini si guardano quelle del partner: il suo
+  // contesto è già nella barra "Le mie | Di <partner>".
+  const color = userColors[authUserId]
+  const score = allUsersData[authUserId]?.score ?? 0
   const { displayVal: scoreDisplay, animClass: scoreAnim } = useCountUp(score)
 
   // Avatar: from profile, fallback to default emoji
@@ -79,12 +82,12 @@ export default function Header({ isReadOnly }) {
               {theme === 'light' ? 'dark_mode' : 'light_mode'}
             </span>
           </button>
-          {!isReadOnly && (
+          {authUserId === 'flavio' && !isReadOnly && (
             <button className="icon-btn" onClick={() => actions.openModal('globalSearch')} title="Cerca">
               <span className="material-icons-round" style={{ fontSize: 20 }}>search</span>
             </button>
           )}
-          {!isReadOnly && (
+          {authUserId === 'flavio' && !isReadOnly && (
             <button className="icon-btn" onClick={() => actions.openModal('insights')} title="Insight">
               <span style={{ fontSize: 18 }}>💡</span>
             </button>

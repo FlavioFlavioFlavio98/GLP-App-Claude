@@ -40,13 +40,18 @@ if (USE_EMULATOR) {
   console.warn('[GLP] 🧪 Modalità TEST attiva — connesso agli emulatori Firebase locali, nessun dato reale coinvolto. Le Cloud Functions (Coach/Psicologo AI) non sono emulate e non funzioneranno in questa modalità.')
 }
 
-// Whitelist: solo questa email può accedere
+// Whitelist: solo queste due email possono accedere. Flavio ha l'app completa;
+// Simona (fidanzata) solo la sezione Abitudini condivise — le regole Firestore
+// (firestore.rules) sono il vero controllo di sicurezza, questa lista è solo
+// il filtro lato UI.
 export const ALLOWED_EMAILS = [
   'flavio.rossi94@gmail.com',
+  'simonaballini2000@gmail.com',
 ]
 
 export const EMAIL_TO_USER = {
   'flavio.rossi94@gmail.com': 'flavio',
+  'simonaballini2000@gmail.com': 'simona',
 }
 
 // Storage — lazy-initialized: caricato solo al primo upload/eliminazione di

@@ -130,6 +130,9 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
           />
         </div>
 
+        {/* Trofei, notifiche, allenamento, coach, psicologo, letture: solo app completa di Flavio */}
+        {authUserId === 'flavio' && (
+          <>
         {/* TROFEI */}
         <div className="settings-section">
           <div className="settings-section-title">Progressi</div>
@@ -260,6 +263,9 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
         <NotificationSection globalData={state.globalData} authUserId={authUserId} actions={actions} />
         <CustomRemindersSection />
 
+          </>
+        )}
+
         {/* MODALITÀ */}
         <div className="settings-section">
           <div className="settings-section-title">Modalità</div>
@@ -281,6 +287,9 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
           )}
         </div>
 
+        {/* Storico, statistiche, dati e strumenti di debug: solo Flavio */}
+        {authUserId === 'flavio' && (
+          <>
         {/* STORICO */}
         <div className="settings-section">
           <div className="settings-section-title">Storico & Diari</div>
@@ -398,6 +407,9 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
             Correggi premio tracciato manuale
           </button>
         </div>
+
+          </>
+        )}
 
         {/* LOGOUT */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>

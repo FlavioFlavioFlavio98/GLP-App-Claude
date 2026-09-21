@@ -2,47 +2,62 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Solo Flavio può accedere — la seconda email è l'account dedicato
-    // all'app Wear OS (watch), separato dal login Google principale per
-    // evitare collisioni con Firebase Auth "un account per email".
-    function isAllowedUser() {
+    // Flavio: la seconda email è l'account dedicato all'app Wear OS (watch) e
+    // all'estensione Chrome, separato dal login Google principale per evitare
+    // collisioni con Firebase Auth "un account per email". Accesso totale,
+    // invariato.
+    function isFlavio() {
       return request.auth != null &&
              (request.auth.token.email == 'flavio.rossi94@gmail.com' ||
               request.auth.token.email == 'flavio.rossi95@gmail.com');
     }
 
+    // Simona: accede SOLO alla sezione Abitudini (tracciamento condiviso con
+    // Flavio). email_verified == true impedisce a chiunque di registrare a
+    // proprio nome un account email/password con questo indirizzo.
+    function isSimona() {
+      return request.auth != null &&
+             request.auth.token.email == 'simonaballini2000@gmail.com' &&
+             request.auth.token.email_verified == true;
+    }
+
     // Documenti utente
     match /users/{userId} {
-      allow read, write: if isAllowedUser();
+      allow read, write: if isFlavio();
+
+      // Simona: solo il proprio documento (abitudini sue). users/flavio è un
+      // documento monolitico con tutto (diario, psicologo, task…): lei NON lo
+      // legge mai, vede le abitudini di Flavio dalla copia sharedHabits sotto.
+      allow read, write: if isSimona() && userId == 'simona';
 
       // Sottocollezione settings: stesse regole del documento padre
       match /settings/{doc} {
-        allow read, write: if isAllowedUser();
+        allow read, write: if isFlavio();
       }
 
       // FCM tokens
       match /fcmTokens/{tokenId} {
-        allow read, write: if isAllowedUser();
+        allow read, write: if isFlavio();
       }
 
       // Dati privati (es. peso)
       match /private/{doc} {
-        allow read, write: if isAllowedUser();
+        allow read, write: if isFlavio();
       }
 
       // Letture (PDF personali)
       match /readings/{readingId} {
-        allow read, write: if isAllowedUser();
+        allow read, write: if isFlavio();
 
         // Log singole letture completate
         match /logs/{logId} {
-          allow read, write: if isAllowedUser();
+          allow read, write: if isFlavio();
         }
       }
 
       // Foto Progressi (check fisico periodico)
       match /bodyPhotos/{photoId} {
-        allow read, write: if isAllowedUser();
+        allow read, write: if isFlavio();
       }
 
       // Backup automatico giornaliero del documento principale (vedi Cloud
@@ -51,9 +66,17 @@ service cloud.firestore {
       // queste regole): mai dal client, altrimenti un bug lato client
       // potrebbe corrompere anche i backup stessi.
       match /backups/{backupId} {
-        allow read: if isAllowedUser();
+        allow read: if isFlavio();
         allow write: if false;
       }
+    }
+
+    // Copia in sola lettura delle SOLE abitudini di Flavio, per Simona (vedi
+    // Cloud Function mirrorSharedHabits): scritta esclusivamente dall'Admin
+    // SDK, mai da un client.
+    match /sharedHabits/{userId} {
+      allow read: if isFlavio() || isSimona();
+      allow write: if false;
     }
 
     // Config (ex PIN) — non più usata, blocca tutto

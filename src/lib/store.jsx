@@ -27,11 +27,10 @@ import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
 import { computeSocialPts } from './mindStats'
 import { countWords } from './diaryMarkdown'
+import { PARTNER_OF, applyHabitAction, patchUserData } from './partnerHabits'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
-
-const USERS = ['flavio']
 
 const MISSION_POOL = [
   { id: 'complete_5_habits', title: 'Completa 5 abitudini', pts: 5, target: 5, type: 'habits_count' },
@@ -50,7 +49,7 @@ function reducer(state, action) {
   switch (action.type) {
     case 'SET_AUTH':
       if (!action.payload) {
-        return { ...state, authStatus: 'unauthenticated', authUserId: null, currentUser: 'flavio', globalData: null, viewUserId: null }
+        return { ...state, authStatus: 'unauthenticated', authUserId: null, currentUser: 'flavio', globalData: null, viewUserId: null, allUsersData: { flavio: null, simona: null } }
       }
       return {
         ...state,
@@ -79,6 +78,17 @@ function reducer(state, action) {
       // qui, una sola volta per aggiornamento dati, così ogni componente che legge
       // globalData.score/allUsersData[x].score vede sempre il totale corretto senza
       // doverlo ricalcolare ad ogni render.
+      const dataWithScore = { ...action.data, score: calculateTotalScore(action.data) }
+      return {
+        ...state,
+        allUsersData: { ...state.allUsersData, [action.user]: dataWithScore },
+        globalData: action.user === state.currentUser ? dataWithScore : state.globalData,
+      }
+    }
+    // Aggiornamento ottimistico dei dati del partner (completamento
+    // abitudine): il tap si vede subito; lo snapshot reale di Firestore lo
+    // sovrascrive con lo stesso contenuto appena la Cloud Function ha scritto.
+    case 'PATCH_USER_DATA': {
       const dataWithScore = { ...action.data, score: calculateTotalScore(action.data) }
       return {
         ...state,
@@ -132,7 +142,7 @@ const initialState = {
   currentUser: 'flavio',  // kept for backwards compat with all actions (= viewUserId)
   pendingAchievements: [],
   globalData: null,
-  allUsersData: { flavio: null },
+  allUsersData: { flavio: null, simona: null },
   viewDate: toDateString(new Date()),
   toast: null,
   modal: null,
@@ -141,6 +151,7 @@ const initialState = {
   lastDarkTheme: localStorage.getItem('glp_last_dark_theme') || 'dark',
   userColors: {
     flavio: localStorage.getItem('glp_color_flavio') || '#ffca28',
+    simona: localStorage.getItem('glp_color_simona') || '#d05ce3',
   },
   // Il selettore "compact/normal/expanded" (classi habit-density-* già in
   // index.css) non è mai stato collegato a nessuna UI in Impostazioni — di
@@ -181,11 +192,22 @@ export function AppProvider({ children }) {
         // conferma davvero l'assenza, al massimo una volta per sessione per
         // utente, e sempre con merge:true come ulteriore rete di sicurezza.
         const ensuredUsers = new Set()
-        const unsubs = USERS.map(u =>
-          onSnapshot(doc(db, 'users', u), snap => {
+        // Sorgenti dati per sessione. Flavio legge i due documenti utente
+        // interi. Simona NON può leggere users/flavio (è un documento
+        // monolitico con diario, psicologo, task…): legge il proprio e la
+        // copia in sola lettura delle SOLE abitudini di Flavio
+        // (sharedHabits/flavio, scritta da una Cloud Function). Entrambe
+        // finiscono in allUsersData con la stessa forma, quindi tutta la UI
+        // delle abitudini funziona uguale su dati veri e su dati mirror.
+        const sources = userId === 'flavio'
+          ? [{ user: 'flavio', col: 'users' }, { user: 'simona', col: 'users' }]
+          : [{ user: 'simona', col: 'users' }, { user: 'flavio', col: 'sharedHabits' }]
+        const unsubs = sources.map(({ user: u, col }) =>
+          onSnapshot(doc(db, col, u), snap => {
             if (snap.exists()) {
               dispatch({ type: 'SET_USER_DATA', user: u, data: snap.data() })
-            } else if (!snap.metadata.fromCache && !ensuredUsers.has(u)) {
+            } else if (col === 'users' && u === userId && !snap.metadata.fromCache && !ensuredUsers.has(u)) {
+              // Si crea SOLO il proprio documento (mai quello dell'altro).
               ensuredUsers.add(u)
               setDoc(
                 doc(db, 'users', u),
@@ -193,7 +215,7 @@ export function AppProvider({ children }) {
                 { merge: true }
               ).catch(e => console.error('[ensure user doc]', e))
             }
-          })
+          }, err => console.warn(`[onSnapshot ${col}/${u}]`, err.code || err.message))
         )
         firestoreUnsubsRef.current = unsubs
       } else {
@@ -240,7 +262,11 @@ export function AppProvider({ children }) {
     },
 
     // ── View mode (read-only switcher) ──
+    // Vista del partner (Flavio ⇄ Simona): solo l'altro utente, e solo se i
+    // suoi dati sono già arrivati (altrimenti globalData resterebbe null e
+    // l'app mostrerebbe lo splash all'infinito).
     switchToViewUser(userId) {
+      if (userId !== PARTNER_OF[state.authUserId] || !state.allUsersData[userId]) return
       dispatch({ type: 'SET_VIEW_USER', userId })
     },
     restoreOwnUser() {
@@ -331,8 +357,48 @@ export function AppProvider({ children }) {
     },
 
     // ─── HABIT STATUS ────────────────────────────────────────────────────────
+    // Completa/annulla/fallisce l'abitudine DEL PARTNER (vista partner): è
+    // l'unica scrittura consentita mentre si guardano i dati dell'altro, ed
+    // è eseguita dalla Cloud Function setPartnerHabitStatus (mai scrivendo
+    // direttamente sul documento dell'altro — vedi firestore.rules).
+    async setPartnerHabitStatus(partnerId, habitId, action) {
+      const { allUsersData, viewDate } = state
+      const before = allUsersData[partnerId]
+      if (!before) return
+      if (viewDate > toDateString(new Date())) { actions.showToast('Non puoi completare giorni futuri', 'ℹ️'); return }
+      const result = applyHabitAction(before, habitId, viewDate, action)
+      if (result.error) {
+        actions.showToast(result.error === 'numeric-owner-only' ? 'Questo valore lo inserisce solo il proprietario' : 'Non modificabile', 'ℹ️')
+        return
+      }
+      actions.vibrate('light')
+      // Aggiornamento ottimistico: il tap si vede subito, senza aspettare il
+      // giro di rete e l'eventuale cold start della function.
+      dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: patchUserData(before, viewDate, result) })
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions')
+        const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'setPartnerHabitStatus')
+        await fn({ habitId, date: viewDate, action })
+        if (result.actionType === 'done') {
+          import('canvas-confetti').then(m => m.default({ particleCount: 60, spread: 60, origin: { y: 0.7 }, colors: [partnerId === 'flavio' ? '#ffca28' : '#d05ce3'] }))
+          actions.showToast('Completata!', '✅')
+        } else if (result.actionType === 'failed') {
+          actions.showToast('Segnata come fallita', '❌')
+        }
+      } catch (err) {
+        console.error('setPartnerHabitStatus failed:', err)
+        dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: before })
+        actions.showToast('Errore nel salvataggio', '❌')
+      }
+    },
+
     async setHabitStatus(habitId, action) {
-      if (isReadOnly()) { actions.showToast('Sola lettura', 'ℹ️'); return }
+      if (isReadOnly()) {
+        const { authUserId, viewUserId } = state
+        if (viewUserId === PARTNER_OF[authUserId]) return actions.setPartnerHabitStatus(viewUserId, habitId, action)
+        actions.showToast('Sola lettura', 'ℹ️')
+        return
+      }
       const { authUserId, globalData, viewDate } = state
       actions.vibrate('light')
       const ref = doc(db, 'users', authUserId)

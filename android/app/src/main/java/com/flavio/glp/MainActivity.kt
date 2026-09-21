@@ -6,44 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
-import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.PermissionController
-import androidx.health.connect.client.permission.HealthPermission
-import androidx.health.connect.client.records.SleepSessionRecord
-import androidx.health.connect.client.records.StepsRecord
-import androidx.lifecycle.lifecycleScope
 import com.getcapacitor.BridgeActivity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : BridgeActivity() {
-
-    companion object {
-        const val GOOGLE_FIT_REQUEST_CODE = 1001
-        const val ACTIVITY_RECOGNITION_REQUEST_CODE = 1002
-    }
-
-    private val healthConnectPermissions = setOf(
-        HealthPermission.getReadPermission(StepsRecord::class),
-        HealthPermission.getReadPermission(SleepSessionRecord::class)
-    )
-
-    private val requestPermissionActivityContract = PermissionController.createRequestPermissionResultContract()
-
-    private val requestHealthPermissions = registerForActivityResult(requestPermissionActivityContract) { granted: Set<String> ->
-        android.util.Log.d("FitSync", "Health Connect permissions result: $granted")
-        android.util.Log.d("FitSync", "Required: $healthConnectPermissions")
-        android.util.Log.d("FitSync", "All granted: ${granted.containsAll(healthConnectPermissions)}")
-        if (granted.containsAll(healthConnectPermissions)) {
-            triggerFitSync()
-        } else {
-            android.util.Log.w("FitSync", "Permessi Health Connect NON tutti concessi — sync non parte")
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         registerPlugin(NotificationPlugin::class.java)
@@ -68,7 +38,6 @@ class MainActivity : BridgeActivity() {
             if (auth.currentUser != null) {
                 cleanAutoFitHabitsOnce()
                 saveWidgetData()
-                setupHealthConnect()
                 // Ri-programma gli allarmi usando le impostazioni salvate localmente
                 NotificationScheduler.scheduleAll(this)
                 // Assicura che il token FCM sia salvato per i push silenziosi di sync widget
@@ -151,28 +120,6 @@ class MainActivity : BridgeActivity() {
             }
     }
 
-    private fun setupHealthConnect() {
-        val status = HealthConnectClient.getSdkStatus(this)
-        android.util.Log.d("FitSync", "Health Connect status: $status")
-        if (status != HealthConnectClient.SDK_AVAILABLE) {
-            android.util.Log.w("FitSync", "Health Connect non disponibile (status=$status)")
-            return
-        }
-        val client = HealthConnectClient.getOrCreate(this)
-        lifecycleScope.launch {
-            val granted = client.permissionController.getGrantedPermissions()
-            android.util.Log.d("FitSync", "Already granted: $granted")
-            android.util.Log.d("FitSync", "Required: $healthConnectPermissions")
-            if (granted.containsAll(healthConnectPermissions)) {
-                android.util.Log.d("FitSync", "Permessi OK — avvio sync")
-                triggerFitSync()
-            } else {
-                android.util.Log.d("FitSync", "Permessi mancanti — lancio dialog Health Connect")
-                requestHealthPermissions.launch(healthConnectPermissions)
-            }
-        }
-    }
-
     private fun fetchUrgentReadingsCount() {
         FirebaseFirestore.getInstance()
             .collection("users").document("flavio").collection("readings")
@@ -191,15 +138,6 @@ class MainActivity : BridgeActivity() {
                     .apply()
                 android.util.Log.d("GLP_Notif", "Urgent readings: $urgentCount")
             }
-    }
-
-    private fun triggerFitSync() {
-        android.util.Log.d("FitSync", "triggerFitSync called")
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        android.util.Log.d("FitSync", "Current hour: $hour — sync_all")
-        startService(Intent(this, FitSyncService::class.java).apply {
-            putExtra("action", "sync_all")
-        })
     }
 
     private fun saveWidgetData() {

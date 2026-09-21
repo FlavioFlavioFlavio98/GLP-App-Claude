@@ -60,7 +60,6 @@ dependencies {
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
     implementation 'com.google.android.gms:play-services-auth:21.3.0'
-    implementation 'androidx.health.connect:connect-client:1.1.0-alpha10'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.0'
 
     // Firebase per il widget

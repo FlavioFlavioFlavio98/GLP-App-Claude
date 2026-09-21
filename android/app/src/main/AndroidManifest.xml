@@ -235,9 +235,6 @@
                 android:resource="@xml/day_widget_info"/>
         </receiver>
 
-        <!-- Service per sync Google Fit -->
-        <service android:name=".FitSyncService" android:exported="false"/>
-
         <!-- Notifica persistente con timer live durante un pasto tracciato
              (vedi MealSessionService) — "specialUse" è il tipo generico
              introdotto per i casi (come questo, un timer di benessere) che
@@ -283,17 +280,10 @@
     <!-- Foreground service per la notifica persistente col timer del pasto -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.health.READ_STEPS" />
-    <uses-permission android:name="android.permission.health.READ_SLEEP" />
 
     <!-- Notifiche locali -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-
-    <!-- Health Connect -->
-    <queries>
-        <package android:name="com.google.android.apps.healthdata" />
-    </queries>
 
 </manifest>

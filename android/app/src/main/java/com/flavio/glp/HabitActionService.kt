@@ -91,11 +91,9 @@ class HabitActionService : Service() {
                 val pending = habits.filter { habit ->
                     val id = habit["id"]?.toString() ?: return@filter false
                     val archived = habit["archivedAt"]
-                    val type = habit["type"] as? String ?: ""
                     archived == null &&
                     !doneList.contains(id) &&
-                    !failedList.contains(id) &&
-                    type != "auto_fit"
+                    !failedList.contains(id)
                 }
 
                 val prefs = getSharedPreferences("glp_widget", MODE_PRIVATE)

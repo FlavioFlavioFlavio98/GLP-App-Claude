@@ -62,7 +62,7 @@ function RewardCard({ reward, globalData, isDragOverlay, dragHandleProps, sortMo
             <button className="btn-icon" onClick={() => actions.openModal('edit', { id: reward.id, type: 'reward' })}>
               <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
             </button>
-            <button className="shop-buy-btn" onClick={() => actions.buyReward(reward.name, cost)}>
+            <button className="shop-buy-btn" onClick={() => actions.buyReward(reward.id, reward.name, cost)}>
               Compra
             </button>
           </div>

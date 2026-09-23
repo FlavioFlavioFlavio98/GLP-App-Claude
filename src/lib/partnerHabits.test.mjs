@@ -46,5 +46,31 @@ for (const d of days) {
     }
   }
 }
+console.log(`✔ client e server identici su ${n} scenari (abitudini)`)
+
+// Stesso confronto per l'acquisto premi (Negozio Premi condiviso).
+const rewards = [
+  { id: 'r1', name: 'Film', cost: 10 },
+  { id: 'r2', name: 'Snack', cost: 2, type: 'tracked' },
+  { id: 'r3', name: 'Archiviato', cost: 5, archivedAt: '2026-09-20' },
+]
+const rewardDays = [
+  undefined,
+  { purchases: [] },
+  { purchases: [{ name: 'Film', cost: 10, time: 1 }] },
+]
+let m = 0
+for (const d of rewardDays) {
+  for (const r of rewards.map(x => x.id).concat(['nope'])) {
+    for (const date of ['2026-09-21', '2026-09-20']) {
+      const data = { rewards: JSON.parse(JSON.stringify(rewards)), dailyLogs: d === undefined ? {} : { [date]: JSON.parse(JSON.stringify(d)) } }
+      const c = client.applyRewardPurchase(data, r, date, 42)
+      const s = server.applyRewardPurchase(data, r, date, 42)
+      assert.deepEqual(c, s, `divergenza client/server: reward=${r} date=${date} day=${JSON.stringify(d)}`)
+      m++
+    }
+  }
+}
+console.log(`✔ client e server identici su ${m} scenari (premi)`)
+
 rmSync(tmp, { recursive: true, force: true })
-console.log(`✔ client e server identici su ${n} scenari`)

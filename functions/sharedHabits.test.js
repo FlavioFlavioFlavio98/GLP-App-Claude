@@ -14,8 +14,13 @@ function baseData() {
       { id: 'g1', name: 'Obiettivo', type: 'goal', goalConfig: { secret: 1 } },
     ],
     tags: [{ id: 't1', name: 'Salute', color: '#fff' }],
+    rewards: [
+      { id: 'r1', name: 'Film', cost: 10 },
+      { id: 'r2', name: 'Snack tracciato', cost: 2, type: 'tracked' },
+    ],
+    rewardCategories: [{ id: 'c1', name: 'Svago', color: '#f0f' }],
     dailyLogs: {
-      '2026-09-20': { habits: ['h1'], failedHabits: [], habitLevels: { h1: 'max' }, habitNotes: { h1: 'nota privata' }, mood: { a: 1 }, purchases: [{ cost: 5 }], readingEarned: 3 },
+      '2026-09-20': { habits: ['h1'], failedHabits: [], habitLevels: { h1: 'max' }, habitNotes: { h1: 'nota privata' }, mood: { a: 1 }, purchases: [{ name: 'Film', cost: 10, time: 1 }], readingEarned: 3 },
       '2025-01-01': { habits: ['h1'] }, // fuori finestra (> 365 giorni)
       '2026-09-19': ['h2'], // formato legacy (array)
     },
@@ -24,17 +29,19 @@ function baseData() {
   }
 }
 
-test('mirror: tiene solo abitudini/tag/stato e toglie tutto ciò che è privato', () => {
+test('mirror: tiene abitudini/tag/stato/premi (incluso Negozio Premi) e toglie tutto ciò che è privato', () => {
   const m = s.buildSharedHabits(baseData(), TODAY)
   const json = JSON.stringify(m)
-  for (const secret of ['privato', 'PRIVATO', 'motivo', 'nota privata', 'segreto', 'goalConfig', 'purchases', 'mood', 'readingEarned', 'tasks', 'psychSessions']) {
+  for (const secret of ['privato', 'PRIVATO', 'motivo', 'nota privata', 'segreto', 'goalConfig', 'mood', 'readingEarned', 'tasks', 'psychSessions']) {
     assert.ok(!json.includes(secret), `il mirror non deve contenere "${secret}"`)
   }
   assert.equal(m.habits.length, 3, 'gli obiettivi (goal) sono esclusi')
   assert.deepEqual(m.profile, { avatar: '🔥' })
   assert.deepEqual(Object.keys(m.dailyLogs).sort(), ['2026-09-19', '2026-09-20'])
   assert.deepEqual(m.dailyLogs['2026-09-19'], { habits: ['h2'] }, 'array legacy normalizzato')
-  assert.deepEqual(m.dailyLogs['2026-09-20'], { habits: ['h1'], habitLevels: { h1: 'max' } })
+  assert.deepEqual(m.dailyLogs['2026-09-20'], { habits: ['h1'], habitLevels: { h1: 'max' }, purchases: [{ name: 'Film', cost: 10, time: 1 }] }, 'gli acquisti al Negozio Premi sono condivisi (il Negozio è condiviso)')
+  assert.deepEqual(m.rewards, baseData().rewards, 'il Negozio Premi è condiviso')
+  assert.deepEqual(m.rewardCategories, baseData().rewardCategories)
 })
 
 test('hash stabile e sensibile ai cambiamenti', () => {
@@ -89,6 +96,26 @@ test('azione: rifiuta numeriche, obiettivi, sconosciute, azioni strane', () => {
   assert.equal(s.applyHabitAction(d, 'g1', TODAY, 'next').error, 'not-allowed')
   assert.equal(s.applyHabitAction(d, 'nope', TODAY, 'next').error, 'habit-not-found')
   assert.equal(s.applyHabitAction(d, 'h1', TODAY, 'delete').error, 'bad-action')
+})
+
+test('acquisto premio: costo sempre letto dal documento (mai dal chiamante), aggiunto ai purchases del giorno', () => {
+  const d = baseData()
+  const r = s.applyRewardPurchase(d, 'r1', '2026-09-21', 12345)
+  assert.deepEqual(r, { purchases: [{ name: 'Film', cost: 10, time: 12345 }], cost: 10, name: 'Film' })
+})
+
+test('acquisto premio: si accumula sugli acquisti già presenti quel giorno', () => {
+  const d = baseData()
+  const r = s.applyRewardPurchase(d, 'r1', '2026-09-20', 999)
+  assert.deepEqual(r.purchases, [{ name: 'Film', cost: 10, time: 1 }, { name: 'Film', cost: 10, time: 999 }])
+})
+
+test('acquisto premio: rifiuta premio inesistente, tracciato, o archiviato', () => {
+  const d = baseData()
+  assert.equal(s.applyRewardPurchase(d, 'nope', TODAY, 1).error, 'reward-not-found')
+  assert.equal(s.applyRewardPurchase(d, 'r2', TODAY, 1).error, 'not-allowed', 'i premi "tracked" restano solo del proprietario')
+  d.rewards[0].archivedAt = '2026-09-01'
+  assert.equal(s.applyRewardPurchase(d, 'r1', TODAY, 1).error, 'reward-archived')
 })
 
 test('date valide: non nel futuro, non oltre 30 giorni indietro', () => {

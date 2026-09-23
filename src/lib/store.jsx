@@ -27,7 +27,7 @@ import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
 import { computeSocialPts } from './mindStats'
 import { countWords } from './diaryMarkdown'
-import { PARTNER_OF, applyHabitAction, patchUserData } from './partnerHabits'
+import { PARTNER_OF, USER_LABEL, applyHabitAction, patchUserData, applyRewardPurchase, patchRewardPurchase } from './partnerHabits'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -124,10 +124,6 @@ function reducer(state, action) {
     case 'SET_WAKE_LOCK':
       localStorage.setItem('glp_wake_lock', String(action.value))
       return { ...state, wakeLockEnabled: action.value }
-    case 'PUSH_ACHIEVEMENTS':
-      return { ...state, pendingAchievements: [...(state.pendingAchievements || []), ...action.defs] }
-    case 'CLEAR_ACHIEVEMENT_QUEUE':
-      return { ...state, pendingAchievements: [] }
     default:
       return state
   }
@@ -140,7 +136,6 @@ const initialState = {
   viewUserId: null,       // the user whose data is currently displayed (can differ in read-only mode)
 
   currentUser: 'flavio',  // kept for backwards compat with all actions (= viewUserId)
-  pendingAchievements: [],
   globalData: null,
   allUsersData: { flavio: null, simona: null },
   viewDate: toDateString(new Date()),
@@ -291,7 +286,6 @@ export function AppProvider({ children }) {
     setDensity(d) { dispatch({ type: 'SET_DENSITY', density: d }) },
     setMinimalMode(v) { dispatch({ type: 'SET_MINIMAL_MODE', value: v }) },
     setWakeLockEnabled(v) { dispatch({ type: 'SET_WAKE_LOCK', value: v }) },
-    clearAchievementQueue() { dispatch({ type: 'CLEAR_ACHIEVEMENT_QUEUE' }) },
 
     // ─── REWARD CATEGORIES ───────────────────────────────────────────────────
     async saveRewardCategories(categories) {
@@ -392,6 +386,42 @@ export function AppProvider({ children }) {
       }
     },
 
+    // Compra un premio del Negozio Premi DELL'ALTRO — stesso schema di
+    // setPartnerHabitStatus: mai una scrittura diretta sul documento
+    // dell'altro, costo sempre letto dal documento del proprietario tramite
+    // la Cloud Function buyPartnerReward (mai fidarsi del client).
+    async buyPartnerReward(partnerId, rewardId) {
+      const { allUsersData, viewDate } = state
+      const before = allUsersData[partnerId]
+      if (!before) return
+      const reward = (before.rewards || []).find(r => r.id === rewardId)
+      if (!reward) { actions.showToast('Premio non trovato', 'ℹ️'); return }
+      if (reward.type === 'tracked') { actions.showToast('Non disponibile per il partner', 'ℹ️'); return }
+      const cost = getItemValueAtDate(reward, 'cost', viewDate)
+      if (before.score < cost) {
+        if (!window.confirm(`Saldo di ${USER_LABEL[partnerId]} insufficiente (${before.score}). Andrà in negativo. Continuare?`)) return
+      } else {
+        if (!window.confirm(`Comprare "${reward.name}" per ${USER_LABEL[partnerId]} (${cost} pt)?`)) return
+      }
+      const result = applyRewardPurchase(before, rewardId, viewDate, Date.now())
+      if (result.error) { actions.showToast('Non disponibile', 'ℹ️'); return }
+      actions.vibrate('heavy')
+      // Aggiornamento ottimistico: l'acquisto si vede subito, senza
+      // aspettare il giro di rete.
+      dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: patchRewardPurchase(before, viewDate, result) })
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions')
+        const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'buyPartnerReward')
+        await fn({ rewardId, date: viewDate })
+        import('canvas-confetti').then(m => m.default({ shapes: ['circle'], colors: ['#4caf50'] }))
+        actions.showToast('Acquisto effettuato!', '🛍️')
+      } catch (err) {
+        console.error('buyPartnerReward failed:', err)
+        dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: before })
+        actions.showToast('Errore nel salvataggio', '❌')
+      }
+    },
+
     async setHabitStatus(habitId, action) {
       if (isReadOnly()) {
         const { authUserId, viewUserId } = state
@@ -400,16 +430,20 @@ export function AppProvider({ children }) {
         return
       }
       const { authUserId, globalData, viewDate } = state
+      const optimisticResult = applyHabitAction(globalData, habitId, viewDate, action)
+      if (optimisticResult.error) return
       actions.vibrate('light')
       const ref = doc(db, 'users', authUserId)
 
-      // Determine habit metadata from globalData (habits list is not race-condition sensitive)
-      const habitsArrBase = [...(globalData.habits || [])]
-      const habitIndex = habitsArrBase.findIndex(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
-      const habitObj = habitsArrBase[habitIndex]
-      if (!habitObj) return
-
-      const isMulti = getItemValueAtDate(habitObj, 'isMulti', viewDate)
+      // Aggiornamento ottimistico: il tap si vede subito, senza aspettare il
+      // giro di rete. La transazione sotto resta la fonte di verità (rilegge
+      // lo stato fresco dal server con la stessa logica pura). Prima di
+      // questo fix, con più tap ravvicinati (completamento in blocco a fine
+      // giornata), la spunta restava sul vecchio stato finché non arrivava
+      // l'eco di Firestore: un secondo tap sulla stessa abitudine, letto
+      // dalla transazione fresca lato server, la trovava già fatta e la
+      // annullava (spunta verde e poi di nuovo grigia).
+      dispatch({ type: 'PATCH_USER_DATA', user: authUserId, data: patchUserData(globalData, viewDate, optimisticResult) })
 
       let finalEntry, finalHabitsArr, actionType = 'neutral'
 
@@ -417,79 +451,23 @@ export function AppProvider({ children }) {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
           const freshData = snap.data()
+          const result = applyHabitAction(freshData, habitId, viewDate, action)
+          if (result.error) throw new Error(result.error)
 
-          const habitsArr = [...(freshData.habits || [])]
-          const freshHabitIndex = habitsArr.findIndex(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
-
-          let raw = freshData.dailyLogs?.[viewDate] || {}
-          if (Array.isArray(raw)) raw = { habits: raw, failedHabits: [], habitLevels: {}, purchases: [] }
-          let entry = {
-            habits: [...(raw.habits || [])],
-            failedHabits: [...(raw.failedHabits || [])],
-            habitLevels: { ...(raw.habitLevels || {}) },
-            purchases: raw.purchases || [],
-          }
-
-          const wasDone = entry.habits.includes(habitId)
-          const wasLevel = entry.habitLevels[habitId] || 'max'
-
-          if (wasDone) {
-            entry.habits = entry.habits.filter(id => id !== habitId)
-            delete entry.habitLevels[habitId]
-          }
-          if (entry.failedHabits.includes(habitId)) {
-            entry.failedHabits = entry.failedHabits.filter(id => id !== habitId)
-          }
-
-          actionType = 'neutral'
-          if (action === 'failed') {
-            entry.failedHabits.push(habitId)
-            actionType = 'failed'
-          } else if (action === 'next') {
-            if (!wasDone) {
-              entry.habits.push(habitId)
-              if (isMulti) {
-                entry.habitLevels[habitId] = 'min'
-              } else {
-                entry.habitLevels[habitId] = 'max'
-                actionType = 'done'
-              }
-            } else if (isMulti && wasLevel === 'min') {
-              entry.habits.push(habitId)
-              entry.habitLevels[habitId] = 'max'
-              actionType = 'done'
-            }
-          }
-
-          // lastDone va tenuto sincronizzato con "è davvero segnata fatta ora",
-          // qualunque sia stato il percorso (completata, annullata, o passata
-          // a fallita) — non solo dentro il ramo "next" come prima. Senza
-          // pulirlo quando entry.habits non la contiene più, un'abitudine a
-          // cadenza multi-giorno annullata subito dopo un tap per errore
-          // restava comunque nascosta per il resto della giornata (isHabitVisible
-          // legge lastDone per la cadenza), come se fosse stata completata
-          // davvero — stesso bug già corretto sul modulo Wear OS.
-          if (freshHabitIndex >= 0) {
-            if (entry.habits.includes(habitId)) {
-              habitsArr[freshHabitIndex] = { ...habitsArr[freshHabitIndex], lastDone: viewDate }
-            } else if (habitsArr[freshHabitIndex].lastDone) {
-              const { lastDone, ...rest } = habitsArr[freshHabitIndex]
-              habitsArr[freshHabitIndex] = rest
-            }
-          }
-
-          finalEntry = entry
-          finalHabitsArr = habitsArr
+          finalEntry = result.entry
+          finalHabitsArr = result.habits
+          actionType = result.actionType
 
           transaction.update(ref, {
-            [`dailyLogs.${viewDate}.habits`]: entry.habits,
-            [`dailyLogs.${viewDate}.failedHabits`]: entry.failedHabits,
-            [`dailyLogs.${viewDate}.habitLevels`]: entry.habitLevels,
-            habits: habitsArr,
+            [`dailyLogs.${viewDate}.habits`]: result.entry.habits,
+            [`dailyLogs.${viewDate}.failedHabits`]: result.entry.failedHabits,
+            [`dailyLogs.${viewDate}.habitLevels`]: result.entry.habitLevels,
+            habits: result.habits,
           })
         })
       } catch (err) {
         console.error('setHabitStatus transaction failed:', err)
+        dispatch({ type: 'PATCH_USER_DATA', user: authUserId, data: globalData })
         actions.showToast('Errore nel salvataggio', '❌')
         return
       }
@@ -509,8 +487,13 @@ export function AppProvider({ children }) {
       }, 500)
     },
 
-    async buyReward(name, cost) {
-      if (isReadOnly()) { actions.showToast('Sola lettura', 'ℹ️'); return }
+    async buyReward(rewardId, name, cost) {
+      if (isReadOnly()) {
+        const { authUserId, viewUserId } = state
+        if (viewUserId === PARTNER_OF[authUserId]) return actions.buyPartnerReward(viewUserId, rewardId)
+        actions.showToast('Sola lettura', 'ℹ️')
+        return
+      }
       const { authUserId, globalData, viewDate } = state
       if (globalData.score < cost) {
         if (!window.confirm(`Saldo insufficiente (${globalData.score}). Andrai in negativo. Continuare?`)) return
@@ -2197,7 +2180,6 @@ export function AppProvider({ children }) {
           else updated.push({ id: def.id, unlockedAt: now, notified: true })
         })
         await updateDoc(doc(db, 'users', userId), { achievements: updated })
-        dispatch({ type: 'PUSH_ACHIEVEMENTS', defs: newly })
       } catch { /* non-critical */ }
     },
 

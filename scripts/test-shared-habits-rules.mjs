@@ -87,7 +87,7 @@ await adb.doc('users/flavio').set({
   diaryLog: { x: { text: 'DIARIO-PRIVATO' } },
 })
 await adb.doc('users/simona').set({ habits: [{ id: 's1', name: 'Yoga', reward: 3, penalty: 1 }], dailyLogs: {}, tags: [] })
-await adb.doc('sharedHabits/flavio').set({ habits: [{ id: 'f1', name: 'Cold Shower', reward: 3, penalty: 1 }], dailyLogs: {}, tags: [], profile: { avatar: '🔥' } })
+await adb.doc('sharedHabits/flavio').set({ habits: [{ id: 'f1', name: 'Cold Shower', reward: 3, penalty: 1 }], dailyLogs: {}, tags: [], rewards: [{ id: 'fr1', name: 'Film', cost: 10 }], rewardCategories: [], profile: { avatar: '🔥' } })
 
 await check('Simona NON può leggere users/flavio (documento monolitico)', () => denied(getDoc(doc(simona.db, 'users', 'flavio')), 'read users/flavio'))
 await check('Simona NON può scrivere users/flavio', () => denied(updateDoc(doc(simona.db, 'users', 'flavio'), { x: 1 }), 'write users/flavio'))
@@ -96,10 +96,11 @@ await check('Simona può leggere/scrivere users/simona', async () => {
   assert.ok((await getDoc(doc(simona.db, 'users', 'simona'))).exists())
   await updateDoc(doc(simona.db, 'users', 'simona'), { 'profile.avatar': '💜' })
 })
-await check('Simona può leggere sharedHabits/flavio (solo abitudini)', async () => {
+await check('Simona può leggere sharedHabits/flavio (abitudini + Negozio Premi)', async () => {
   const s = await getDoc(doc(simona.db, 'sharedHabits', 'flavio'))
   assert.ok(s.exists())
   assert.ok(!JSON.stringify(s.data()).includes('PRIVATO'))
+  assert.deepEqual(s.data().rewards, [{ id: 'fr1', name: 'Film', cost: 10 }], 'il Negozio Premi è condiviso')
 })
 await check('Simona NON può scrivere sharedHabits (solo Admin SDK)', () => denied(setDoc(doc(simona.db, 'sharedHabits', 'flavio'), { habits: [] }), 'write sharedHabits'))
 await check('Flavio NON può scrivere sharedHabits (solo Admin SDK)', () => denied(setDoc(doc(flavio.db, 'sharedHabits', 'flavio'), { habits: [] }), 'flavio write sharedHabits'))

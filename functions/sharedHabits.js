@@ -31,8 +31,9 @@ const MAX_BACK_DAYS = 30
 // Campi personali delle abitudini che NON devono finire nel mirror: note
 // vocali/diario abitudine e il "perché" (motivazione personale).
 const PRIVATE_HABIT_FIELDS = ['voiceNotes', 'notes', 'why']
-// Dei log giornalieri il mirror tiene solo lo stato di completamento.
-const SHARED_LOG_FIELDS = ['habits', 'failedHabits', 'habitLevels', 'habitValues']
+// Dei log giornalieri il mirror tiene lo stato di completamento e gli
+// acquisti al Negozio Premi (anch'esso condiviso — vedi buyPartnerReward).
+const SHARED_LOG_FIELDS = ['habits', 'failedHabits', 'habitLevels', 'habitValues', 'purchases']
 
 function stableId(h) {
   return h.id || String(h.name || '').replace(/[^a-zA-Z0-9]/g, '')
@@ -64,13 +65,14 @@ function shiftDate(dateStr, deltaDays) {
 }
 
 function normalizeDay(raw) {
-  if (!raw) return { habits: [], failedHabits: [], habitLevels: {}, habitValues: {} }
-  if (Array.isArray(raw)) return { habits: raw, failedHabits: [], habitLevels: {}, habitValues: {} }
+  if (!raw) return { habits: [], failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [] }
+  if (Array.isArray(raw)) return { habits: raw, failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [] }
   return {
     habits: raw.habits || [],
     failedHabits: raw.failedHabits || [],
     habitLevels: raw.habitLevels || {},
     habitValues: raw.habitValues || {},
+    purchases: raw.purchases || [],
   }
 }
 
@@ -101,6 +103,8 @@ function buildSharedHabits(data, todayStr) {
     habits,
     tags: data.tags || [],
     dailyLogs,
+    rewards: data.rewards || [],
+    rewardCategories: data.rewardCategories || [],
     profile: { avatar: (data.profile && data.profile.avatar) || null },
   }
 }
@@ -181,6 +185,27 @@ function applyHabitAction(data, habitId, date, action) {
   return { entry, habits, actionType }
 }
 
+// Acquisto di un premio DELL'ALTRO (Negozio Premi condiviso). `data` = suo
+// documento utente, `rewardId` = id del premio (i premi, a differenza delle
+// abitudini, hanno sempre un id). Il costo è sempre letto dal documento del
+// proprietario (mai fidarsi di un costo passato dal chiamante): evita che un
+// client desincronizzato o manomesso paghi/faccia pagare un importo diverso.
+// I premi "tracked" (consumo giornaliero a soglia) restano solo del
+// proprietario: la UI di tracciamento non ha senso per il partner.
+function applyRewardPurchase(data, rewardId, date, now) {
+  const rewards = data.rewards || []
+  const reward = rewards.find(r => r.id === rewardId)
+  if (!reward) return { error: 'reward-not-found' }
+  if (reward.type === 'tracked') return { error: 'not-allowed' }
+  if (reward.archivedAt && date >= reward.archivedAt) return { error: 'reward-archived' }
+
+  const cost = getItemValueAtDate(reward, 'cost', date)
+  const raw = normalizeDay(data.dailyLogs && data.dailyLogs[date])
+  const purchases = [...raw.purchases, { name: reward.name, cost, time: now }]
+
+  return { purchases, cost, name: reward.name }
+}
+
 function validateDate(date, todayUtc) {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false
   if (Number.isNaN(new Date(date + 'T00:00:00Z').getTime())) return false
@@ -193,5 +218,5 @@ function validateDate(date, todayUtc) {
 module.exports = {
   EMAIL_TO_USER, PARTNER_OF, MIRROR_DAYS, MAX_BACK_DAYS,
   stableId, getItemValueAtDate, shiftDate,
-  buildSharedHabits, hashPayload, applyHabitAction, validateDate,
+  buildSharedHabits, hashPayload, applyHabitAction, applyRewardPurchase, validateDate,
 }

@@ -13,7 +13,6 @@ import Toast from './components/Toast'
 import SplashScreen from './components/SplashScreen'
 import LoginScreen from './components/LoginScreen'
 import UpdateBanner from './components/UpdateBanner'
-import { AchievementQueue } from './components/AchievementOverlay'
 import { trackThemeUsed } from './lib/achievementLogic'
 import DailySummaryPanel from './components/DailySummaryPanel'
 import { trackAppOpen, trackSectionUsage } from './lib/trackAppOpen'
@@ -96,7 +95,7 @@ function useFocusMode(viewDate) {
 
 export default function App() {
   const { state, actions } = useApp()
-  const { authStatus, authUserId, viewUserId, currentUser, globalData, allUsersData, viewDate, theme, userColors, density, pendingAchievements, minimalMode, wakeLockEnabled, modal } = state
+  const { authStatus, authUserId, viewUserId, currentUser, globalData, allUsersData, viewDate, theme, userColors, density, minimalMode, wakeLockEnabled, modal } = state
   const isReadOnly = viewUserId !== authUserId
   const isNative = window.Capacitor?.isNativePlatform?.() || false
 
@@ -574,7 +573,6 @@ export default function App() {
         </Suspense>
       )}
       <UpdateBanner />
-      <AchievementQueue queue={pendingAchievements || []} onClear={() => actions.clearAchievementQueue()} />
       {levelUpInfo && <LevelUpOverlay levelInfo={levelUpInfo} onClose={() => setLevelUpInfo(null)} />}
     </>
   )

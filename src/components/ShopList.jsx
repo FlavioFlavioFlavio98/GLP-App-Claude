@@ -14,7 +14,7 @@ const SORT_OPTIONS = [
 
 export default function ShopList() {
   const { state, actions } = useApp()
-  const { globalData, viewDate, authUserId } = state
+  const { globalData, viewDate } = state
   const [selectedCat, setSelectedCat] = useState(null)
   const [sort, setSort] = useState(() => localStorage.getItem(SORT_KEY) || 'manual')
   const isReadOnly = state.viewUserId !== state.authUserId
@@ -64,8 +64,8 @@ export default function ShopList() {
 
   return (
     <>
-      {/* ── Tracciamento giornaliero — solo Flavio ── */}
-      {authUserId === 'flavio' && !isReadOnly && trackedRewards.length > 0 && (
+      {/* ── Tracciamento giornaliero — solo sui propri premi ── */}
+      {!isReadOnly && trackedRewards.length > 0 && (
         <TrackedSection rewards={trackedRewards} globalData={globalData} actions={actions} viewDate={viewDate} />
       )}
 
@@ -123,13 +123,17 @@ export default function ShopList() {
               </div>
               <div className="actions-group" style={{ flexDirection: 'column', gap: 5 }}>
                 <div className="actions-group">
-                  <button className="btn-icon" onClick={() => actions.openModal('singleReward', r.id)}>
-                    <span className="material-icons-round" style={{ fontSize: 18 }}>insights</span>
-                  </button>
-                  <button className="btn-icon" onClick={() => actions.openModal('edit', { id: r.id, type: 'reward' })}>
-                    <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
-                  </button>
-                  <button className="shop-buy-btn" onClick={() => actions.buyReward(r.name, cost)}>Compra</button>
+                  {!isReadOnly && (
+                    <>
+                      <button className="btn-icon" onClick={() => actions.openModal('singleReward', r.id)}>
+                        <span className="material-icons-round" style={{ fontSize: 18 }}>insights</span>
+                      </button>
+                      <button className="btn-icon" onClick={() => actions.openModal('edit', { id: r.id, type: 'reward' })}>
+                        <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
+                      </button>
+                    </>
+                  )}
+                  <button className="shop-buy-btn" onClick={() => actions.buyReward(r.id, r.name, cost)}>Compra</button>
                 </div>
               </div>
             </div>

@@ -30,9 +30,13 @@ await db.doc('users/flavio').set({
     { id: 'f3', name: 'Sonno', numericType: 'x', numericConfig: { threshold: 7 } },
   ],
   tags: [{ id: 't1', name: 'Salute' }], dailyLogs: {}, profile: { avatar: '🔥' },
+  rewards: [{ id: 'fr1', name: 'Film', cost: 10 }],
   diaryLog: { [today]: { text: 'DIARIO-PRIVATO' } },
 })
-await db.doc('users/simona').set({ habits: [{ id: 's1', name: 'Yoga', reward: 3, penalty: 1 }], tags: [], dailyLogs: {} })
+await db.doc('users/simona').set({
+  habits: [{ id: 's1', name: 'Yoga', reward: 3, penalty: 1 }], tags: [], dailyLogs: {},
+  rewards: [{ id: 'sr1', name: 'Serie TV', cost: 5 }],
+})
 
 // ── mirrorSharedHabits (stesso corpo dell'onDocumentWritten in index.js) ──
 async function runMirror() {
@@ -98,6 +102,42 @@ await check('Scritture concorrenti sullo stesso giorno non si perdono (transazio
   const f = (await db.doc('users/flavio').get()).data()
   assert.ok(f.dailyLogs[today].habits.includes('f2') || f.dailyLogs[today].habitLevels?.f2, 'f2 registrata')
   assert.ok(f.dailyLogs[today].failedHabits.includes('f1'), 'f1 fallita')
+})
+
+// ── buyPartnerReward (stesso corpo della callable in index.js) ──
+async function runBuyPartnerReward(caller, rewardId, date) {
+  const target = shared.PARTNER_OF[caller]
+  return db.runTransaction(async tx => {
+    const ref = db.doc(`users/${target}`)
+    const snap = await tx.get(ref)
+    const data = snap.data()
+    const r = shared.applyRewardPurchase(data, rewardId, date, Date.now())
+    if (r.error) { const e = new Error(r.error); e.code = 'failed-precondition'; throw e }
+    tx.update(ref, { [`dailyLogs.${date}.purchases`]: r.purchases })
+    return r
+  })
+}
+
+await check('Simona compra un premio del negozio di Flavio → transazione reale su users/flavio, costo dal server', async () => {
+  const r = await runBuyPartnerReward('simona', 'fr1', today)
+  assert.equal(r.cost, 10)
+  const f = (await db.doc('users/flavio').get()).data()
+  assert.deepEqual(f.dailyLogs[today].purchases, [{ name: 'Film', cost: 10, time: r.purchases[0].time }])
+})
+await check('Il mirror include il Negozio Premi e gli acquisti dopo la scrittura', async () => {
+  await runMirror()
+  const m = (await db.doc('sharedHabits/flavio').get()).data()
+  assert.deepEqual(m.rewards, [{ id: 'fr1', name: 'Film', cost: 10 }])
+  assert.deepEqual(m.dailyLogs[today].purchases, [{ name: 'Film', cost: 10, time: m.dailyLogs[today].purchases[0].time }])
+})
+await check('Flavio compra un premio del negozio di Simona → transazione reale su users/simona', async () => {
+  const r = await runBuyPartnerReward('flavio', 'sr1', today)
+  assert.equal(r.cost, 5)
+  const s = (await db.doc('users/simona').get()).data()
+  assert.deepEqual(s.dailyLogs[today].purchases, [{ name: 'Serie TV', cost: 5, time: r.purchases[0].time }])
+})
+await check('Acquisto: rifiuta premio inesistente', async () => {
+  await assert.rejects(runBuyPartnerReward('simona', 'nope', today), /reward-not-found/)
 })
 
 console.log(`\n${results.filter(Boolean).length}/${results.length} controlli superati`)

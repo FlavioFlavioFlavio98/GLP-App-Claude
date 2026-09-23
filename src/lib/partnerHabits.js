@@ -16,13 +16,14 @@ function stableId(h) {
 }
 
 function normalizeDay(raw) {
-  if (!raw) return { habits: [], failedHabits: [], habitLevels: {}, habitValues: {} }
-  if (Array.isArray(raw)) return { habits: raw, failedHabits: [], habitLevels: {}, habitValues: {} }
+  if (!raw) return { habits: [], failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [] }
+  if (Array.isArray(raw)) return { habits: raw, failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [] }
   return {
     habits: raw.habits || [],
     failedHabits: raw.failedHabits || [],
     habitLevels: raw.habitLevels || {},
     habitValues: raw.habitValues || {},
+    purchases: raw.purchases || [],
   }
 }
 
@@ -101,5 +102,34 @@ export function patchUserData(data, date, result) {
     ...data,
     habits: result.habits,
     dailyLogs: { ...(data.dailyLogs || {}), [date]: { ...dayObj, ...result.entry } },
+  }
+}
+
+// Acquisto di un premio DELL'ALTRO (Negozio Premi condiviso) — stessa
+// transizione della Cloud Function buyPartnerReward (functions/sharedHabits.js),
+// usata qui per l'aggiornamento ottimistico. Il costo è sempre letto dal
+// documento del proprietario, mai passato dal chiamante.
+export function applyRewardPurchase(data, rewardId, date, now) {
+  const rewards = data.rewards || []
+  const reward = rewards.find(r => r.id === rewardId)
+  if (!reward) return { error: 'reward-not-found' }
+  if (reward.type === 'tracked') return { error: 'not-allowed' }
+  if (reward.archivedAt && date >= reward.archivedAt) return { error: 'reward-archived' }
+
+  const cost = getItemValueAtDate(reward, 'cost', date)
+  const raw = normalizeDay(data.dailyLogs && data.dailyLogs[date])
+  const purchases = [...raw.purchases, { name: reward.name, cost, time: now }]
+
+  return { purchases, cost, name: reward.name }
+}
+
+// Applica il risultato di applyRewardPurchase a una copia dei dati utente
+// (aggiornamento ottimistico).
+export function patchRewardPurchase(data, date, result) {
+  const prevDay = data.dailyLogs && data.dailyLogs[date]
+  const dayObj = (prevDay && !Array.isArray(prevDay)) ? prevDay : {}
+  return {
+    ...data,
+    dailyLogs: { ...(data.dailyLogs || {}), [date]: { ...dayObj, purchases: result.purchases } },
   }
 }

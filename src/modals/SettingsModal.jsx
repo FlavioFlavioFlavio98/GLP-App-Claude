@@ -6,6 +6,52 @@ import { exportWorkoutCsv, exportWorkoutPdf } from '../lib/workoutExport'
 
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.()
 
+// Imposta/cambia la password dell'account attuale (loggato con Google) per poter
+// accedere anche con email+password da telefoni senza account Google. La
+// password la digita l'utente: non è mai scritta nel codice.
+function EmailPasswordSection() {
+  const [open, setOpen] = useState(false)
+  const [pw, setPw] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function save(e) {
+    e.preventDefault()
+    setBusy(true); setMsg('')
+    try {
+      const { auth } = await import('../lib/firebase')
+      const { EmailAuthProvider, linkWithCredential, updatePassword } = await import('firebase/auth')
+      const user = auth.currentUser
+      if (!user?.email) throw new Error('no-user')
+      if (user.providerData.some(p => p.providerId === 'password')) await updatePassword(user, pw)
+      else await linkWithCredential(user, EmailAuthProvider.credential(user.email, pw))
+      setPw(''); setMsg('Password salvata. Ora puoi accedere anche con email e password.')
+    } catch (err) {
+      setMsg(err.code === 'auth/requires-recent-login' ? 'Per sicurezza esci e rientra con Google, poi riprova.'
+        : err.code === 'auth/weak-password' ? 'Password troppo debole (minimo 6 caratteri).'
+        : err.code === 'auth/operation-not-allowed' ? 'Abilita "Email/Password" in Firebase → Authentication → Metodo di accesso.'
+        : 'Errore nel salvataggio della password.')
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <button className="btn-danger" style={{ borderColor: 'rgba(255,255,255,0.15)', color: '#aaa', width: '100%' }} onClick={() => setOpen(o => !o)}>
+        🔑 Password per accesso con email
+      </button>
+      {open && (
+        <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="Nuova password (min. 8 caratteri consigliati)" autoComplete="new-password" required minLength={6}
+            style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', color: '#eee' }} />
+          <button className="btn-danger" type="submit" disabled={busy} style={{ color: '#aaa', borderColor: 'rgba(255,255,255,0.15)' }}>{busy ? 'Salvo...' : 'Salva password'}</button>
+          {msg && <div style={{ fontSize: '0.78em', color: '#aaa' }}>{msg}</div>}
+        </form>
+      )}
+    </div>
+  )
+}
+
 const DEFAULT_NOTIF_SETTINGS = {
   habits:   { enabled: false, hour: 20, minute: 0 },
   tasks:    { enabled: false, hour: 18, minute: 0 },
@@ -410,6 +456,8 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
 
           </>
         )}
+
+        <EmailPasswordSection />
 
         {/* LOGOUT */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>

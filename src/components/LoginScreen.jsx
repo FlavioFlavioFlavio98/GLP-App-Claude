@@ -27,6 +27,9 @@ export default function LoginScreen({ onLogin }) {
   const theme = THEMES[localStorage.getItem('glp_theme') || 'dark']
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showEmail, setShowEmail] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   async function handleGoogleLogin() {
     setLoading(true)
@@ -62,6 +65,27 @@ export default function LoginScreen({ onLogin }) {
       if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
         setError('Errore durante il login. Riprova.')
       }
+      setLoading(false)
+    }
+  }
+
+  async function handleEmailLogin(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const { signInWithEmailAndPassword, signOut } = await import('firebase/auth')
+      const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
+      if (!ALLOWED_EMAILS.includes(result.user.email)) {
+        await signOut(auth)
+        setError('Accesso non autorizzato — questa app è privata.')
+        setLoading(false)
+        return
+      }
+      onLogin?.(result.user.email)
+    } catch (err) {
+      const bad = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email', 'auth/invalid-login-credentials']
+      setError(bad.includes(err.code) ? 'Email o password non corretti.' : err.code === 'auth/too-many-requests' ? 'Troppi tentativi, riprova tra qualche minuto.' : 'Errore durante il login. Riprova.')
       setLoading(false)
     }
   }
@@ -130,6 +154,35 @@ export default function LoginScreen({ onLogin }) {
           </>
         )}
       </button>
+
+      {/* Accesso con email e password (per telefoni senza account Google) */}
+      {!showEmail ? (
+        <button
+          onClick={() => setShowEmail(true)}
+          style={{ marginTop: 16, background: 'none', border: 'none', color: '#888', fontSize: '0.85em', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          Accedi con email e password
+        </button>
+      ) : (
+        <form onSubmit={handleEmailLogin} style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10, width: 260 }}>
+          <input
+            type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="Email" autoComplete="username" required
+            style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', color: '#eee', fontSize: '0.95em' }}
+          />
+          <input
+            type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="Password" autoComplete="current-password" required
+            style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', color: '#eee', fontSize: '0.95em' }}
+          />
+          <button
+            type="submit" disabled={loading}
+            style={{ padding: '12px', borderRadius: 10, border: 'none', background: theme.themeColor, color: '#111', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
+          >
+            Accedi
+          </button>
+        </form>
+      )}
 
       {/* Login di test — solo modalità emulatore, mai in produzione */}
       {USE_EMULATOR && (

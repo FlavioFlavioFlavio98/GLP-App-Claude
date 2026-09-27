@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
 import { getAuth, GoogleAuthProvider, connectAuthEmulator } from 'firebase/auth'
 // firebase/messaging e firebase/storage NON sono importati qui in cima di
 // proposito — sono SDK pesanti usati solo per push notification e upload
@@ -18,7 +18,23 @@ export const firebaseConfig = {
 }
 
 export const app = initializeApp(firebaseConfig)
-export const db = getFirestore(app)
+
+// Cache locale persistente (IndexedDB): SENZA questa, una scrittura fatta
+// offline (es. task aggiunta in modalità aereo) resta in coda SOLO in
+// memoria — se la scheda/PWA si chiude o viene ricaricata prima di tornare
+// online, quella scrittura è persa per sempre, senza alcun errore visibile
+// (bug segnalato da Flavio il 27/9/2026: task aggiunta offline mai salvata).
+// persistentMultipleTabManager: stessa cache condivisa se l'app è aperta in
+// più schede contemporaneamente. Se IndexedDB non è disponibile (raro: es.
+// alcune modalità di navigazione privata), si ricade sulla sola cache in
+// memoria invece di far fallire l'intera app.
+export let db
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) })
+} catch (e) {
+  console.warn('[GLP] Cache persistente non disponibile, uso la cache in memoria:', e)
+  db = getFirestore(app)
+}
 export const auth = getAuth(app)
 export const googleProvider = new GoogleAuthProvider()
 

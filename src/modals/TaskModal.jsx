@@ -121,27 +121,34 @@ export default function TaskModal() {
   async function handleSave() {
     if (!title.trim()) { actions.showToast('Inserisci un nome', '⚠️'); return }
     setSaving(true)
-    if (isIdea) {
-      await actions.addLifeAreaIdea(destination, title.trim())
-      // Sposta = crea lo spunto nell'area + rimuove la task originale dalle
-      // task generali, non una semplice modifica — la task com'era (con
-      // scadenza/punti) non ha più senso una volta diventata uno spunto.
-      if (isMoveToArea) await actions.deleteTask(editTask.id)
-      setSaving(false)
+    try {
+      if (isIdea) {
+        await actions.addLifeAreaIdea(destination, title.trim())
+        // Sposta = crea lo spunto nell'area + rimuove la task originale dalle
+        // task generali, non una semplice modifica — la task com'era (con
+        // scadenza/punti) non ha più senso una volta diventata uno spunto.
+        if (isMoveToArea) await actions.deleteTask(editTask.id)
+        actions.closeModal()
+        return
+      }
+      if (!deadline) { actions.showToast('Seleziona una data', '⚠️'); return }
+      if (reward < 0 || penalty < 0) { actions.showToast('I punti non possono essere negativi', '⚠️'); return }
+      if (isEdit) {
+        await actions.editTask({ ...editTask, title: title.trim(), description: desc.trim(), deadline, reward, penalty, priority })
+      } else if (alreadyDone) {
+        await actions.addCompletedTask({ title: title.trim(), description: desc.trim(), completedDate: deadline, reward, priority })
+      } else {
+        await actions.addTask({ title: title.trim(), description: desc.trim(), deadline, reward, penalty, priority })
+      }
       actions.closeModal()
-      return
+    } catch {
+      // Il toast d'errore è già mostrato dall'azione stessa (store.jsx) — qui
+      // basta NON chiudere il modal e NON perdere quanto scritto, così
+      // l'utente vede che non è stato salvato e può riprovare invece di
+      // credere (a torto) che la task sia stata creata.
+    } finally {
+      setSaving(false)
     }
-    if (!deadline) { actions.showToast('Seleziona una data', '⚠️'); setSaving(false); return }
-    if (reward < 0 || penalty < 0) { actions.showToast('I punti non possono essere negativi', '⚠️'); setSaving(false); return }
-    if (isEdit) {
-      await actions.editTask({ ...editTask, title: title.trim(), description: desc.trim(), deadline, reward, penalty, priority })
-    } else if (alreadyDone) {
-      await actions.addCompletedTask({ title: title.trim(), description: desc.trim(), completedDate: deadline, reward, priority })
-    } else {
-      await actions.addTask({ title: title.trim(), description: desc.trim(), deadline, reward, penalty, priority })
-    }
-    setSaving(false)
-    actions.closeModal()
   }
 
   return (

@@ -2220,7 +2220,7 @@ export function AppProvider({ children }) {
     // stile "scaduta" nel widget) per ore, finché non scatta la mezzanotte.
     async addTask(taskData) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
+      const { authUserId } = state
       const todayStr = toDateString(new Date())
       const isPast = taskData.deadline < todayStr
       const newTask = {
@@ -2238,14 +2238,23 @@ export function AppProvider({ children }) {
         rewardApplied: false,
         penaltyApplied: isPast,
       }
-      const tasks = [...(globalData.tasks || []), newTask]
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      try {
+        // arrayUnion: mai in conflitto con un'aggiunta concorrente da un altro
+        // dispositivo (widget Android, altra scheda) nella stessa finestra —
+        // a differenza di leggere+riscrivere l'intero array da stato locale,
+        // che può essere non aggiornato (bug segnalato: task non salvata).
+        await updateDoc(doc(db, 'users', authUserId), { tasks: arrayUnion(newTask) })
+      } catch (err) {
+        console.error('addTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        throw err
+      }
       actions.showToast(isPast ? 'Task creata già scaduta ⚠️' : 'Task creata!', '📋')
     },
 
     async addCompletedTask({ title, description, completedDate, reward, priority }) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
+      const { authUserId } = state
       const rewardNum = parseInt(reward) || 0
       const newTask = {
         id: `task_${Date.now().toString(36)}`,
@@ -2262,8 +2271,13 @@ export function AppProvider({ children }) {
         rewardApplied: true,
         penaltyApplied: false,
       }
-      const tasks = [...(globalData.tasks || []), newTask]
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      try {
+        await updateDoc(doc(db, 'users', authUserId), { tasks: arrayUnion(newTask) })
+      } catch (err) {
+        console.error('addCompletedTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        throw err
+      }
       actions.vibrate('light')
       actions.showToast(`Task già fatta registrata! +${rewardNum}pt`, '✅')
     },
@@ -2276,40 +2290,61 @@ export function AppProvider({ children }) {
 
     async editTask(taskData) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
+      const { authUserId } = state
       const todayStr = toDateString(new Date())
-      const tasks = (globalData.tasks || []).map(t => {
-        if (t.id !== taskData.id) return t
-        const merged = { ...t, ...taskData }
-        // Se la modifica sposta la scadenza nel passato su una task ancora
-        // attiva, la marca scaduta subito (stesso motivo di addTask sopra).
-        if (merged.status === 'active' && merged.deadline < todayStr) {
-          return { ...merged, status: 'expired', expiredAt: new Date().toISOString(), penaltyApplied: true }
-        }
-        // Il contrario: se una task scaduta viene rimandata a oggi o dopo,
-        // torna attiva e la penalità già applicata viene annullata — expiredAt
-        // + penaltyApplied sono ciò che il calcolo del punteggio usa davvero
-        // per sottrarre i punti, quindi vanno azzerati insieme allo status,
-        // altrimenti la penalità resterebbe applicata in modo invisibile.
-        if (merged.status === 'expired' && merged.deadline >= todayStr) {
-          return { ...merged, status: 'active', expiredAt: null, penaltyApplied: false }
-        }
-        return merged
-      })
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const ref = doc(db, 'users', authUserId)
+      try {
+        // Transazione: legge SEMPRE lo stato fresco dal server invece che da
+        // globalData locale (che dopo una disconnessione può essere non
+        // aggiornato), altrimenti si rischia di sovrascrivere in silenzio
+        // task aggiunte nel frattempo da un altro dispositivo.
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const tasks = (freshData.tasks || []).map(t => {
+            if (t.id !== taskData.id) return t
+            const merged = { ...t, ...taskData }
+            // Se la modifica sposta la scadenza nel passato su una task ancora
+            // attiva, la marca scaduta subito (stesso motivo di addTask sopra).
+            if (merged.status === 'active' && merged.deadline < todayStr) {
+              return { ...merged, status: 'expired', expiredAt: new Date().toISOString(), penaltyApplied: true }
+            }
+            // Il contrario: se una task scaduta viene rimandata a oggi o dopo,
+            // torna attiva e la penalità già applicata viene annullata — expiredAt
+            // + penaltyApplied sono ciò che il calcolo del punteggio usa davvero
+            // per sottrarre i punti, quindi vanno azzerati insieme allo status,
+            // altrimenti la penalità resterebbe applicata in modo invisibile.
+            if (merged.status === 'expired' && merged.deadline >= todayStr) {
+              return { ...merged, status: 'active', expiredAt: null, penaltyApplied: false }
+            }
+            return merged
+          })
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('editTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        throw err
+      }
       actions.showToast('Task aggiornata!', '✏️')
     },
 
     // Scrittura condivisa tra reopenTask e postponeTask (stesso reset di
     // stato, solo la scadenza cambia) — un'unica implementazione evita che le
-    // due azioni possano andare fuori sincrono a un futuro fix.
+    // due azioni possano andare fuori sincrono a un futuro fix. Errori NON
+    // gestiti qui: propagano ai chiamanti, che mostrano il toast.
     async _setTaskDeadline(task, newDeadline) {
-      const { authUserId, globalData } = state
-      const tasks = (globalData.tasks || []).map(t => {
-        if (t.id !== task.id) return t
-        return { ...t, status: 'active', expiredAt: null, deadline: newDeadline, penaltyApplied: false }
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(ref)
+        const freshData = snap.data() || {}
+        const tasks = (freshData.tasks || []).map(t => {
+          if (t.id !== task.id) return t
+          return { ...t, status: 'active', expiredAt: null, deadline: newDeadline, penaltyApplied: false }
+        })
+        transaction.update(ref, { tasks })
       })
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
     },
 
     // Tempo cronometrato su una task (timer avviato/fermato dalla Tab Task)
@@ -2318,13 +2353,23 @@ export function AppProvider({ children }) {
     // confrontarlo con una stima, richiesta esplicita di Flavio.
     async addTaskTimeSpent(taskId, seconds) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
+      const { authUserId } = state
       const numSeconds = parseInt(seconds) || 0
       if (numSeconds <= 0) return
-      const tasks = (globalData.tasks || []).map(t =>
-        t.id === taskId ? { ...t, timeSpentSec: (t.timeSpentSec || 0) + numSeconds } : t
-      )
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const tasks = (freshData.tasks || []).map(t =>
+            t.id === taskId ? { ...t, timeSpentSec: (t.timeSpentSec || 0) + numSeconds } : t
+          )
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('addTaskTimeSpent failed:', err)
+        actions.showToast('Tempo non salvato (errore di rete)', '⚠️')
+      }
     },
 
     // Scorciatoia rapida dal menu ⋮ per posticipare — evita di dover aprire
@@ -2339,7 +2384,13 @@ export function AppProvider({ children }) {
       const todayStr = toDateString(new Date())
       const base = task.deadline > todayStr ? task.deadline : todayStr
       const newDeadline = addDays(base, days)
-      await actions._setTaskDeadline(task, newDeadline)
+      try {
+        await actions._setTaskDeadline(task, newDeadline)
+      } catch (err) {
+        console.error('postponeTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       const [, m, d] = newDeadline.split('-')
       actions.showToast(`Posticipata al ${parseInt(d)}/${parseInt(m)}`, '📅')
     },
@@ -2355,11 +2406,22 @@ export function AppProvider({ children }) {
       const expiredCount = (globalData.tasks || []).filter(t => t.status === 'expired').length
       if (expiredCount === 0) return
       if (!window.confirm(`Rimandare a oggi tutte le ${expiredCount} task scadute?`)) return
-      const tasks = (globalData.tasks || []).map(t => {
-        if (t.status !== 'expired') return t
-        return { ...t, status: 'active', deadline: todayStr, expiredAt: null, penaltyApplied: false }
-      })
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const tasks = (freshData.tasks || []).map(t => {
+            if (t.status !== 'expired') return t
+            return { ...t, status: 'active', deadline: todayStr, expiredAt: null, penaltyApplied: false }
+          })
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('rescheduleAllExpiredToToday failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast(`${expiredCount} task rimandate a oggi`, '⏰')
     },
 
@@ -2380,16 +2442,26 @@ export function AppProvider({ children }) {
         : `Completare "${task.title}"? +${task.reward}pt`
       if (!window.confirm(confirmMsg)) return
       const { authUserId, globalData } = state
-      const rewardNum = parseInt(task.reward) || 0
-      console.log('completing task, reward:', task.reward, '→ rewardNum:', rewardNum)
       const now = new Date().toISOString()
-      let tasks = (globalData.tasks || []).map(t =>
-        t.id === task.id
-          ? { ...t, status: 'completed', completedAt: now, rewardApplied: true }
-          : t
-      )
-      tasks = actions._spawnNextRecurringInstance(task, tasks)
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const ref = doc(db, 'users', authUserId)
+      let tasks
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          tasks = (freshData.tasks || []).map(t =>
+            t.id === task.id
+              ? { ...t, status: 'completed', completedAt: now, rewardApplied: true }
+              : t
+          )
+          tasks = actions._spawnNextRecurringInstance(task, tasks, freshData.recurringTasks || [])
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('confirmCompleteTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.vibrate('light')
       if (template && template.active !== false) {
         const nextDate = addDays(toDateString(new Date()), template.intervalDays)
@@ -2413,37 +2485,70 @@ export function AppProvider({ children }) {
     async uncompleteTask(task) {
       if (isReadOnly()) return
       if (!window.confirm(`Completata per errore? Ripristina "${task.title}" tra le task attive`)) return
-      const { authUserId, globalData } = state
-      let tasks = (globalData.tasks || []).map(t =>
-        t.id === task.id
-          ? { ...t, status: 'active', completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false }
-          : t
-      )
-      // Se era una task ricorrente, rimuove la prossima istanza generata al
-      // completamento — altrimenti riattivandola ne resterebbero due pendenti
-      // per la stessa regola.
-      if (task.recurringId) {
-        tasks = tasks.filter(t => !(t.recurringId === task.recurringId && t.id !== task.id && t.status === 'active'))
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          let tasks = (freshData.tasks || []).map(t =>
+            t.id === task.id
+              ? { ...t, status: 'active', completedAt: null, rewardApplied: false, expiredAt: null, penaltyApplied: false }
+              : t
+          )
+          // Se era una task ricorrente, rimuove la prossima istanza generata al
+          // completamento — altrimenti riattivandola ne resterebbero due pendenti
+          // per la stessa regola.
+          if (task.recurringId) {
+            tasks = tasks.filter(t => !(t.recurringId === task.recurringId && t.id !== task.id && t.status === 'active'))
+          }
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('uncompleteTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
       }
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
       actions.showToast('Completamento annullato', '↩️')
     },
 
     async deleteExpiredTask(taskId) {
       if (isReadOnly()) return
       if (!window.confirm('Eliminare definitivamente questa task?')) return
-      const { authUserId, globalData } = state
-      const tasks = (globalData.tasks || []).filter(t => t.id !== taskId)
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const tasks = (freshData.tasks || []).filter(t => t.id !== taskId)
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('deleteExpiredTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast('Task eliminata', '🗑️')
     },
 
     async deleteTask(taskId) {
       if (isReadOnly()) return
       if (!window.confirm('Eliminare questa task attiva?')) return
-      const { authUserId, globalData } = state
-      const tasks = (globalData.tasks || []).filter(t => t.id !== taskId)
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const tasks = (freshData.tasks || []).filter(t => t.id !== taskId)
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('deleteTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast('Task eliminata', '🗑️')
     },
 
@@ -2457,8 +2562,19 @@ export function AppProvider({ children }) {
         ? `Eliminare questa task? I ${rewardNum}pt guadagnati verranno rimossi dal punteggio.`
         : 'Eliminare definitivamente questa task?'
       if (!window.confirm(confirmMsg)) return
-      const tasks = (globalData.tasks || []).filter(t => t.id !== taskId)
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const tasks = (freshData.tasks || []).filter(t => t.id !== taskId)
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('deleteCompletedTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast('Task eliminata', '🗑️')
     },
 
@@ -2590,16 +2706,27 @@ export function AppProvider({ children }) {
     // per "chiudere" la task e rimuoverla dalla vista attiva.
     async dismissExpiredTask(task) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
+      const { authUserId } = state
       const template = actions._getRecurringTemplate(task)
       const now = new Date().toISOString()
-      let tasks = (globalData.tasks || []).map(t =>
-        t.id === task.id
-          ? { ...t, status: 'completed', completedAt: now, rewardApplied: false }
-          : t
-      )
-      tasks = actions._spawnNextRecurringInstance(task, tasks)
-      await updateDoc(doc(db, 'users', authUserId), { tasks })
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          let tasks = (freshData.tasks || []).map(t =>
+            t.id === task.id
+              ? { ...t, status: 'completed', completedAt: now, rewardApplied: false }
+              : t
+          )
+          tasks = actions._spawnNextRecurringInstance(task, tasks, freshData.recurringTasks || [])
+          transaction.update(ref, { tasks })
+        })
+      } catch (err) {
+        console.error('dismissExpiredTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.vibrate('light')
       if (template && template.active !== false) {
         const nextDate = addDays(toDateString(new Date()), template.intervalDays)
@@ -2616,11 +2743,11 @@ export function AppProvider({ children }) {
     // prossima istanza all'array già in costruzione, scadenza = oggi + N
     // giorni. Ritorna l'array (eventualmente) esteso, da usare nello stesso
     // updateDoc del completamento — un solo giro di rete, atomico quanto
-    // basta per questo caso d'uso.
-    _spawnNextRecurringInstance(task, tasksSoFar) {
+    // basta per questo caso d'uso. `recurringTasks` va passato esplicitamente
+    // (dati freschi letti dentro una transazione), mai letto da state qui.
+    _spawnNextRecurringInstance(task, tasksSoFar, recurringTasks) {
       if (!task.recurringId) return tasksSoFar
-      const { globalData } = state
-      const template = (globalData.recurringTasks || []).find(r => r.id === task.recurringId)
+      const template = (recurringTasks || []).find(r => r.id === task.recurringId)
       if (!template || template.active === false) return tasksSoFar
       if (hasPendingInstance(tasksSoFar, template.id)) return tasksSoFar
       const todayStr = toDateString(new Date())
@@ -2630,7 +2757,7 @@ export function AppProvider({ children }) {
 
     async addRecurringTask({ title, priority, reward, penalty, intervalDays, startDate }) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
+      const { authUserId } = state
       const todayStr = toDateString(new Date())
       const template = {
         id: `rec_${Date.now().toString(36)}`,
@@ -2658,37 +2785,80 @@ export function AppProvider({ children }) {
         penaltyApplied: false,
         recurringId: template.id,
       }
-      const recurringTasks = [...(globalData.recurringTasks || []), template]
-      const tasks = [...(globalData.tasks || []), firstInstance]
-      await updateDoc(doc(db, 'users', authUserId), { recurringTasks, tasks })
+      try {
+        // Due arrayUnion indipendenti sullo stesso updateDoc: entrambe le
+        // aggiunte sono nuove (id appena generati), nessun conflitto possibile
+        // con scritture concorrenti su un altro dispositivo.
+        await updateDoc(doc(db, 'users', authUserId), {
+          recurringTasks: arrayUnion(template),
+          tasks: arrayUnion(firstInstance),
+        })
+      } catch (err) {
+        console.error('addRecurringTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        throw err
+      }
       actions.showToast('Task ricorrente creata!', '🔁')
     },
 
     async updateRecurringTask(id, updates) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
-      const recurringTasks = (globalData.recurringTasks || []).map(r =>
-        r.id === id ? { ...r, ...updates } : r
-      )
-      await updateDoc(doc(db, 'users', authUserId), { recurringTasks })
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const recurringTasks = (freshData.recurringTasks || []).map(r =>
+            r.id === id ? { ...r, ...updates } : r
+          )
+          transaction.update(ref, { recurringTasks })
+        })
+      } catch (err) {
+        console.error('updateRecurringTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast('Ricorrenza aggiornata', '✏️')
     },
 
     async toggleRecurringTaskActive(id, active) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
-      const recurringTasks = (globalData.recurringTasks || []).map(r =>
-        r.id === id ? { ...r, active } : r
-      )
-      await updateDoc(doc(db, 'users', authUserId), { recurringTasks })
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const recurringTasks = (freshData.recurringTasks || []).map(r =>
+            r.id === id ? { ...r, active } : r
+          )
+          transaction.update(ref, { recurringTasks })
+        })
+      } catch (err) {
+        console.error('toggleRecurringTaskActive failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast(active ? 'Ricorrenza riattivata' : 'Ricorrenza in pausa', active ? '▶️' : '⏸️')
     },
 
     async deleteRecurringTask(id) {
       if (isReadOnly()) return
-      const { authUserId, globalData } = state
-      const recurringTasks = (globalData.recurringTasks || []).filter(r => r.id !== id)
-      await updateDoc(doc(db, 'users', authUserId), { recurringTasks })
+      const { authUserId } = state
+      const ref = doc(db, 'users', authUserId)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data() || {}
+          const recurringTasks = (freshData.recurringTasks || []).filter(r => r.id !== id)
+          transaction.update(ref, { recurringTasks })
+        })
+      } catch (err) {
+        console.error('deleteRecurringTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast('Ricorrenza eliminata', '🗑️')
     },
 
@@ -2773,7 +2943,13 @@ export function AppProvider({ children }) {
 
     async reopenTask(task, newDeadline) {
       if (isReadOnly()) return
-      await actions._setTaskDeadline(task, newDeadline)
+      try {
+        await actions._setTaskDeadline(task, newDeadline)
+      } catch (err) {
+        console.error('reopenTask failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return
+      }
       actions.showToast('Task riaperta!', '↩️')
     },
 

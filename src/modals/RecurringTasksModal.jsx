@@ -34,9 +34,15 @@ export default function RecurringTasksModal() {
   async function handleAdd() {
     if (!title.trim()) { actions.showToast('Scrivi un titolo', '⚠️'); return }
     setSaving(true)
-    await actions.addRecurringTask({ title, priority, reward, penalty, intervalDays, startDate })
-    setSaving(false)
-    resetForm()
+    try {
+      await actions.addRecurringTask({ title, priority, reward, penalty, intervalDays, startDate })
+      resetForm()
+    } catch {
+      // Toast d'errore già mostrato dall'azione — il form resta com'era,
+      // così l'utente non perde quanto scritto e può riprovare.
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

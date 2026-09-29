@@ -123,7 +123,7 @@ export function computeDayNet(userData, dateStr) {
   const empty = {
     totalHabitPoints: 0, taskPts: 0, extraPts: 0, checkInPts: 0, readingPts: 0,
     purchaseCost: 0, penaltyCost: 0, trackedCost: 0, dailySpent: 0, expiredTaskCost: 0,
-    net: 0,
+    habitCoinsNet: 0, net: 0,
   }
   if (!userData) return empty
 
@@ -195,14 +195,26 @@ export function computeDayNet(userData, dateStr) {
     })
     .reduce((sum, t) => sum + (parseInt(t.penalty) || 0), 0)
 
-  const net = totalHabitPoints + taskPts + extraPts + checkInPts + readingPts - dailySpent - expiredTaskCost
+  // Punteggio GENERALE dell'app (task/allenamento/diario/letture/check-in) — le
+  // abitudini NON ci finiscono più dentro: diventano "coin abitudini" a parte
+  // (habitCoinsNet, vedi calculateTotalHabitCoins), richiesta esplicita di
+  // Flavio per non mischiare le due cose. I coin sono quello che si spende nel
+  // Negozio Premi ed è l'unico numero confrontato tra Flavio e Simona.
+  const net = taskPts + extraPts + checkInPts + readingPts - expiredTaskCost
+  const habitCoinsNet = totalHabitPoints - dailySpent
 
-  return { totalHabitPoints, taskPts, extraPts, checkInPts, readingPts, purchaseCost, penaltyCost, trackedCost, dailySpent, expiredTaskCost, net }
+  return { totalHabitPoints, taskPts, extraPts, checkInPts, readingPts, purchaseCost, penaltyCost, trackedCost, dailySpent, expiredTaskCost, habitCoinsNet, net }
 }
 
 // Calculate net points for a single day for a given user's data
 export function getDailyNet(userData, dateStr) {
   return computeDayNet(userData, dateStr).net
+}
+
+// Coin abitudini (guadagnati/persi dalle sole abitudini, meno gli acquisti al
+// Negozio Premi quel giorno) — MAI il punteggio generale, vedi computeDayNet.
+export function getDailyHabitCoins(userData, dateStr) {
+  return computeDayNet(userData, dateStr).habitCoinsNet
 }
 
 // Ricalcola il punteggio TOTALE sommando computeDayNet() su ogni giorno rilevante,
@@ -235,17 +247,35 @@ export function calculateTotalScore(userData) {
   let total = 0
   dates.forEach(dateStr => { total += computeDayNet(userData, dateStr).net })
 
-  // Bonus obiettivi completati (non legati a un giorno specifico nel Netto)
-  ;(userData.habits || []).forEach(h => {
-    if (h.type === 'goal' && h.goalConfig?.completedAt) {
-      total += h.goalConfig.rewardOnComplete || 0
-    }
-  })
-
   // Bonus mood (+0.5pt una tantum per giorno in cui è stato salvato)
   Object.values(userData.dailyLogs || {}).forEach(rawEntry => {
     if (rawEntry && typeof rawEntry === 'object' && rawEntry.moodPtsGiven === true) {
       total += 0.5
+    }
+  })
+
+  return Math.round(total * 100) / 100
+}
+
+// Ricalcola il saldo COIN ABITUDINI totale: punti guadagnati/persi dalle sole
+// abitudini (incluso il bonus di completamento obiettivi) meno quanto speso nel
+// Negozio Premi (acquisti normali + premi tracciati a soglia) — MAI mischiato
+// col punteggio generale dell'app (calculateTotalScore). Richiesta esplicita di
+// Flavio (29/9/2026): i coin servono solo per le abitudini, si spendono nel
+// negozio, e sono l'unico numero confrontato tra Flavio e Simona.
+export function calculateTotalHabitCoins(userData) {
+  if (!userData) return 0
+
+  let total = 0
+  Object.keys(userData.dailyLogs || {}).forEach(dateStr => {
+    total += computeDayNet(userData, dateStr).habitCoinsNet
+  })
+
+  // Bonus obiettivi completati (era nel punteggio generale, ora è un coin
+  // abitudine come tutto il resto della sezione Abitudini).
+  ;(userData.habits || []).forEach(h => {
+    if (h.type === 'goal' && h.goalConfig?.completedAt) {
+      total += h.goalConfig.rewardOnComplete || 0
     }
   })
 

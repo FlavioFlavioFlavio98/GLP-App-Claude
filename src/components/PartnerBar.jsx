@@ -54,6 +54,24 @@ export default function PartnerBar() {
         </button>
       </div>
 
+      {/* Coin abitudini di entrambi — sempre visibili qui, indipendentemente da
+          quale vista è attiva: "servono per essere visti da Flavio e Simona
+          per capire come stiamo andando lato abitudini" (richiesta esplicita
+          di Flavio, 29/9/2026). Sono SEPARATI dal punteggio generale
+          dell'app — si spendono solo nel Negozio Premi. */}
+      {(ownData || partnerData) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
+          marginTop: 8, padding: '8px 12px', borderRadius: 10,
+          background: 'rgba(255,202,40,0.06)', border: '1px solid rgba(255,202,40,0.18)',
+          fontSize: '0.82em', fontWeight: 700,
+        }}>
+          <span style={{ color: color(authUserId) }}>{ownAvatar} {ownData?.habitCoins ?? 0}🪙</span>
+          <span style={{ color: 'var(--text-sec)', fontWeight: 400 }}>vs</span>
+          <span style={{ color: color(partnerId) }}>{partnerAvatar} {partnerData?.habitCoins ?? 0}🪙</span>
+        </div>
+      )}
+
       {!partnerData && (
         <div style={{ fontSize: '0.72em', color: '#888', margin: '8px 2px 0' }}>
           {partnerId === 'flavio'

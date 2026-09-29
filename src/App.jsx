@@ -298,7 +298,7 @@ export default function App() {
   // Netto Oggi: fonte unica di verità (usata anche per lo storico e il punteggio totale)
   const {
     totalHabitPoints, taskPts, extraPts, checkInPts, readingPts,
-    purchaseCost, penaltyCost, dailySpent, expiredTaskCost, net,
+    purchaseCost, penaltyCost, dailySpent, expiredTaskCost, habitCoinsNet, net,
   } = computeDayNet(globalData, viewDate)
 
   const trackedItems = Object.entries(entry.trackedRewards || {}).map(([id, tr]) => {
@@ -414,6 +414,7 @@ export default function App() {
           expiredTaskCost={expiredTaskCost}
           trackedItems={trackedItems}
           dailySpent={dailySpent}
+          habitCoinsNet={habitCoinsNet}
           net={net}
           buildInfo={<BuildInfo />}
         />

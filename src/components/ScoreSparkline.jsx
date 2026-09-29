@@ -1,4 +1,4 @@
-import { getDailyNet, toDateString } from '../lib/habitLogic'
+import { getDailyHabitCoins, toDateString } from '../lib/habitLogic'
 
 export default function ScoreSparkline({ habits, rewards, dailyLogs }) {
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -7,7 +7,7 @@ export default function ScoreSparkline({ habits, rewards, dailyLogs }) {
     return toDateString(d)
   })
 
-  const values = days.map(date => getDailyNet({ habits, rewards, dailyLogs }, date))
+  const values = days.map(date => getDailyHabitCoins({ habits, rewards, dailyLogs }, date))
   const max = Math.max(...values.map(Math.abs), 1)
   const w = 120, h = 36, pad = 4
 

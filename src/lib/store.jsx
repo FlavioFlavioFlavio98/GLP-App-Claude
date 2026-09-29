@@ -12,7 +12,7 @@ import {
 // è caricato eager all'avvio dell'app, e questi due SDK servono solo per
 // azioni specifiche (Cloud Functions AI, upload file), mai al primo avvio.
 // Richiesta esplicita di Flavio: PWA più veloce ad aprirsi.
-import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore } from './habitLogic'
+import { toDateString, getItemValueAtDate, calcNumericPoints, parseEntry, calculateTotalScore, calculateTotalHabitCoins } from './habitLogic'
 import { updatePersistentNotification } from './fcm'
 import { trackSectionUsage } from './trackAppOpen'
 import { checkNewAchievements, computeCurrentStreak } from './achievementLogic'
@@ -74,11 +74,14 @@ function reducer(state, action) {
         globalData: state.allUsersData[state.authUserId] || null,
       }
     case 'SET_USER_DATA': {
-      // score non è mai salvato staticamente: viene sempre ricalcolato al volo
-      // qui, una sola volta per aggiornamento dati, così ogni componente che legge
-      // globalData.score/allUsersData[x].score vede sempre il totale corretto senza
-      // doverlo ricalcolare ad ogni render.
-      const dataWithScore = { ...action.data, score: calculateTotalScore(action.data) }
+      // score/habitCoins non sono mai salvati staticamente: vengono sempre
+      // ricalcolati al volo qui, una sola volta per aggiornamento dati, così
+      // ogni componente che legge globalData.score/habitCoins (o
+      // allUsersData[x].score/habitCoins) vede sempre il totale corretto senza
+      // doverlo ricalcolare ad ogni render. I coin abitudini sono SEPARATI dal
+      // punteggio generale (richiesta esplicita di Flavio, 29/9/2026) — vedi
+      // calculateTotalHabitCoins in habitLogic.js.
+      const dataWithScore = { ...action.data, score: calculateTotalScore(action.data), habitCoins: calculateTotalHabitCoins(action.data) }
       return {
         ...state,
         allUsersData: { ...state.allUsersData, [action.user]: dataWithScore },
@@ -89,7 +92,7 @@ function reducer(state, action) {
     // abitudine): il tap si vede subito; lo snapshot reale di Firestore lo
     // sovrascrive con lo stesso contenuto appena la Cloud Function ha scritto.
     case 'PATCH_USER_DATA': {
-      const dataWithScore = { ...action.data, score: calculateTotalScore(action.data) }
+      const dataWithScore = { ...action.data, score: calculateTotalScore(action.data), habitCoins: calculateTotalHabitCoins(action.data) }
       return {
         ...state,
         allUsersData: { ...state.allUsersData, [action.user]: dataWithScore },
@@ -398,10 +401,11 @@ export function AppProvider({ children }) {
       if (!reward) { actions.showToast('Premio non trovato', 'ℹ️'); return }
       if (reward.type === 'tracked') { actions.showToast('Non disponibile per il partner', 'ℹ️'); return }
       const cost = getItemValueAtDate(reward, 'cost', viewDate)
-      if (before.score < cost) {
-        if (!window.confirm(`Saldo di ${USER_LABEL[partnerId]} insufficiente (${before.score}). Andrà in negativo. Continuare?`)) return
+      const partnerCoins = calculateTotalHabitCoins(before)
+      if (partnerCoins < cost) {
+        if (!window.confirm(`Coin di ${USER_LABEL[partnerId]} insufficienti (${partnerCoins}). Andrà in negativo. Continuare?`)) return
       } else {
-        if (!window.confirm(`Comprare "${reward.name}" per ${USER_LABEL[partnerId]} (${cost} pt)?`)) return
+        if (!window.confirm(`Comprare "${reward.name}" per ${USER_LABEL[partnerId]} (${cost} coin)?`)) return
       }
       const result = applyRewardPurchase(before, rewardId, viewDate, Date.now())
       if (result.error) { actions.showToast('Non disponibile', 'ℹ️'); return }
@@ -495,8 +499,8 @@ export function AppProvider({ children }) {
         return
       }
       const { authUserId, globalData, viewDate } = state
-      if (globalData.score < cost) {
-        if (!window.confirm(`Saldo insufficiente (${globalData.score}). Andrai in negativo. Continuare?`)) return
+      if (globalData.habitCoins < cost) {
+        if (!window.confirm(`Coin insufficienti (${globalData.habitCoins}). Andrai in negativo. Continuare?`)) return
       } else {
         if (!window.confirm(`Comprare ${name} per ${cost}?`)) return
       }

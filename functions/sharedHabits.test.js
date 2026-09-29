@@ -20,7 +20,7 @@ function baseData() {
     ],
     rewardCategories: [{ id: 'c1', name: 'Svago', color: '#f0f' }],
     dailyLogs: {
-      '2026-09-20': { habits: ['h1'], failedHabits: [], habitLevels: { h1: 'max' }, habitNotes: { h1: 'nota privata' }, mood: { a: 1 }, purchases: [{ name: 'Film', cost: 10, time: 1 }], readingEarned: 3 },
+      '2026-09-20': { habits: ['h1'], failedHabits: [], habitLevels: { h1: 'max' }, habitNotes: { h1: 'nota privata' }, mood: { a: 1 }, purchases: [{ name: 'Film', cost: 10, time: 1 }], trackedRewards: { r2: { quantity: 2, cost: 4 } }, readingEarned: 3 },
       '2025-01-01': { habits: ['h1'] }, // fuori finestra (> 365 giorni)
       '2026-09-19': ['h2'], // formato legacy (array)
     },
@@ -39,7 +39,7 @@ test('mirror: tiene abitudini/tag/stato/premi (incluso Negozio Premi) e toglie t
   assert.deepEqual(m.profile, { avatar: '🔥' })
   assert.deepEqual(Object.keys(m.dailyLogs).sort(), ['2026-09-19', '2026-09-20'])
   assert.deepEqual(m.dailyLogs['2026-09-19'], { habits: ['h2'] }, 'array legacy normalizzato')
-  assert.deepEqual(m.dailyLogs['2026-09-20'], { habits: ['h1'], habitLevels: { h1: 'max' }, purchases: [{ name: 'Film', cost: 10, time: 1 }] }, 'gli acquisti al Negozio Premi sono condivisi (il Negozio è condiviso)')
+  assert.deepEqual(m.dailyLogs['2026-09-20'], { habits: ['h1'], habitLevels: { h1: 'max' }, purchases: [{ name: 'Film', cost: 10, time: 1 }], trackedRewards: { r2: { quantity: 2, cost: 4 } } }, 'acquisti e premi tracciati condivisi (servono al calcolo coin del partner)')
   assert.deepEqual(m.rewards, baseData().rewards, 'il Negozio Premi è condiviso')
   assert.deepEqual(m.rewardCategories, baseData().rewardCategories)
 })

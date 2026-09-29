@@ -48,7 +48,10 @@ export function dayStatus(data, dateStr) {
   return {
     total: due.length, done, failed,
     perfect: due.length > 0 && fully === due.length,
-    net: Math.round((n.totalHabitPoints - n.penaltyCost) * 10) / 10,
+    // Coin abitudini del giorno (guadagni - penalità - acquisti Negozio Premi
+    // - premi tracciati) — stessa cifra mostrata come "🪙 Netto coin",
+    // mai il punteggio generale dell'app.
+    net: Math.round(n.habitCoinsNet * 10) / 10,
     dueIds: due.map(stableId), entry,
   }
 }

@@ -32,7 +32,7 @@ function Big({ color, value, sub }) {
   )
 }
 
-function fmtPts(n) { return `${n > 0 ? '+' : ''}${n}` }
+function fmtPts(n) { return `${n > 0 ? '+' : ''}${n}🪙` }
 
 export default function CoupleStatsPanel({ people }) {
   const { state } = useApp()
@@ -87,13 +87,13 @@ export default function CoupleStatsPanel({ people }) {
         </div>
       </Card>
 
-      <Card title="Classifica della settimana (punti abitudini)">
+      <Card title="Classifica della settimana (coin abitudini)">
         <TwoCols
           left={<Big color={color('flavio')} value={`${leader === 'flavio' ? '🏆 ' : ''}${fmtPts(P.flavio.week)}`} sub={`Flavio · scorsa ${fmtPts(P.flavio.lastWeek)}`} />}
           right={<Big color={color('simona')} value={`${leader === 'simona' ? '🏆 ' : ''}${fmtPts(P.simona.week)}`} sub={`Simona · scorsa ${fmtPts(P.simona.lastWeek)}`} />}
         />
         <div style={{ textAlign: 'center', fontSize: '0.72em', color: 'var(--text-sec)', marginTop: 8 }}>
-          {leader ? `${USER_LABEL[leader]} è avanti di ${stats.joint.weekGap} pt` : 'Pari questa settimana'}
+          {leader ? `${USER_LABEL[leader]} è avanti di ${stats.joint.weekGap} coin` : 'Pari questa settimana'}
         </div>
       </Card>
 

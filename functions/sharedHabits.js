@@ -32,8 +32,12 @@ const MAX_BACK_DAYS = 30
 // vocali/diario abitudine e il "perché" (motivazione personale).
 const PRIVATE_HABIT_FIELDS = ['voiceNotes', 'notes', 'why']
 // Dei log giornalieri il mirror tiene lo stato di completamento e gli
-// acquisti al Negozio Premi (anch'esso condiviso — vedi buyPartnerReward).
-const SHARED_LOG_FIELDS = ['habits', 'failedHabits', 'habitLevels', 'habitValues', 'purchases']
+// acquisti al Negozio Premi (anch'esso condiviso — vedi buyPartnerReward),
+// inclusi i premi tracciati a soglia (trackedRewards): servono al calcolo dei
+// coin abitudini mostrato al partner (vedi calculateTotalHabitCoins lato
+// client), altrimenti il suo saldo coin visto dall'altro risulterebbe più
+// alto del reale.
+const SHARED_LOG_FIELDS = ['habits', 'failedHabits', 'habitLevels', 'habitValues', 'purchases', 'trackedRewards']
 
 function stableId(h) {
   return h.id || String(h.name || '').replace(/[^a-zA-Z0-9]/g, '')
@@ -65,14 +69,15 @@ function shiftDate(dateStr, deltaDays) {
 }
 
 function normalizeDay(raw) {
-  if (!raw) return { habits: [], failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [] }
-  if (Array.isArray(raw)) return { habits: raw, failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [] }
+  if (!raw) return { habits: [], failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [], trackedRewards: {} }
+  if (Array.isArray(raw)) return { habits: raw, failedHabits: [], habitLevels: {}, habitValues: {}, purchases: [], trackedRewards: {} }
   return {
     habits: raw.habits || [],
     failedHabits: raw.failedHabits || [],
     habitLevels: raw.habitLevels || {},
     habitValues: raw.habitValues || {},
     purchases: raw.purchases || [],
+    trackedRewards: raw.trackedRewards || {},
   }
 }
 

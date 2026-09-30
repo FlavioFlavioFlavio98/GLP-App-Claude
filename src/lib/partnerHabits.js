@@ -133,3 +133,32 @@ export function patchRewardPurchase(data, date, result) {
     dailyLogs: { ...(data.dailyLogs || {}), [date]: { ...dayObj, purchases: result.purchases } },
   }
 }
+
+// Inserimento del valore di un'abitudine NUMERICA dell'ALTRO — stessa
+// transizione della Cloud Function setPartnerNumericValue
+// (functions/sharedHabits.js), usata qui per l'aggiornamento ottimistico.
+// Gli obiettivi (goal) restano sempre solo del proprietario.
+export function applyNumericValue(data, habitId, date, value) {
+  const habits = data.habits || []
+  const habit = habits.find(h => stableId(h) === habitId)
+  if (!habit) return { error: 'habit-not-found' }
+  if (habit.type === 'goal') return { error: 'not-allowed' }
+  if (!habit.numericConfig) return { error: 'not-numeric' }
+
+  const raw = normalizeDay(data.dailyLogs && data.dailyLogs[date])
+  const entryHabits = [...raw.habits]
+  if (!entryHabits.includes(habitId)) entryHabits.push(habitId)
+  const habitValues = { ...raw.habitValues, [habitId]: value }
+
+  return { entryHabits, habitValues }
+}
+
+// Applica il risultato di applyNumericValue a una copia dei dati utente.
+export function patchNumericValue(data, date, result) {
+  const prevDay = data.dailyLogs && data.dailyLogs[date]
+  const dayObj = (prevDay && !Array.isArray(prevDay)) ? prevDay : {}
+  return {
+    ...data,
+    dailyLogs: { ...(data.dailyLogs || {}), [date]: { ...dayObj, habits: result.entryHabits, habitValues: result.habitValues } },
+  }
+}

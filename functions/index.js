@@ -865,6 +865,63 @@ exports.buyPartnerReward = onCall(
   }
 )
 
+// Inserisce il valore di un'abitudine NUMERICA dell'ALTRO (es. minuti,
+// bicchieri d'acqua) — stesso schema di setPartnerHabitStatus. Fino al
+// 30/9/2026 i valori numerici erano riservati al proprietario; rimosso su
+// richiesta esplicita di Flavio (completano spesso le abitudini di entrambi
+// da un solo telefono a fine giornata). Gli obiettivi restano esclusi.
+exports.setPartnerNumericValue = onCall(
+  { region: REGION, invoker: 'public' },
+  async (request) => {
+    const token = request.auth && request.auth.token
+    if (!token || !token.email) throw new HttpsError('unauthenticated', 'Login richiesto')
+    const caller = shared.EMAIL_TO_USER[token.email]
+    if (!caller || token.email_verified !== true) throw new HttpsError('permission-denied', 'Non autorizzato')
+
+    const { habitId, date, value } = request.data || {}
+    if (typeof habitId !== 'string' || !habitId || habitId.length > 200) {
+      throw new HttpsError('invalid-argument', 'Abitudine non valida')
+    }
+    if (!shared.validateDate(date, new Date().toISOString().slice(0, 10))) {
+      throw new HttpsError('invalid-argument', 'Data non valida (non nel futuro, max 30 giorni indietro)')
+    }
+    if ((typeof value !== 'string' && typeof value !== 'number') || String(value).length > 30) {
+      throw new HttpsError('invalid-argument', 'Valore non valido')
+    }
+
+    const target = shared.PARTNER_OF[caller]
+    const db = admin.firestore()
+    const targetRef = db.collection('users').doc(target)
+    const mirrorRef = db.collection('sharedHabits').doc('flavio')
+
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(targetRef)
+      if (!snap.exists) throw new HttpsError('not-found', 'Utente non trovato')
+      const data = snap.data()
+      const r = shared.applyNumericValue(data, habitId, date, value)
+      if (r.error) throw new HttpsError('failed-precondition', r.error)
+
+      const rawDay = data.dailyLogs && data.dailyLogs[date]
+      if (Array.isArray(rawDay)) {
+        tx.update(targetRef, { [`dailyLogs.${date}`]: { habits: r.entryHabits, failedHabits: [], habitLevels: {}, habitValues: r.habitValues } })
+      } else {
+        tx.update(targetRef, {
+          [`dailyLogs.${date}.habits`]: r.entryHabits,
+          [`dailyLogs.${date}.habitValues`]: r.habitValues,
+        })
+      }
+
+      if (target === 'flavio') {
+        const dayObj = (rawDay && !Array.isArray(rawDay)) ? rawDay : {}
+        const newData = { ...data, dailyLogs: { ...(data.dailyLogs || {}), [date]: { ...dayObj, habits: r.entryHabits, habitValues: r.habitValues } } }
+        const payload = shared.buildSharedHabits(newData, new Date().toISOString().slice(0, 10))
+        tx.set(mirrorRef, { ...payload, hash: shared.hashPayload(payload), updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      }
+      return { ok: true }
+    })
+  }
+)
+
 // ── backupUserData ──────────────────────────────────────────────────────────
 // Copia ORARIA del documento principale (users/flavio) in una sottocollezione
 // separata — aggiunta dopo un incidente in cui un bug lato client ha

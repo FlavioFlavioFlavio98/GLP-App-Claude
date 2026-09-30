@@ -190,6 +190,28 @@ function applyHabitAction(data, habitId, date, action) {
   return { entry, habits, actionType }
 }
 
+// Inserimento del valore di un'abitudine NUMERICA dell'ALTRO (es. minuti di
+// meditazione, bicchieri d'acqua). Fino al 30/9/2026 questo era riservato al
+// proprietario ("i valori numerici li inserisce solo lei/lui") — rimosso su
+// richiesta esplicita di Flavio: Flavio e Simona completano spesso le
+// abitudini di entrambi a fine giornata da un solo telefono, e vogliono poter
+// inserire ANCHE i valori numerici l'uno per l'altro. Gli obiettivi (goal)
+// restano SEMPRE solo del proprietario (percorso separato, non gestito qui).
+function applyNumericValue(data, habitId, date, value) {
+  const habits = data.habits || []
+  const habit = habits.find(h => stableId(h) === habitId)
+  if (!habit) return { error: 'habit-not-found' }
+  if (habit.type === 'goal') return { error: 'not-allowed' }
+  if (!habit.numericConfig) return { error: 'not-numeric' }
+
+  const raw = normalizeDay(data.dailyLogs && data.dailyLogs[date])
+  const entryHabits = [...raw.habits]
+  if (!entryHabits.includes(habitId)) entryHabits.push(habitId)
+  const habitValues = { ...(raw.habitValues || {}), [habitId]: value }
+
+  return { entryHabits, habitValues }
+}
+
 // Acquisto di un premio DELL'ALTRO (Negozio Premi condiviso). `data` = suo
 // documento utente, `rewardId` = id del premio (i premi, a differenza delle
 // abitudini, hanno sempre un id). Il costo è sempre letto dal documento del
@@ -223,5 +245,5 @@ function validateDate(date, todayUtc) {
 module.exports = {
   EMAIL_TO_USER, PARTNER_OF, MIRROR_DAYS, MAX_BACK_DAYS,
   stableId, getItemValueAtDate, shiftDate,
-  buildSharedHabits, hashPayload, applyHabitAction, applyRewardPurchase, validateDate,
+  buildSharedHabits, hashPayload, applyHabitAction, applyRewardPurchase, applyNumericValue, validateDate,
 }

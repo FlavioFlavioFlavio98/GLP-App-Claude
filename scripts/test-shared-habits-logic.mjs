@@ -140,5 +140,33 @@ await check('Acquisto: rifiuta premio inesistente', async () => {
   await assert.rejects(runBuyPartnerReward('simona', 'nope', today), /reward-not-found/)
 })
 
+// ── setPartnerNumericValue (stesso corpo della callable in index.js) ──
+async function runSetPartnerNumericValue(caller, habitId, date, value) {
+  const target = shared.PARTNER_OF[caller]
+  return db.runTransaction(async tx => {
+    const ref = db.doc(`users/${target}`)
+    const snap = await tx.get(ref)
+    const data = snap.data()
+    const r = shared.applyNumericValue(data, habitId, date, value)
+    if (r.error) { const e = new Error(r.error); e.code = 'failed-precondition'; throw e }
+    tx.update(ref, {
+      [`dailyLogs.${date}.habits`]: r.entryHabits,
+      [`dailyLogs.${date}.habitValues`]: r.habitValues,
+    })
+    return r
+  })
+}
+
+await check('Simona inserisce un valore numerico per Flavio (rimosso vincolo solo-proprietario) → transazione reale', async () => {
+  const r = await runSetPartnerNumericValue('simona', 'f3', today, '7.5')
+  assert.deepEqual(r.habitValues, { f3: '7.5' })
+  const f = (await db.doc('users/flavio').get()).data()
+  assert.equal(f.dailyLogs[today].habitValues.f3, '7.5')
+  assert.ok(f.dailyLogs[today].habits.includes('f3'), 'segnata come fatta per la visibilità')
+})
+await check('Valore numerico: rifiuta abitudine non numerica e obiettivo', async () => {
+  await assert.rejects(runSetPartnerNumericValue('simona', 'f1', today, '1'), /not-numeric/)
+})
+
 console.log(`\n${results.filter(Boolean).length}/${results.length} controlli superati`)
 process.exit(results.includes(0) ? 1 : 0)

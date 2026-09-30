@@ -86,10 +86,15 @@ export default function ShopList() {
         ))}
       </div>
 
-      {/* Category filter chips */}
-      {categories.length > 0 && (
+      {/* Category filter chips — con scorciatoia per creare/gestire le
+          categorie direttamente da qui, invece di doverle cercare in
+          Impostazioni (richiesta esplicita di Flavio, 30/9/2026). La
+          scorciatoia "Gestisci" resta nascosta in vista partner (sola lettura). */}
+      {(categories.length > 0 || !isReadOnly) && (
         <div className="reward-cat-filter">
-          <button className={`reward-cat-filter-chip${selectedCat === null ? ' active' : ''}`} onClick={() => setSelectedCat(null)}>Tutti</button>
+          {categories.length > 0 && (
+            <button className={`reward-cat-filter-chip${selectedCat === null ? ' active' : ''}`} onClick={() => setSelectedCat(null)}>Tutti</button>
+          )}
           {categories.map(c => (
             <button key={c.id} className={`reward-cat-filter-chip${selectedCat === c.id ? ' active' : ''}`}
               style={selectedCat === c.id ? { background: c.color, borderColor: c.color, color: '#fff' } : { borderColor: `${c.color}66`, color: c.color }}
@@ -97,6 +102,16 @@ export default function ShopList() {
               {c.emoji && <span>{c.emoji} </span>}{c.name}
             </button>
           ))}
+          {!isReadOnly && (
+            <button
+              className="reward-cat-filter-chip"
+              style={{ borderStyle: 'dashed', color: 'var(--text-sec)' }}
+              onClick={() => actions.openModal('rewardCategories')}
+              title="Crea o gestisci le categorie premi"
+            >
+              🗂️ {categories.length > 0 ? 'Gestisci' : 'Crea categorie'}
+            </button>
+          )}
         </div>
       )}
 

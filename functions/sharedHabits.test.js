@@ -98,6 +98,27 @@ test('azione: rifiuta numeriche, obiettivi, sconosciute, azioni strane', () => {
   assert.equal(s.applyHabitAction(d, 'h1', TODAY, 'delete').error, 'bad-action')
 })
 
+test('valore numerico: inserito per l\'altro, marca la giornata come fatta, non tocca gli altri campi', () => {
+  const d = baseData()
+  const r = s.applyNumericValue(d, 'h3', TODAY, '8')
+  assert.deepEqual(r, { entryHabits: ['h3'], habitValues: { h3: '8' } })
+})
+
+test('valore numerico: si accumula con altri valori già presenti quel giorno', () => {
+  const d = baseData()
+  d.dailyLogs[TODAY] = { habits: ['h1'], failedHabits: [], habitLevels: { h1: 'max' }, habitValues: { h3: '5' } }
+  const r = s.applyNumericValue(d, 'h3', TODAY, '9')
+  assert.deepEqual(r.entryHabits.sort(), ['h1', 'h3'])
+  assert.deepEqual(r.habitValues, { h3: '9' })
+})
+
+test('valore numerico: rifiuta abitudine sconosciuta, obiettivo, o non numerica', () => {
+  const d = baseData()
+  assert.equal(s.applyNumericValue(d, 'nope', TODAY, '1').error, 'habit-not-found')
+  assert.equal(s.applyNumericValue(d, 'g1', TODAY, '1').error, 'not-allowed')
+  assert.equal(s.applyNumericValue(d, 'h1', TODAY, '1').error, 'not-numeric')
+})
+
 test('acquisto premio: costo sempre letto dal documento (mai dal chiamante), aggiunto ai purchases del giorno', () => {
   const d = baseData()
   const r = s.applyRewardPurchase(d, 'r1', '2026-09-21', 12345)

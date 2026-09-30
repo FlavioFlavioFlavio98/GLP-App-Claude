@@ -43,14 +43,14 @@ export default function PartnerBar() {
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={() => actions.restoreOwnUser()} style={segBtn(!viewingPartner, color(authUserId), false)}>
-          {ownAvatar} Le mie
+          {ownAvatar} {USER_LABEL[authUserId]}
         </button>
         <button
           onClick={() => actions.switchToViewUser(partnerId)}
           disabled={!partnerData}
           style={segBtn(viewingPartner, color(partnerId), !partnerData)}
         >
-          {partnerAvatar} Di {partnerName}
+          {partnerAvatar} {partnerName}
         </button>
       </div>
 
@@ -77,12 +77,6 @@ export default function PartnerBar() {
           {partnerId === 'flavio'
             ? 'Le abitudini di Flavio non sono ancora disponibili — appariranno appena Flavio usa l\'app.'
             : 'Simona non ha ancora aperto l\'app: le sue abitudini appariranno dopo il suo primo accesso.'}
-        </div>
-      )}
-
-      {viewingPartner && (
-        <div style={{ fontSize: '0.74em', margin: '8px 0 0', padding: '8px 12px', borderRadius: 10, background: `${color(partnerId)}14`, border: `1px solid ${color(partnerId)}44`, color: 'var(--text)' }}>
-          Stai guardando le abitudini di <b>{partnerName}</b> — puoi segnarle come fatte o fallite per {partnerId === 'simona' ? 'lei' : 'lui'} (i valori numerici li inserisce solo {partnerId === 'simona' ? 'lei' : 'lui'}).
         </div>
       )}
 

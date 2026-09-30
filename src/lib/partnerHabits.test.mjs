@@ -73,4 +73,25 @@ for (const d of rewardDays) {
 }
 console.log(`✔ client e server identici su ${m} scenari (premi)`)
 
+// Stesso confronto per l'inserimento del valore di abitudini numeriche.
+const numericDays = [
+  undefined,
+  { habits: [], failedHabits: [], habitLevels: {}, habitValues: {} },
+  { habits: ['e'], failedHabits: [], habitLevels: {}, habitValues: { e: '3' } },
+  ['a', 'c'], // formato legacy
+]
+let p = 0
+for (const d of numericDays) {
+  for (const h of habits.map(x => x.id || 'Senzaid').concat(['nope'])) {
+    for (const value of ['5', '0', 12]) {
+      const data = { habits: JSON.parse(JSON.stringify(habits)), dailyLogs: d === undefined ? {} : { '2026-09-21': JSON.parse(JSON.stringify(d)) } }
+      const c = client.applyNumericValue(data, h, '2026-09-21', value)
+      const s = server.applyNumericValue(data, h, '2026-09-21', value)
+      assert.deepEqual(c, s, `divergenza client/server: habit=${h} value=${value} day=${JSON.stringify(d)}`)
+      p++
+    }
+  }
+}
+console.log(`✔ client e server identici su ${p} scenari (valori numerici)`)
+
 rmSync(tmp, { recursive: true, force: true })

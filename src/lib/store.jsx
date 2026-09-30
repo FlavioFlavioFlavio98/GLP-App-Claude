@@ -27,7 +27,7 @@ import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
 import { computeSocialPts } from './mindStats'
 import { countWords } from './diaryMarkdown'
-import { PARTNER_OF, USER_LABEL, applyHabitAction, patchUserData, applyRewardPurchase, patchRewardPurchase } from './partnerHabits'
+import { PARTNER_OF, USER_LABEL, applyHabitAction, patchUserData, applyRewardPurchase, patchRewardPurchase, applyNumericValue, patchNumericValue } from './partnerHabits'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -421,6 +421,39 @@ export function AppProvider({ children }) {
         actions.showToast('Acquisto effettuato!', '🛍️')
       } catch (err) {
         console.error('buyPartnerReward failed:', err)
+        dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: before })
+        actions.showToast('Errore nel salvataggio', '❌')
+      }
+    },
+
+    // Inserisce il valore di un'abitudine NUMERICA dell'ALTRO — stesso schema
+    // di setPartnerHabitStatus. Rimosso il vincolo "solo il proprietario" su
+    // richiesta esplicita di Flavio (30/9/2026): a fine giornata completano
+    // spesso le abitudini di entrambi da un solo telefono, valori numerici
+    // inclusi. Gli obiettivi restano sempre esclusi.
+    async setPartnerNumericValue(partnerId, habitId, value) {
+      const { allUsersData, viewDate } = state
+      const before = allUsersData[partnerId]
+      if (!before) return
+      const result = applyNumericValue(before, habitId, viewDate, value)
+      if (result.error) {
+        actions.showToast(result.error === 'not-numeric' ? 'Non è un\'abitudine numerica' : 'Non modificabile', 'ℹ️')
+        return
+      }
+      actions.vibrate('light')
+      const { calcNumericPoints: cnp } = await import('./habitLogic')
+      const habit = (before.habits || []).find(h => (h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')) === habitId)
+      const newPts = cnp(parseFloat(value), habit.numericConfig)
+      // Aggiornamento ottimistico: il valore si vede subito, senza aspettare
+      // il giro di rete.
+      dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: patchNumericValue(before, viewDate, result) })
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions')
+        const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'setPartnerNumericValue')
+        await fn({ habitId, date: viewDate, value })
+        actions.showToast(`${newPts >= 0 ? '+' : ''}${newPts} pt`, newPts >= 0 ? '✅' : '❌')
+      } catch (err) {
+        console.error('setPartnerNumericValue failed:', err)
         dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: before })
         actions.showToast('Errore nel salvataggio', '❌')
       }
@@ -2027,7 +2060,12 @@ export function AppProvider({ children }) {
 
     // ─── Numeric value ────────────────────────────────────────────────────────
     async setNumericValue(habitId, value) {
-      if (isReadOnly()) return
+      if (isReadOnly()) {
+        const { authUserId, viewUserId } = state
+        if (viewUserId === PARTNER_OF[authUserId]) return actions.setPartnerNumericValue(viewUserId, habitId, value)
+        actions.showToast('Sola lettura', 'ℹ️')
+        return
+      }
       const { authUserId, globalData, viewDate } = state
       const ref = doc(db, 'users', authUserId)
 

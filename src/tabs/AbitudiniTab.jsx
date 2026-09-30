@@ -20,7 +20,7 @@ export default function AbitudiniTab({ globalData, minimalMode, isReadOnly, acti
   return (
     <>
       <PartnerBar />
-      <GoalSection habits={globalData.habits} />
+      <GoalSection habits={globalData.habits} isReadOnly={isReadOnly} />
       <SearchSection />
       <HabitsSection {...habitsSectionProps} />
       {!minimalMode && (

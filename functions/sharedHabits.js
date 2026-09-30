@@ -83,8 +83,12 @@ function normalizeDay(raw) {
 
 function buildSharedHabits(data, todayStr) {
   const since = shiftDate(todayStr, -MIRROR_DAYS)
+  // Gli obiettivi (goal) erano esclusi dal mirror perché fino al 30/9/2026
+  // non erano aggiornabili dal partner — ora lo sono (setPartnerGoalValue),
+  // quindi vanno inclusi: altrimenti Simona non vedrebbe mai gli obiettivi
+  // di Flavio nella copia in sola lettura.
   const habits = (data.habits || [])
-    .filter(h => h && h.type !== 'goal')
+    .filter(Boolean)
     .map(h => {
       const copy = { ...h }
       PRIVATE_HABIT_FIELDS.forEach(f => delete copy[f])
@@ -212,6 +216,30 @@ function applyNumericValue(data, habitId, date, value) {
   return { entryHabits, habitValues }
 }
 
+// Aggiorna il valore di un OBIETTIVO (goal) dell'ALTRO — a differenza di
+// habits/rewards/numeriche, un obiettivo non è legato a un giorno preciso:
+// il progresso vive su habit.goalConfig.currentValue, non su dailyLogs.
+// Rimosso il vincolo "solo il proprietario" su richiesta esplicita di
+// Flavio (30/9/2026), stessa logica di aggiornamento già usata lato client
+// in updateGoalValue. `todayStr` va passato dal chiamante (mai calcolato
+// qui) per restare una funzione pura testabile.
+function applyGoalValue(data, habitId, value, todayStr) {
+  const habits = [...(data.habits || [])]
+  const idx = habits.findIndex(h => h.id === habitId)
+  if (idx < 0) return { error: 'habit-not-found' }
+  const habit = habits[idx]
+  if (habit.type !== 'goal') return { error: 'not-goal' }
+
+  const gc = habit.goalConfig || {}
+  const target = gc.targetValue || 1
+  const newGc = { ...gc, currentValue: value }
+  const justCompleted = value >= target && !gc.completedAt
+  if (justCompleted) newGc.completedAt = todayStr
+  habits[idx] = { ...habit, goalConfig: newGc }
+
+  return { habits, justCompleted, rewardOnComplete: gc.rewardOnComplete || 0 }
+}
+
 // Acquisto di un premio DELL'ALTRO (Negozio Premi condiviso). `data` = suo
 // documento utente, `rewardId` = id del premio (i premi, a differenza delle
 // abitudini, hanno sempre un id). Il costo è sempre letto dal documento del
@@ -245,5 +273,5 @@ function validateDate(date, todayUtc) {
 module.exports = {
   EMAIL_TO_USER, PARTNER_OF, MIRROR_DAYS, MAX_BACK_DAYS,
   stableId, getItemValueAtDate, shiftDate,
-  buildSharedHabits, hashPayload, applyHabitAction, applyRewardPurchase, applyNumericValue, validateDate,
+  buildSharedHabits, hashPayload, applyHabitAction, applyRewardPurchase, applyNumericValue, applyGoalValue, validateDate,
 }

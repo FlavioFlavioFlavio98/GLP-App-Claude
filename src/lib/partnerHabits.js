@@ -162,3 +162,29 @@ export function patchNumericValue(data, date, result) {
     dailyLogs: { ...(data.dailyLogs || {}), [date]: { ...dayObj, habits: result.entryHabits, habitValues: result.habitValues } },
   }
 }
+
+// Aggiorna il valore di un OBIETTIVO (goal) dell'ALTRO — stessa transizione
+// della Cloud Function setPartnerGoalValue (functions/sharedHabits.js). Non
+// è legato a un giorno: il progresso vive su habit.goalConfig, non su
+// dailyLogs. `todayStr` va passato dal chiamante per restare pura/testabile.
+export function applyGoalValue(data, habitId, value, todayStr) {
+  const habits = [...(data.habits || [])]
+  const idx = habits.findIndex(h => h.id === habitId)
+  if (idx < 0) return { error: 'habit-not-found' }
+  const habit = habits[idx]
+  if (habit.type !== 'goal') return { error: 'not-goal' }
+
+  const gc = habit.goalConfig || {}
+  const target = gc.targetValue || 1
+  const newGc = { ...gc, currentValue: value }
+  const justCompleted = value >= target && !gc.completedAt
+  if (justCompleted) newGc.completedAt = todayStr
+  habits[idx] = { ...habit, goalConfig: newGc }
+
+  return { habits, justCompleted, rewardOnComplete: gc.rewardOnComplete || 0 }
+}
+
+// Applica il risultato di applyGoalValue a una copia dei dati utente.
+export function patchGoalValue(data, result) {
+  return { ...data, habits: result.habits }
+}

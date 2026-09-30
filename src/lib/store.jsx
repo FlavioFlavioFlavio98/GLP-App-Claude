@@ -27,7 +27,7 @@ import { SEED_FOODS } from './nutritionStats'
 import { buildRecurringInstance, hasPendingInstance, addDays } from './recurringTasksLogic'
 import { computeSocialPts } from './mindStats'
 import { countWords } from './diaryMarkdown'
-import { PARTNER_OF, USER_LABEL, applyHabitAction, patchUserData, applyRewardPurchase, patchRewardPurchase, applyNumericValue, patchNumericValue } from './partnerHabits'
+import { PARTNER_OF, USER_LABEL, applyHabitAction, patchUserData, applyRewardPurchase, patchRewardPurchase, applyNumericValue, patchNumericValue, applyGoalValue, patchGoalValue } from './partnerHabits'
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -911,24 +911,74 @@ export function AppProvider({ children }) {
 
     // ─── Goals ───────────────────────────────────────────────────────────────
     async updateGoalValue(habitId, newValue) {
-      if (isReadOnly()) return
-      const { authUserId, globalData } = state
-      const ref = doc(db, 'users', authUserId)
-      const habitsArr = [...(globalData.habits || [])]
-      const idx = habitsArr.findIndex(h => h.id === habitId)
-      if (idx === -1) return
-      const habit = habitsArr[idx]
-      const gc = habit.goalConfig || {}
-      const target = gc.targetValue || 1
-      const updated = { ...habit, goalConfig: { ...gc, currentValue: newValue } }
-      if (newValue >= target && !gc.completedAt) {
-        updated.goalConfig.completedAt = toDateString(new Date())
-        import('canvas-confetti').then(m => m.default({ particleCount: 100, spread: 80, origin: { y: 0.6 } }))
-        actions.showToast(`Obiettivo raggiunto! +${gc.rewardOnComplete || 0}pt 🎉`, '🎯')
+      if (isReadOnly()) {
+        const { authUserId, viewUserId } = state
+        if (viewUserId === PARTNER_OF[authUserId]) return actions.setPartnerGoalValue(viewUserId, habitId, newValue)
+        actions.showToast('Sola lettura', 'ℹ️')
+        return
       }
-      habitsArr[idx] = updated
-      await updateDoc(ref, { habits: habitsArr })
-      if (gc.completedAt || newValue < target) actions.vibrate('light')
+      const { authUserId } = state
+      const todayStr = toDateString(new Date())
+      const ref = doc(db, 'users', authUserId)
+
+      let result
+      try {
+        // Transazione: legge SEMPRE lo stato fresco dal server invece che da
+        // globalData locale, altrimenti si rischia di sovrascrivere in
+        // silenzio un aggiornamento fatto nel frattempo da un altro
+        // dispositivo (stesso motivo per cui le task usano runTransaction).
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(ref)
+          const freshData = snap.data()
+          result = applyGoalValue(freshData, habitId, newValue, todayStr)
+          if (result.error) throw new Error(result.error)
+          transaction.update(ref, { habits: result.habits })
+        })
+      } catch (err) {
+        console.error('updateGoalValue failed:', err)
+        actions.showToast('Errore nel salvataggio', '❌')
+        return
+      }
+
+      if (result.justCompleted) {
+        import('canvas-confetti').then(m => m.default({ particleCount: 100, spread: 80, origin: { y: 0.6 } }))
+        actions.showToast(`Obiettivo raggiunto! +${result.rewardOnComplete}pt 🎉`, '🎯')
+      } else {
+        actions.vibrate('light')
+      }
+    },
+
+    // Aggiorna il valore di un OBIETTIVO dell'ALTRO — stesso schema di
+    // setPartnerHabitStatus/setPartnerNumericValue. Richiesta esplicita di
+    // Flavio (30/9/2026): anche gli obiettivi ora sono aggiornabili da
+    // entrambi, come le altre abitudini.
+    async setPartnerGoalValue(partnerId, habitId, value) {
+      const { allUsersData } = state
+      const before = allUsersData[partnerId]
+      if (!before) return
+      const todayStr = toDateString(new Date())
+      const result = applyGoalValue(before, habitId, value, todayStr)
+      if (result.error) {
+        actions.showToast(result.error === 'not-goal' ? 'Non è un obiettivo' : 'Non modificabile', 'ℹ️')
+        return
+      }
+      actions.vibrate('light')
+      // Aggiornamento ottimistico: il valore si vede subito, senza aspettare
+      // il giro di rete.
+      dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: patchGoalValue(before, result) })
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions')
+        const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'setPartnerGoalValue')
+        await fn({ habitId, value })
+        if (result.justCompleted) {
+          import('canvas-confetti').then(m => m.default({ particleCount: 100, spread: 80, origin: { y: 0.6 } }))
+          actions.showToast(`Obiettivo raggiunto! +${result.rewardOnComplete}pt 🎉`, '🎯')
+        }
+      } catch (err) {
+        console.error('setPartnerGoalValue failed:', err)
+        dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: before })
+        actions.showToast('Errore nel salvataggio', '❌')
+      }
     },
 
     // ─── Weight ──────────────────────────────────────────────────────────────

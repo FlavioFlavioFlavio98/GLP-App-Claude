@@ -922,6 +922,52 @@ exports.setPartnerNumericValue = onCall(
   }
 )
 
+// Aggiorna il valore di un OBIETTIVO (goal) dell'ALTRO — stesso schema di
+// setPartnerHabitStatus/setPartnerNumericValue. A differenza di quelle, non
+// è legato a un giorno (il progresso vive su habit.goalConfig, non su
+// dailyLogs). Rimosso il vincolo "solo il proprietario" su richiesta
+// esplicita di Flavio (30/9/2026).
+exports.setPartnerGoalValue = onCall(
+  { region: REGION, invoker: 'public' },
+  async (request) => {
+    const token = request.auth && request.auth.token
+    if (!token || !token.email) throw new HttpsError('unauthenticated', 'Login richiesto')
+    const caller = shared.EMAIL_TO_USER[token.email]
+    if (!caller || token.email_verified !== true) throw new HttpsError('permission-denied', 'Non autorizzato')
+
+    const { habitId, value } = request.data || {}
+    if (typeof habitId !== 'string' || !habitId || habitId.length > 200) {
+      throw new HttpsError('invalid-argument', 'Abitudine non valida')
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new HttpsError('invalid-argument', 'Valore non valido')
+    }
+
+    const target = shared.PARTNER_OF[caller]
+    const db = admin.firestore()
+    const targetRef = db.collection('users').doc(target)
+    const mirrorRef = db.collection('sharedHabits').doc('flavio')
+    const todayStr = new Date().toISOString().slice(0, 10)
+
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(targetRef)
+      if (!snap.exists) throw new HttpsError('not-found', 'Utente non trovato')
+      const data = snap.data()
+      const r = shared.applyGoalValue(data, habitId, value, todayStr)
+      if (r.error) throw new HttpsError('failed-precondition', r.error)
+
+      tx.update(targetRef, { habits: r.habits })
+
+      if (target === 'flavio') {
+        const newData = { ...data, habits: r.habits }
+        const payload = shared.buildSharedHabits(newData, todayStr)
+        tx.set(mirrorRef, { ...payload, hash: shared.hashPayload(payload), updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      }
+      return { justCompleted: r.justCompleted, rewardOnComplete: r.rewardOnComplete }
+    })
+  }
+)
+
 // ── backupUserData ──────────────────────────────────────────────────────────
 // Copia ORARIA del documento principale (users/flavio) in una sottocollezione
 // separata — aggiunta dopo un incidente in cui un bug lato client ha

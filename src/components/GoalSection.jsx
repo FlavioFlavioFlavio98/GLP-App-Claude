@@ -9,7 +9,7 @@ function daysUntil(deadline) {
   return Math.ceil((end - today) / 86400000)
 }
 
-function GoalCard({ habit }) {
+function GoalCard({ habit, isReadOnly }) {
   const { actions } = useApp()
   const gc = habit.goalConfig || {}
   const current = gc.currentValue || 0
@@ -66,9 +66,11 @@ function GoalCard({ habit }) {
             <span className="material-icons-round" style={{ fontSize: 20, color: 'var(--theme-color)' }}>add_circle</span>
           </button>
         )}
-        <button className="btn-icon" onClick={() => actions.openModal('edit', { id: habit.id, type: 'habit' })}>
-          <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
-        </button>
+        {!isReadOnly && (
+          <button className="btn-icon" onClick={() => actions.openModal('edit', { id: habit.id, type: 'habit' })}>
+            <span className="material-icons-round" style={{ fontSize: 18 }}>edit</span>
+          </button>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -103,14 +105,14 @@ function GoalCard({ habit }) {
   )
 }
 
-export default function GoalSection({ habits }) {
+export default function GoalSection({ habits, isReadOnly }) {
   const today = toDateString(new Date())
   const goals = (habits || []).filter(h => h.type === 'goal' && (!h.archivedAt || h.archivedAt > today))
   if (goals.length === 0) return null
 
   return (
     <Accordion label="🎯 Obiettivi" defaultOpen={true}>
-      {goals.map(h => <GoalCard key={h.id} habit={h} />)}
+      {goals.map(h => <GoalCard key={h.id} habit={h} isReadOnly={isReadOnly} />)}
     </Accordion>
   )
 }

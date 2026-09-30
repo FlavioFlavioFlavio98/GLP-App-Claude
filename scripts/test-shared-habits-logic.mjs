@@ -28,6 +28,7 @@ await db.doc('users/flavio').set({
     { id: 'f1', name: 'Cold Shower', reward: 3, penalty: 1, why: 'MOTIVO-PRIVATO', voiceNotes: [{ text: 'NOTA-PRIVATA' }] },
     { id: 'f2', name: 'Workout', reward: 4, rewardMin: 2, penalty: 2, isMulti: true },
     { id: 'f3', name: 'Sonno', numericType: 'x', numericConfig: { threshold: 7 } },
+    { id: 'f4', name: 'Leggere 10 libri', type: 'goal', goalConfig: { targetValue: 10, rewardOnComplete: 30, currentValue: 2 } },
   ],
   tags: [{ id: 't1', name: 'Salute' }], dailyLogs: {}, profile: { avatar: '🔥' },
   rewards: [{ id: 'fr1', name: 'Film', cost: 10 }],
@@ -50,7 +51,7 @@ await check('Il mirror non contiene dati privati ed espone le abitudini', async 
   const m = (await db.doc('sharedHabits/flavio').get()).data()
   const json = JSON.stringify(m)
   assert.ok(!json.includes('PRIVAT'))
-  assert.equal(m.habits.length, 3)
+  assert.equal(m.habits.length, 4, 'include anche l\'obiettivo (goal), condiviso dal 30/9/2026')
 })
 
 // ── setPartnerHabitStatus (stesso corpo della callable in index.js) ──
@@ -166,6 +167,44 @@ await check('Simona inserisce un valore numerico per Flavio (rimosso vincolo sol
 })
 await check('Valore numerico: rifiuta abitudine non numerica e obiettivo', async () => {
   await assert.rejects(runSetPartnerNumericValue('simona', 'f1', today, '1'), /not-numeric/)
+})
+
+// ── setPartnerGoalValue (stesso corpo della callable in index.js) ──
+async function runSetPartnerGoalValue(caller, habitId, value) {
+  const target = shared.PARTNER_OF[caller]
+  return db.runTransaction(async tx => {
+    const ref = db.doc(`users/${target}`)
+    const snap = await tx.get(ref)
+    const data = snap.data()
+    const r = shared.applyGoalValue(data, habitId, value, today)
+    if (r.error) { const e = new Error(r.error); e.code = 'failed-precondition'; throw e }
+    tx.update(ref, { habits: r.habits })
+    return r
+  })
+}
+
+await check('Simona aggiorna l\'obiettivo di Flavio (rimosso vincolo solo-proprietario) → transazione reale', async () => {
+  const r = await runSetPartnerGoalValue('simona', 'f4', 5)
+  assert.equal(r.justCompleted, false)
+  const f = (await db.doc('users/flavio').get()).data()
+  assert.equal(f.habits.find(h => h.id === 'f4').goalConfig.currentValue, 5)
+})
+await check('Simona completa l\'obiettivo di Flavio raggiungendo il target → bonus e completedAt impostati', async () => {
+  const r = await runSetPartnerGoalValue('simona', 'f4', 10)
+  assert.equal(r.justCompleted, true)
+  assert.equal(r.rewardOnComplete, 30)
+  const f = (await db.doc('users/flavio').get()).data()
+  assert.equal(f.habits.find(h => h.id === 'f4').goalConfig.completedAt, today)
+})
+await check('Il mirror include l\'obiettivo di Flavio dopo la scrittura', async () => {
+  await runMirror()
+  const m = (await db.doc('sharedHabits/flavio').get()).data()
+  const g = m.habits.find(h => h.id === 'f4')
+  assert.ok(g, 'l\'obiettivo è nel mirror')
+  assert.equal(g.goalConfig.currentValue, 10)
+})
+await check('Obiettivo: rifiuta abitudine non-obiettivo', async () => {
+  await assert.rejects(runSetPartnerGoalValue('simona', 'f1', 1), /not-goal/)
 })
 
 console.log(`\n${results.filter(Boolean).length}/${results.length} controlli superati`)

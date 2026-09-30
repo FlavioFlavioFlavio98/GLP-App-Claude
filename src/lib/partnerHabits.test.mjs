@@ -94,4 +94,25 @@ for (const d of numericDays) {
 }
 console.log(`✔ client e server identici su ${p} scenari (valori numerici)`)
 
+// Stesso confronto per l'aggiornamento degli obiettivi (goal) — non legato a
+// un giorno, ma allo stato dell'abitudine stessa.
+const goalVariants = [
+  habits, // 'g' senza goalConfig
+  habits.map(h => h.id === 'g' ? { ...h, goalConfig: { targetValue: 10, rewardOnComplete: 15, currentValue: 4 } } : h),
+  habits.map(h => h.id === 'g' ? { ...h, goalConfig: { targetValue: 10, rewardOnComplete: 15, currentValue: 4, completedAt: '2026-09-01' } } : h),
+]
+let q = 0
+for (const hs of goalVariants) {
+  for (const h of hs.map(x => x.id || 'Senzaid').concat(['nope'])) {
+    for (const value of [5, 10, 0]) {
+      const data = { habits: JSON.parse(JSON.stringify(hs)) }
+      const c = client.applyGoalValue(data, h, value, '2026-09-21')
+      const s = server.applyGoalValue(data, h, value, '2026-09-21')
+      assert.deepEqual(c, s, `divergenza client/server: habit=${h} value=${value}`)
+      q++
+    }
+  }
+}
+console.log(`✔ client e server identici su ${q} scenari (obiettivi)`)
+
 rmSync(tmp, { recursive: true, force: true })

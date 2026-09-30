@@ -11,7 +11,7 @@ function baseData() {
       { id: 'h1', name: 'Cold Shower', reward: 3, penalty: 1, voiceNotes: [{ id: 'n1', text: 'privato' }], why: 'motivo privato', notes: ['x'] },
       { id: 'h2', name: 'Workout', reward: 4, rewardMin: 2, penalty: 2, isMulti: true, changes: [{ date: '2026-01-01', reward: 4, rewardMin: 2, penalty: 2, isMulti: true }] },
       { id: 'h3', name: 'Sonno', reward: 0, numericType: 'x', numericConfig: { threshold: 7 } },
-      { id: 'g1', name: 'Obiettivo', type: 'goal', goalConfig: { secret: 1 } },
+      { id: 'g1', name: 'Obiettivo', type: 'goal', goalConfig: { targetValue: 10, rewardOnComplete: 20, currentValue: 3 } },
     ],
     tags: [{ id: 't1', name: 'Salute', color: '#fff' }],
     rewards: [
@@ -29,13 +29,14 @@ function baseData() {
   }
 }
 
-test('mirror: tiene abitudini/tag/stato/premi (incluso Negozio Premi) e toglie tutto ciò che è privato', () => {
+test('mirror: tiene abitudini (inclusi gli obiettivi)/tag/stato/premi e toglie tutto ciò che è privato', () => {
   const m = s.buildSharedHabits(baseData(), TODAY)
   const json = JSON.stringify(m)
-  for (const secret of ['privato', 'PRIVATO', 'motivo', 'nota privata', 'segreto', 'goalConfig', 'mood', 'readingEarned', 'tasks', 'psychSessions']) {
+  for (const secret of ['privato', 'PRIVATO', 'motivo', 'nota privata', 'segreto', 'mood', 'readingEarned', 'tasks', 'psychSessions']) {
     assert.ok(!json.includes(secret), `il mirror non deve contenere "${secret}"`)
   }
-  assert.equal(m.habits.length, 3, 'gli obiettivi (goal) sono esclusi')
+  assert.equal(m.habits.length, 4, 'gli obiettivi sono ora inclusi (aggiornabili dal partner dal 30/9/2026)')
+  assert.ok(m.habits.some(h => h.id === 'g1' && h.type === 'goal'), 'l\'obiettivo è nel mirror')
   assert.deepEqual(m.profile, { avatar: '🔥' })
   assert.deepEqual(Object.keys(m.dailyLogs).sort(), ['2026-09-19', '2026-09-20'])
   assert.deepEqual(m.dailyLogs['2026-09-19'], { habits: ['h2'] }, 'array legacy normalizzato')
@@ -117,6 +118,39 @@ test('valore numerico: rifiuta abitudine sconosciuta, obiettivo, o non numerica'
   assert.equal(s.applyNumericValue(d, 'nope', TODAY, '1').error, 'habit-not-found')
   assert.equal(s.applyNumericValue(d, 'g1', TODAY, '1').error, 'not-allowed')
   assert.equal(s.applyNumericValue(d, 'h1', TODAY, '1').error, 'not-numeric')
+})
+
+test('obiettivo: aggiorna il valore, non completa se sotto al target', () => {
+  const d = baseData()
+  const r = s.applyGoalValue(d, 'g1', 7, TODAY)
+  const g = r.habits.find(h => h.id === 'g1')
+  assert.equal(g.goalConfig.currentValue, 7)
+  assert.equal(g.goalConfig.completedAt, undefined)
+  assert.equal(r.justCompleted, false)
+})
+
+test('obiettivo: raggiunto il target lo marca completato con la data passata dal chiamante', () => {
+  const d = baseData()
+  const r = s.applyGoalValue(d, 'g1', 10, TODAY)
+  const g = r.habits.find(h => h.id === 'g1')
+  assert.equal(g.goalConfig.completedAt, TODAY)
+  assert.equal(r.justCompleted, true)
+  assert.equal(r.rewardOnComplete, 20)
+})
+
+test('obiettivo: già completato non si ricompleta (niente doppio bonus)', () => {
+  const d = baseData()
+  d.habits.find(h => h.id === 'g1').goalConfig.completedAt = '2026-09-01'
+  const r = s.applyGoalValue(d, 'g1', 10, TODAY)
+  assert.equal(r.justCompleted, false, 'già completato, non è un nuovo completamento')
+  const g = r.habits.find(h => h.id === 'g1')
+  assert.equal(g.goalConfig.completedAt, '2026-09-01', 'data di completamento originale invariata')
+})
+
+test('obiettivo: rifiuta abitudine sconosciuta o non-obiettivo', () => {
+  const d = baseData()
+  assert.equal(s.applyGoalValue(d, 'nope', 1, TODAY).error, 'habit-not-found')
+  assert.equal(s.applyGoalValue(d, 'h1', 1, TODAY).error, 'not-goal')
 })
 
 test('acquisto premio: costo sempre letto dal documento (mai dal chiamante), aggiunto ai purchases del giorno', () => {

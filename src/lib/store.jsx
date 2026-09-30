@@ -377,7 +377,6 @@ export function AppProvider({ children }) {
         const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'setPartnerHabitStatus')
         await fn({ habitId, date: viewDate, action })
         if (result.actionType === 'done') {
-          import('canvas-confetti').then(m => m.default({ particleCount: 60, spread: 60, origin: { y: 0.7 }, colors: [partnerId === 'flavio' ? '#ffca28' : '#d05ce3'] }))
           actions.showToast('Completata!', '✅')
         } else if (result.actionType === 'failed') {
           actions.showToast('Segnata come fallita', '❌')
@@ -510,7 +509,6 @@ export function AppProvider({ children }) {
       }
 
       if (actionType === 'done') {
-        import('canvas-confetti').then(m => m.default({ particleCount: 60, spread: 60, origin: { y: 0.7 }, colors: [authUserId === 'flavio' ? '#ffca28' : '#d05ce3'] }))
         actions.showToast('Completata!', '✅')
       } else if (actionType === 'failed') {
         actions.showToast('Segnata come fallita', '❌')

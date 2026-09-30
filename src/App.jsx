@@ -93,6 +93,57 @@ function useFocusMode(viewDate) {
   return [focusMode && viewDate === today, toggle]
 }
 
+// In focus/minimal mode un'abitudine completata sparisce dalla lista subito,
+// facendo scorrere tutte le altre verso l'alto — con più tap ravvicinati (fine
+// giornata, completamento in blocco) il tap successivo cade nel posto
+// sbagliato perché la lista si è già spostata (segnalato da Flavio, 30/9/2026).
+// Questo hook trattiene ogni abitudine appena completata nella lista per
+// GRACE_MS prima di lasciarla sparire, così la posizione degli altri item
+// resta stabile durante una raffica di tap.
+const GRACE_MS = 650
+function useCompletionGrace(globalData, viewDate) {
+  const [graceIds, setGraceIds] = useState(() => new Set())
+  const prevRef = useRef(new Set())
+  const timersRef = useRef(new Map())
+
+  useEffect(() => {
+    if (!globalData) return
+    const entry = parseEntry(globalData.dailyLogs?.[viewDate])
+    const completeIds = new Set()
+    ;(globalData.habits || []).forEach(h => {
+      if (h.type === 'goal') return
+      const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
+      if (!entry.habits.includes(sid)) return
+      const isMulti = getItemValueAtDate(h, 'isMulti', viewDate)
+      if (isMulti && (entry.habitLevels[sid] || 'max') !== 'max') return
+      completeIds.add(sid)
+    })
+
+    const prev = prevRef.current
+    const added = [...completeIds].filter(id => !prev.has(id))
+    if (added.length > 0) {
+      setGraceIds(g => {
+        const next = new Set(g)
+        added.forEach(id => next.add(id))
+        return next
+      })
+      added.forEach(id => {
+        clearTimeout(timersRef.current.get(id))
+        const t = setTimeout(() => {
+          setGraceIds(g => { const next = new Set(g); next.delete(id); return next })
+          timersRef.current.delete(id)
+        }, GRACE_MS)
+        timersRef.current.set(id, t)
+      })
+    }
+    prevRef.current = completeIds
+  }, [globalData, viewDate])
+
+  useEffect(() => () => { timersRef.current.forEach(t => clearTimeout(t)); timersRef.current.clear() }, [])
+
+  return graceIds
+}
+
 export default function App() {
   const { state, actions } = useApp()
   const { authStatus, authUserId, viewUserId, currentUser, globalData, allUsersData, viewDate, theme, userColors, density, minimalMode, wakeLockEnabled, modal } = state
@@ -100,6 +151,7 @@ export default function App() {
   const isNative = window.Capacitor?.isNativePlatform?.() || false
 
   const [focusMode, toggleFocusMode] = useFocusMode(viewDate)
+  const completionGraceIds = useCompletionGrace(globalData, viewDate)
   // Zen mode del Diario: mentre si scrive, nasconde header/date-nav/bottom-nav
   // per togliere ogni distrazione dalla pagina — richiesta esplicita di
   // Flavio. Diverso da focusMode qui sopra (quello filtra le abitudini già
@@ -329,8 +381,15 @@ export default function App() {
     return h.timeSlot === timeSlotFilter
   }
 
-  const filteredRegular = ((focusMode || minimalMode) ? sortedRegular.filter(h => !isFullyComplete(h)) : sortedRegular).filter(matchesTimeSlot)
-  const filteredBonus   = (focusMode ? sortedBonus.filter(h => !isFullyComplete(h)) : sortedBonus).filter(matchesTimeSlot)
+  // isFullyComplete(h) || in "grazia" (appena completata, non ancora sparita
+  // dalla lista) — vedi useCompletionGrace sopra.
+  function shouldHideWhenDone(h) {
+    if (!isFullyComplete(h)) return false
+    const sid = h.id || h.name.replace(/[^a-zA-Z0-9]/g, '')
+    return !completionGraceIds.has(sid)
+  }
+  const filteredRegular = ((focusMode || minimalMode) ? sortedRegular.filter(h => !shouldHideWhenDone(h)) : sortedRegular).filter(matchesTimeSlot)
+  const filteredBonus   = (focusMode ? sortedBonus.filter(h => !shouldHideWhenDone(h)) : sortedBonus).filter(matchesTimeSlot)
 
   const pendingCount = isToday
     ? regular.filter(h => {

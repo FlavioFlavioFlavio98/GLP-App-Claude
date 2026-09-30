@@ -29,6 +29,17 @@ import { computeSocialPts } from './mindStats'
 import { countWords } from './diaryMarkdown'
 import { PARTNER_OF, USER_LABEL, applyHabitAction, patchUserData, applyRewardPurchase, patchRewardPurchase, applyNumericValue, patchNumericValue, applyGoalValue, patchGoalValue } from './partnerHabits'
 
+// Scritture proprie in corso per utente (flavio/simona). Mentre è >0 per un
+// utente, il listener onSnapshot di QUEL documento ignora gli aggiornamenti
+// dal server: con tap rapidi consecutivi (più abitudini completate di fila)
+// uno snapshot intermedio — che riflette solo la PRIMA scrittura commitata,
+// non ancora la seconda/terza già in volo — sovrascriverebbe per un istante
+// lo stato ottimistico più recente, facendo "sfarfallare" la spunta
+// (verde -> grigia -> verde). Segnalato da Flavio, 30/9/2026.
+const pendingWrites = { flavio: 0, simona: 0 }
+function beginWrite(userId) { pendingWrites[userId] = (pendingWrites[userId] || 0) + 1 }
+function endWrite(userId) { pendingWrites[userId] = Math.max(0, (pendingWrites[userId] || 0) - 1) }
+
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
 
@@ -203,6 +214,7 @@ export function AppProvider({ children }) {
         const unsubs = sources.map(({ user: u, col }) =>
           onSnapshot(doc(db, col, u), snap => {
             if (snap.exists()) {
+              if (pendingWrites[u] > 0) return
               dispatch({ type: 'SET_USER_DATA', user: u, data: snap.data() })
             } else if (col === 'users' && u === userId && !snap.metadata.fromCache && !ensuredUsers.has(u)) {
               // Si crea SOLO il proprio documento (mai quello dell'altro).
@@ -372,6 +384,7 @@ export function AppProvider({ children }) {
       // Aggiornamento ottimistico: il tap si vede subito, senza aspettare il
       // giro di rete e l'eventuale cold start della function.
       dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: patchUserData(before, viewDate, result) })
+      beginWrite(partnerId)
       try {
         const { getFunctions, httpsCallable } = await import('firebase/functions')
         const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'setPartnerHabitStatus')
@@ -385,6 +398,8 @@ export function AppProvider({ children }) {
         console.error('setPartnerHabitStatus failed:', err)
         dispatch({ type: 'PATCH_USER_DATA', user: partnerId, data: before })
         actions.showToast('Errore nel salvataggio', '❌')
+      } finally {
+        endWrite(partnerId)
       }
     },
 
@@ -483,6 +498,7 @@ export function AppProvider({ children }) {
 
       let finalEntry, finalHabitsArr, actionType = 'neutral'
 
+      beginWrite(authUserId)
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
@@ -506,6 +522,8 @@ export function AppProvider({ children }) {
         dispatch({ type: 'PATCH_USER_DATA', user: authUserId, data: globalData })
         actions.showToast('Errore nel salvataggio', '❌')
         return
+      } finally {
+        endWrite(authUserId)
       }
 
       if (actionType === 'done') {

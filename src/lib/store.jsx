@@ -37,8 +37,20 @@ import { PARTNER_OF, USER_LABEL, applyHabitAction, patchUserData, applyRewardPur
 // lo stato ottimistico più recente, facendo "sfarfallare" la spunta
 // (verde -> grigia -> verde). Segnalato da Flavio, 30/9/2026.
 const pendingWrites = { flavio: 0, simona: 0 }
-function beginWrite(userId) { pendingWrites[userId] = (pendingWrites[userId] || 0) + 1 }
+const pendingSince = { flavio: 0, simona: 0 }
+function beginWrite(userId) {
+  if (!pendingWrites[userId]) pendingSince[userId] = Date.now()
+  pendingWrites[userId] = (pendingWrites[userId] || 0) + 1
+}
 function endWrite(userId) { pendingWrites[userId] = Math.max(0, (pendingWrites[userId] || 0) - 1) }
+// Rete di sicurezza: se per qualunque motivo una scrittura non si chiude (rete
+// appesa, errore non gestito), il blocco non deve mai tenere ferma la UI per
+// più di qualche secondo — altrimenti nessuno snapshot verrebbe più applicato.
+function isWriting(userId) {
+  if (!pendingWrites[userId]) return false
+  if (Date.now() - pendingSince[userId] > 8000) { pendingWrites[userId] = 0; return false }
+  return true
+}
 
 const AppContext = createContext(null)
 const DispatchContext = createContext(null)
@@ -104,6 +116,24 @@ function reducer(state, action) {
     // sovrascrive con lo stesso contenuto appena la Cloud Function ha scritto.
     case 'PATCH_USER_DATA': {
       const dataWithScore = { ...action.data, score: calculateTotalScore(action.data), habitCoins: calculateTotalHabitCoins(action.data) }
+      return {
+        ...state,
+        allUsersData: { ...state.allUsersData, [action.user]: dataWithScore },
+        globalData: action.user === state.currentUser ? dataWithScore : state.globalData,
+      }
+    }
+    // Aggiornamento ottimistico di singoli campi (es. tasks) sullo stato
+    // CORRENTE (non su una copia vecchia catturata prima di un await): la UI
+    // si aggiorna subito dopo una scrittura riuscita, senza dipendere dall'eco
+    // dello snapshot di Firestore (che può tardare o fermarsi, ad es. con più
+    // schede aperte e persistenza multi-scheda — task completata ma lista
+    // ferma finché non si ricarica, segnalato da Flavio il 2/10/2026).
+    case 'PATCH_USER_FIELDS': {
+      const cur = state.allUsersData[action.user]
+      if (!cur) return state
+      const fields = action.updater ? action.updater(cur) : action.fields
+      const merged = { ...cur, ...fields }
+      const dataWithScore = { ...merged, score: calculateTotalScore(merged), habitCoins: calculateTotalHabitCoins(merged) }
       return {
         ...state,
         allUsersData: { ...state.allUsersData, [action.user]: dataWithScore },
@@ -214,7 +244,7 @@ export function AppProvider({ children }) {
         const unsubs = sources.map(({ user: u, col }) =>
           onSnapshot(doc(db, col, u), snap => {
             if (snap.exists()) {
-              if (pendingWrites[u] > 0) return
+              if (isWriting(u)) return
               dispatch({ type: 'SET_USER_DATA', user: u, data: snap.data() })
             } else if (col === 'users' && u === userId && !snap.metadata.fromCache && !ensuredUsers.has(u)) {
               // Si crea SOLO il proprio documento (mai quello dell'altro).
@@ -2357,6 +2387,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         throw err
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, updater: cur => ({ tasks: [...(cur.tasks || []).filter(t => t.id !== newTask.id), newTask] }) })
       actions.showToast(isPast ? 'Task creata già scaduta ⚠️' : 'Task creata!', '📋')
     },
 
@@ -2386,6 +2417,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         throw err
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, updater: cur => ({ tasks: [...(cur.tasks || []).filter(t => t.id !== newTask.id), newTask] }) })
       actions.vibrate('light')
       actions.showToast(`Task già fatta registrata! +${rewardNum}pt`, '✅')
     },
@@ -2401,6 +2433,7 @@ export function AppProvider({ children }) {
       const { authUserId } = state
       const todayStr = toDateString(new Date())
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         // Transazione: legge SEMPRE lo stato fresco dal server invece che da
         // globalData locale (che dopo una disconnessione può essere non
@@ -2427,6 +2460,7 @@ export function AppProvider({ children }) {
             }
             return merged
           })
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
@@ -2434,6 +2468,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         throw err
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
       actions.showToast('Task aggiornata!', '✏️')
     },
 
@@ -2444,6 +2479,7 @@ export function AppProvider({ children }) {
     async _setTaskDeadline(task, newDeadline) {
       const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(ref)
         const freshData = snap.data() || {}
@@ -2451,8 +2487,10 @@ export function AppProvider({ children }) {
           if (t.id !== task.id) return t
           return { ...t, status: 'active', expiredAt: null, deadline: newDeadline, penaltyApplied: false }
         })
+        newTasks = tasks
         transaction.update(ref, { tasks })
       })
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
     },
 
     // Tempo cronometrato su una task (timer avviato/fermato dalla Tab Task)
@@ -2465,6 +2503,7 @@ export function AppProvider({ children }) {
       const numSeconds = parseInt(seconds) || 0
       if (numSeconds <= 0) return
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
@@ -2472,12 +2511,15 @@ export function AppProvider({ children }) {
           const tasks = (freshData.tasks || []).map(t =>
             t.id === taskId ? { ...t, timeSpentSec: (t.timeSpentSec || 0) + numSeconds } : t
           )
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
         console.error('addTaskTimeSpent failed:', err)
         actions.showToast('Tempo non salvato (errore di rete)', '⚠️')
+        return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
     },
 
     // Scorciatoia rapida dal menu ⋮ per posticipare — evita di dover aprire
@@ -2515,6 +2557,7 @@ export function AppProvider({ children }) {
       if (expiredCount === 0) return
       if (!window.confirm(`Rimandare a oggi tutte le ${expiredCount} task scadute?`)) return
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
@@ -2523,6 +2566,7 @@ export function AppProvider({ children }) {
             if (t.status !== 'expired') return t
             return { ...t, status: 'active', deadline: todayStr, expiredAt: null, penaltyApplied: false }
           })
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
@@ -2530,6 +2574,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
       actions.showToast(`${expiredCount} task rimandate a oggi`, '⏰')
     },
 
@@ -2570,6 +2615,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks } })
       actions.vibrate('light')
       if (template && template.active !== false) {
         const nextDate = addDays(toDateString(new Date()), template.intervalDays)
@@ -2595,6 +2641,7 @@ export function AppProvider({ children }) {
       if (!window.confirm(`Completata per errore? Ripristina "${task.title}" tra le task attive`)) return
       const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
@@ -2610,6 +2657,7 @@ export function AppProvider({ children }) {
           if (task.recurringId) {
             tasks = tasks.filter(t => !(t.recurringId === task.recurringId && t.id !== task.id && t.status === 'active'))
           }
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
@@ -2617,6 +2665,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
       actions.showToast('Completamento annullato', '↩️')
     },
 
@@ -2625,11 +2674,13 @@ export function AppProvider({ children }) {
       if (!window.confirm('Eliminare definitivamente questa task?')) return
       const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
           const freshData = snap.data() || {}
           const tasks = (freshData.tasks || []).filter(t => t.id !== taskId)
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
@@ -2637,6 +2688,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
       actions.showToast('Task eliminata', '🗑️')
     },
 
@@ -2645,11 +2697,13 @@ export function AppProvider({ children }) {
       if (!window.confirm('Eliminare questa task attiva?')) return
       const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
           const freshData = snap.data() || {}
           const tasks = (freshData.tasks || []).filter(t => t.id !== taskId)
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
@@ -2657,6 +2711,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
       actions.showToast('Task eliminata', '🗑️')
     },
 
@@ -2671,11 +2726,13 @@ export function AppProvider({ children }) {
         : 'Eliminare definitivamente questa task?'
       if (!window.confirm(confirmMsg)) return
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
           const freshData = snap.data() || {}
           const tasks = (freshData.tasks || []).filter(t => t.id !== taskId)
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
@@ -2683,6 +2740,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
       actions.showToast('Task eliminata', '🗑️')
     },
 
@@ -2818,6 +2876,7 @@ export function AppProvider({ children }) {
       const template = actions._getRecurringTemplate(task)
       const now = new Date().toISOString()
       const ref = doc(db, 'users', authUserId)
+      let newTasks
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
@@ -2828,6 +2887,7 @@ export function AppProvider({ children }) {
               : t
           )
           tasks = actions._spawnNextRecurringInstance(task, tasks, freshData.recurringTasks || [])
+          newTasks = tasks
           transaction.update(ref, { tasks })
         })
       } catch (err) {
@@ -2835,6 +2895,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { tasks: newTasks } })
       actions.vibrate('light')
       if (template && template.active !== false) {
         const nextDate = addDays(toDateString(new Date()), template.intervalDays)
@@ -2906,6 +2967,14 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         throw err
       }
+      dispatch({
+        type: 'PATCH_USER_FIELDS',
+        user: authUserId,
+        updater: cur => ({
+          recurringTasks: [...(cur.recurringTasks || []).filter(r => r.id !== template.id), template],
+          tasks: [...(cur.tasks || []).filter(t => t.id !== firstInstance.id), firstInstance],
+        }),
+      })
       actions.showToast('Task ricorrente creata!', '🔁')
     },
 
@@ -2913,6 +2982,7 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
+      let newRecurring
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
@@ -2920,6 +2990,7 @@ export function AppProvider({ children }) {
           const recurringTasks = (freshData.recurringTasks || []).map(r =>
             r.id === id ? { ...r, ...updates } : r
           )
+          newRecurring = recurringTasks
           transaction.update(ref, { recurringTasks })
         })
       } catch (err) {
@@ -2927,6 +2998,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { recurringTasks: newRecurring } })
       actions.showToast('Ricorrenza aggiornata', '✏️')
     },
 
@@ -2934,6 +3006,7 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
+      let newRecurring
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
@@ -2941,6 +3014,7 @@ export function AppProvider({ children }) {
           const recurringTasks = (freshData.recurringTasks || []).map(r =>
             r.id === id ? { ...r, active } : r
           )
+          newRecurring = recurringTasks
           transaction.update(ref, { recurringTasks })
         })
       } catch (err) {
@@ -2948,6 +3022,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { recurringTasks: newRecurring } })
       actions.showToast(active ? 'Ricorrenza riattivata' : 'Ricorrenza in pausa', active ? '▶️' : '⏸️')
     },
 
@@ -2955,11 +3030,13 @@ export function AppProvider({ children }) {
       if (isReadOnly()) return
       const { authUserId } = state
       const ref = doc(db, 'users', authUserId)
+      let newRecurring
       try {
         await runTransaction(db, async (transaction) => {
           const snap = await transaction.get(ref)
           const freshData = snap.data() || {}
           const recurringTasks = (freshData.recurringTasks || []).filter(r => r.id !== id)
+          newRecurring = recurringTasks
           transaction.update(ref, { recurringTasks })
         })
       } catch (err) {
@@ -2967,6 +3044,7 @@ export function AppProvider({ children }) {
         actions.showToast('Errore nel salvataggio — riprova', '❌')
         return
       }
+      dispatch({ type: 'PATCH_USER_FIELDS', user: authUserId, fields: { recurringTasks: newRecurring } })
       actions.showToast('Ricorrenza eliminata', '🗑️')
     },
 

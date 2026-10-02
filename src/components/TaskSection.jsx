@@ -216,9 +216,8 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
   const pLabel = PRIORITY_LABELS[task.priority] || 'MEDIA'
   const deadline = formatDeadline(task.deadline)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [postponeOpen, setPostponeOpen] = useState(false)
 
-  function closeMenus() { setMenuOpen(false); setPostponeOpen(false) }
+  function closeMenus() { setMenuOpen(false) }
 
   const longPressTimer = useRef(null)
   const didLong = useRef(false)
@@ -326,7 +325,7 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
           in sé. */}
       {(isActive || isExpired) && (
         <div style={{ display: 'flex', flexDirection: 'row', gap: 4, flexShrink: 0, alignItems: 'center' }}>
-          <button
+          {!menuOpen && <button
             onClick={e => { e.stopPropagation(); onComplete() }}
             onPointerDown={e => e.stopPropagation()}
             style={{
@@ -337,8 +336,8 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
               justifyContent: 'center', fontSize: '0.85em', flexShrink: 0,
             }}
             title={isExpired ? 'Segna come completata (nessun punto)' : 'Completa task'}
-          >✓</button>
-          {isActive && onStartTimer && (
+          >✓</button>}
+          {!menuOpen && isActive && onStartTimer && (
             <button
               onClick={e => { e.stopPropagation(); onStartTimer() }}
               onPointerDown={e => e.stopPropagation()}
@@ -353,46 +352,28 @@ function TaskItem({ task, variant, recurring, onComplete, onEdit, onDelete, onPo
               title={timerDisabled ? 'Ferma prima il timer sull\'altra task in corso' : 'Avvia timer su questa task'}
             >▶️</button>
           )}
-          {postponeOpen ? (
-            <div style={{ display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+          {menuOpen ? (
+            <div style={{ display: 'flex', gap: 3, alignItems: 'center' }} onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
               <button
                 onClick={closeMenus}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9em', padding: '4px 2px', color: '#666' }}
-                title="Annulla"
+                title="Chiudi"
               >✕</button>
+              {[[1, 'Posticipa a domani'], [2, 'Posticipa a dopodomani'], [3, 'Posticipa di 3 giorni'], [7, 'Posticipa di 7 giorni']].map(([d, t]) => (
+                <button
+                  key={d}
+                  onClick={() => { onPostpone(d); closeMenus() }}
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
+                  title={t}
+                >+{d}gg</button>
+              ))}
               <button
-                onClick={() => { onPostpone(1); closeMenus() }}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
-                title="Posticipa a domani"
-              >+1gg</button>
-              <button
-                onClick={() => { onPostpone(2); closeMenus() }}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
-                title="Posticipa a dopodomani"
-              >+2gg</button>
-              <button
-                onClick={() => { onPostpone(3); closeMenus() }}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, cursor: 'pointer', fontSize: '0.62em', fontWeight: 700, color: 'var(--text)', padding: '4px 5px' }}
-                title="Posticipa di 3 giorni"
-              >+3gg</button>
-            </div>
-          ) : menuOpen ? (
-            <div style={{ display: 'flex', gap: 3 }}>
-              <button
-                onClick={e => { e.stopPropagation(); setMenuOpen(false); setPostponeOpen(true) }}
-                onPointerDown={e => e.stopPropagation()}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95em', padding: 2 }}
-                title="Posticipa"
-              >📅</button>
-              <button
-                onClick={e => { e.stopPropagation(); closeMenus(); onEdit() }}
-                onPointerDown={e => e.stopPropagation()}
+                onClick={() => { closeMenus(); onEdit() }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95em', padding: 2 }}
                 title="Modifica"
               >✏️</button>
               <button
-                onClick={e => { e.stopPropagation(); closeMenus(); onDelete() }}
-                onPointerDown={e => e.stopPropagation()}
+                onClick={() => { closeMenus(); onDelete() }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95em', padding: 2 }}
                 title="Elimina"
               >🗑️</button>

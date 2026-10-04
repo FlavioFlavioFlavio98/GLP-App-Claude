@@ -17,6 +17,7 @@ import { trackThemeUsed } from './lib/achievementLogic'
 import DailySummaryPanel from './components/DailySummaryPanel'
 import { trackAppOpen, trackSectionUsage } from './lib/trackAppOpen'
 import BottomNav from './components/BottomNav'
+import AltroTab from './tabs/AltroTab'
 
 // ── Tab principali: caricate on-demand, solo la tab attiva scarica il suo codice ──
 const OggiTab = lazy(() => import('./tabs/OggiTab'))
@@ -166,12 +167,13 @@ export default function App() {
   const [habitsExpanded, setHabitsExpanded] = useState(() => localStorage.getItem('glp_habits_expanded') === 'true')
   const [bonusExpanded, setBonusExpanded] = useState(() => localStorage.getItem('glp_bonus_expanded') === 'true')
   const [voiceNoteHabit, setVoiceNoteHabit] = useState(null)
-  const [storedTab, setCurrentTab] = useState(() => localStorage.getItem('glp_tab') || 'oggi')
+  const [storedTab, setCurrentTab] = useState(() => localStorage.getItem('glp_tab') || 'abitudini')
   // Simona (fidanzata) ha accesso SOLO alla sezione Abitudini: qualunque tab
   // sia salvata in localStorage, per lei è sempre e solo questa. Le regole
   // Firestore sono il vero controllo di accesso; questo è il filtro di UI.
   const currentTab = authUserId === 'simona' ? 'abitudini' : storedTab
-  const homeTab = authUserId === 'simona' ? 'abitudini' : 'oggi'
+  const homeTab = 'abitudini'
+  const ALTRO_SUBTABS = ['oggi', 'body', 'mente', 'nutrizione', 'pasti', 'stats']
 
   function changeTab(tab) {
     // Lasciando la tab Abitudini si esce dalla vista del partner: tutte le
@@ -213,6 +215,8 @@ export default function App() {
       if (showPsychPage) { setShowPsychPage(false); return true }
       if (modal) { actions.closeModal(); return true }
       if (viewUserId !== authUserId) { actions.restoreOwnUser(); return true }
+      // Dentro una sezione di "Altro" si torna prima al menu, poi alla home.
+      if (ALTRO_SUBTABS.includes(currentTab)) { changeTab('altro'); return true }
       if (currentTab !== homeTab) { changeTab(homeTab); return true }
       return false
     }
@@ -459,7 +463,7 @@ export default function App() {
       {/* ── CARD GUADAGNI/COSTI/NETTO (comprimibile) — non in Workout/Benessere/
           Mente: l'economia generale di task/abitudini non è rilevante lì, dove
           ogni tab mostra già le proprie statistiche specifiche ── */}
-      {!['workout', 'body', 'mente', 'nutrizione', 'pasti', 'aree', 'diario'].includes(currentTab) && (
+      {!['workout', 'body', 'mente', 'nutrizione', 'pasti', 'aree', 'diario', 'altro'].includes(currentTab) && (
         <DailySummaryPanel
           authUserId={authUserId}
           globalData={globalData}
@@ -493,6 +497,9 @@ export default function App() {
             />
           </Suspense>
         )}
+
+        {/* ───────── TAB: ALTRO (menu delle sezioni secondarie) ───────── */}
+        {currentTab === 'altro' && <AltroTab onOpen={changeTab} />}
 
         {/* ───────── TAB: ABITUDINI ───────── */}
         {currentTab === 'abitudini' && (

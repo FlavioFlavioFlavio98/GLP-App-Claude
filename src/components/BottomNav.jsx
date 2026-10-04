@@ -1,16 +1,15 @@
 const TABS = [
-  { id: 'oggi',      icon: 'today',          label: 'Oggi' },
   { id: 'abitudini', icon: 'repeat',          label: 'Abitudini' },
   { id: 'task',      icon: 'checklist',       label: 'Task' },
   { id: 'workout',   icon: 'fitness_center',  label: 'Workout' },
-  { id: 'body',      icon: 'spa',             label: 'Benessere' },
-  { id: 'mente',     icon: 'psychology',      label: 'Mente' },
-  { id: 'nutrizione',icon: 'restaurant',      label: 'Nutrizione' },
-  { id: 'pasti',     icon: 'lunch_dining',    label: 'Pasti' },
-  { id: 'stats',     icon: 'bar_chart',       label: 'Stats' },
-  { id: 'aree',      icon: 'diversity_3',     label: 'Aree' },
   { id: 'diario',    icon: 'auto_stories',    label: 'Diario' },
+  { id: 'aree',      icon: 'diversity_3',     label: 'Aree' },
+  { id: 'altro',     icon: 'apps',            label: 'Altro' },
 ]
+
+// Tab raggiungibili solo dal menu "Altro": mentre si è in una di queste la
+// voce "Altro" resta evidenziata.
+const ALTRO_TABS = ['altro', 'oggi', 'body', 'mente', 'nutrizione', 'pasti', 'stats']
 
 export default function BottomNav({ currentTab, onTabChange }) {
   return (
@@ -22,7 +21,7 @@ export default function BottomNav({ currentTab, onTabChange }) {
       display: 'flex',
     }}>
       {TABS.map(tab => {
-        const active = currentTab === tab.id
+        const active = tab.id === 'altro' ? ALTRO_TABS.includes(currentTab) : currentTab === tab.id
         return (
           <button
             key={tab.id}

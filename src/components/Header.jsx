@@ -87,11 +87,6 @@ export default function Header({ isReadOnly }) {
               <span className="material-icons-round" style={{ fontSize: 20 }}>search</span>
             </button>
           )}
-          {authUserId === 'flavio' && !isReadOnly && (
-            <button className="icon-btn" onClick={() => actions.openModal('insights')} title="Insight">
-              <span style={{ fontSize: 18 }}>💡</span>
-            </button>
-          )}
           <button className="icon-btn" onClick={() => actions.openModal('settings')}>
             <span className="material-icons-round" style={{ fontSize: 20 }}>settings</span>
           </button>

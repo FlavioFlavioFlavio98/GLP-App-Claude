@@ -11,6 +11,7 @@ const anthropicKey = defineSecret('ANTHROPIC_KEY')
 const geminiKey = defineSecret('GEMINI_KEY')
 const resendKey = defineSecret('RESEND_KEY')
 const { buildDigest } = require('./dailyDigest')
+const { buildBackupFile } = require('./backupExport')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
 const shared = require('./sharedHabits')
 const ALLOWED_EMAIL = 'flavio.rossi94@gmail.com'
@@ -203,6 +204,19 @@ exports.expireTasks = onSchedule(
 // all'email con cui è stato creato l'account (= quella di Flavio).
 // Se non c'è nessuna task la mail non parte (il test dalle Impostazioni invece
 // parte sempre, così si può verificare che tutto funzioni).
+async function sendResendEmail({ subject, html, text, attachments }) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${resendKey.value().trim()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: 'GLP App <onboarding@resend.dev>', to: [ALLOWED_EMAIL], subject, html, text, attachments }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`[resend] HTTP ${res.status}: ${body}`)
+    throw new Error(`Resend HTTP ${res.status}: ${body}`)
+  }
+}
+
 async function sendTaskDigestEmail({ test = false } = {}) {
   const snap = await admin.firestore().collection('users').doc('flavio').get()
   if (!snap.exists) return { sent: false, reason: 'no-user' }
@@ -212,22 +226,11 @@ async function sendTaskDigestEmail({ test = false } = {}) {
     console.log('[sendDailyTaskDigest] nessuna task, mail non inviata')
     return { sent: false, reason: 'empty' }
   }
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${resendKey.value().trim()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: 'GLP App <onboarding@resend.dev>',
-      to: [ALLOWED_EMAIL],
-      subject: test ? `[TEST] ${digest.subject}` : digest.subject,
-      html: digest.html,
-      text: digest.text,
-    }),
+  await sendResendEmail({
+    subject: test ? `[TEST] ${digest.subject}` : digest.subject,
+    html: digest.html,
+    text: digest.text,
   })
-  if (!res.ok) {
-    const body = await res.text()
-    console.error(`[sendDailyTaskDigest] Resend HTTP ${res.status}: ${body}`)
-    throw new Error(`Resend HTTP ${res.status}: ${body}`)
-  }
   console.log(`[sendDailyTaskDigest] inviata${test ? ' (test)' : ''}: ${digest.counts.today} oggi, ${digest.counts.overdue} in ritardo`)
   return { sent: true, counts: digest.counts }
 }
@@ -244,6 +247,46 @@ exports.sendTaskDigestTest = onCall(
     authCheck(request)
     try {
       return await sendTaskDigestEmail({ test: true })
+    } catch (err) {
+      throw new HttpsError('internal', err.message || 'Invio non riuscito')
+    }
+  }
+)
+
+// ── sendWeeklyBackupEmail ─────────────────────────────────────────────────────
+// Ogni domenica sera manda via email un file JSON con i dati di Flavio e Simona:
+// copia FUORI da Firebase (nella casella Gmail), indipendente dai backup orari
+// che stanno nello stesso database. Ripristino: scripts/restore-from-backup.mjs.
+async function sendBackupEmail({ test = false } = {}) {
+  const db = admin.firestore()
+  const [f, si] = await Promise.all([db.collection('users').doc('flavio').get(), db.collection('users').doc('simona').get()])
+  if (!f.exists) throw new Error('Documento flavio non trovato: backup non inviato')
+  const now = new Date()
+  const file = buildBackupFile({ flavio: f.data(), simona: si.exists ? si.data() : null }, now)
+  const day = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+  const kb = Math.round(file.bytes / 1024)
+  await sendResendEmail({
+    subject: `${test ? '[TEST] ' : ''}Backup GLP ${day} (${kb} KB)`,
+    text: `In allegato il backup completo dei dati (Flavio + Simona) del ${day}.
+Conservalo: serve per ripristinare i dati se qualcosa va storto.`,
+    html: `<p>In allegato il backup completo dei dati (Flavio + Simona) del <strong>${day}</strong> (${kb} KB).</p><p style="color:#888">Conservalo: serve per ripristinare i dati se qualcosa va storto.</p>`,
+    attachments: [{ filename: `glp-backup-${day}.json`, content: file.base64 }],
+  })
+  console.log(`[sendWeeklyBackupEmail] inviato${test ? ' (test)' : ''}: ${kb} KB, campi ${JSON.stringify(file.summary)}`)
+  return { sent: true, kb, summary: file.summary }
+}
+
+exports.sendWeeklyBackupEmail = onSchedule(
+  { schedule: '0 21 * * 0', timeZone: 'Europe/Rome', region: REGION, secrets: [resendKey] },
+  async () => { await sendBackupEmail() }
+)
+
+exports.sendBackupEmailTest = onCall(
+  { region: REGION, secrets: [resendKey], invoker: 'public' },
+  async (request) => {
+    authCheck(request)
+    try {
+      return await sendBackupEmail({ test: true })
     } catch (err) {
       throw new HttpsError('internal', err.message || 'Invio non riuscito')
     }

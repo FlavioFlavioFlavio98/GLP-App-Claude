@@ -201,6 +201,7 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
 
         {/* EMAIL TASK GIORNALIERA — solo Flavio */}
         {authUserId === 'flavio' && <TaskDigestSection />}
+        {authUserId === 'flavio' && <BackupEmailSection />}
 
         {/* ALLENAMENTO — solo Flavio */}
         {authUserId === 'flavio' && (
@@ -826,6 +827,43 @@ function TaskDigestSection() {
       <button className="btn-backup" onClick={sendTest} disabled={busy}>
         <span className="material-icons-round" style={{ fontSize: 18 }}>forward_to_inbox</span>
         {busy ? 'Invio in corso…' : 'Invia email di prova'}
+      </button>
+      {msg && (
+        <p style={{ fontSize: '0.78em', margin: '8px 0 0', color: msg.ok ? 'var(--success, #4caf50)' : 'var(--danger, #ef5350)' }}>
+          {msg.text}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Backup settimanale via email (domenica 21:00) + pulsante di prova ────────
+function BackupEmailSection() {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  async function sendTest() {
+    setBusy(true); setMsg(null)
+    try {
+      const fn = httpsCallable(getFunctions(getApp(), 'europe-west1'), 'sendBackupEmailTest', { timeout: 60000 })
+      const { data } = await fn()
+      setMsg({ ok: !!data?.sent, text: data?.sent ? `Backup inviato (${data.kb} KB). Controlla la posta, anche lo spam.` : 'Nessuna email inviata.' })
+    } catch (err) {
+      setMsg({ ok: false, text: `Invio non riuscito: ${err?.message || 'errore sconosciuto'}` })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">🛟 Backup via email</div>
+      <p style={{ fontSize: '0.75em', color: '#888', margin: '2px 0 10px' }}>
+        Ogni domenica alle 21:00 ricevi un'email con il file di backup (Flavio + Simona).
+      </p>
+      <button className="btn-backup" onClick={sendTest} disabled={busy}>
+        <span className="material-icons-round" style={{ fontSize: 18 }}>forward_to_inbox</span>
+        {busy ? 'Invio in corso…' : 'Invia backup di prova'}
       </button>
       {msg && (
         <p style={{ fontSize: '0.78em', margin: '8px 0 0', color: msg.ok ? 'var(--success, #4caf50)' : 'var(--danger, #ef5350)' }}>

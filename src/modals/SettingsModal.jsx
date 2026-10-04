@@ -201,6 +201,7 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
 
         {/* EMAIL TASK GIORNALIERA — solo Flavio */}
         {authUserId === 'flavio' && <TaskDigestSection />}
+        {authUserId === 'flavio' && <AreasRecapSection />}
         {authUserId === 'flavio' && <BackupEmailSection />}
 
         {/* ALLENAMENTO — solo Flavio */}
@@ -827,6 +828,43 @@ function TaskDigestSection() {
       <button className="btn-backup" onClick={sendTest} disabled={busy}>
         <span className="material-icons-round" style={{ fontSize: 18 }}>forward_to_inbox</span>
         {busy ? 'Invio in corso…' : 'Invia email di prova'}
+      </button>
+      {msg && (
+        <p style={{ fontSize: '0.78em', margin: '8px 0 0', color: msg.ok ? 'var(--success, #4caf50)' : 'var(--danger, #ef5350)' }}>
+          {msg.text}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Riepilogo settimanale delle Aree (domenica 20:00) + pulsante di prova ────
+function AreasRecapSection() {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  async function sendTest() {
+    setBusy(true); setMsg(null)
+    try {
+      const fn = httpsCallable(getFunctions(getApp(), 'europe-west1'), 'sendAreasRecapTest', { timeout: 30000 })
+      const { data } = await fn()
+      setMsg({ ok: !!data?.sent, text: data?.sent ? `Email inviata (${data.counts.entries} voci). Controlla la posta, anche lo spam.` : 'Nessuna email inviata.' })
+    } catch (err) {
+      setMsg({ ok: false, text: `Invio non riuscito: ${err?.message || 'errore sconosciuto'}` })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">🌱 Riepilogo Aree via email</div>
+      <p style={{ fontSize: '0.75em', color: '#888', margin: '2px 0 10px' }}>
+        Ogni domenica alle 20:00 ricevi, area per area e giorno per giorno, ciò che hai fatto da lunedì a domenica.
+      </p>
+      <button className="btn-backup" onClick={sendTest} disabled={busy}>
+        <span className="material-icons-round" style={{ fontSize: 18 }}>forward_to_inbox</span>
+        {busy ? 'Invio in corso…' : 'Invia riepilogo di prova'}
       </button>
       {msg && (
         <p style={{ fontSize: '0.78em', margin: '8px 0 0', color: msg.ok ? 'var(--success, #4caf50)' : 'var(--danger, #ef5350)' }}>

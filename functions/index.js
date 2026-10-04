@@ -12,6 +12,7 @@ const geminiKey = defineSecret('GEMINI_KEY')
 const resendKey = defineSecret('RESEND_KEY')
 const { buildDigest } = require('./dailyDigest')
 const { buildBackupFile } = require('./backupExport')
+const { buildAreasRecap } = require('./areasRecap')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
 const shared = require('./sharedHabits')
 const ALLOWED_EMAIL = 'flavio.rossi94@gmail.com'
@@ -287,6 +288,40 @@ exports.sendBackupEmailTest = onCall(
     authCheck(request)
     try {
       return await sendBackupEmail({ test: true })
+    } catch (err) {
+      throw new HttpsError('internal', err.message || 'Invio non riuscito')
+    }
+  }
+)
+
+// ── sendWeeklyAreasRecap ──────────────────────────────────────────────────────
+// Ogni domenica sera: riepilogo delle Aree della vita, area per area e giorno
+// per giorno, per i 7 giorni che finiscono oggi (lunedì–domenica).
+async function sendAreasRecapEmail({ test = false } = {}) {
+  const snap = await admin.firestore().collection('users').doc('flavio').get()
+  if (!snap.exists) throw new Error('Documento flavio non trovato')
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+  const recap = buildAreasRecap(snap.data(), today)
+  await sendResendEmail({
+    subject: test ? `[TEST] ${recap.subject}` : recap.subject,
+    html: recap.html,
+    text: recap.text,
+  })
+  console.log(`[sendWeeklyAreasRecap] inviato${test ? ' (test)' : ''}: ${recap.counts.entries} voci, ${recap.counts.areas} aree`)
+  return { sent: true, counts: recap.counts }
+}
+
+exports.sendWeeklyAreasRecap = onSchedule(
+  { schedule: '0 20 * * 0', timeZone: 'Europe/Rome', region: REGION, secrets: [resendKey] },
+  async () => { await sendAreasRecapEmail() }
+)
+
+exports.sendAreasRecapTest = onCall(
+  { region: REGION, secrets: [resendKey], invoker: 'public' },
+  async (request) => {
+    authCheck(request)
+    try {
+      return await sendAreasRecapEmail({ test: true })
     } catch (err) {
       throw new HttpsError('internal', err.message || 'Invio non riuscito')
     }

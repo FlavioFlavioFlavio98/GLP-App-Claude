@@ -62,7 +62,7 @@ function StatCell({ label, value, color }) {
   )
 }
 
-export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalData }) {
+function LifeAreaTools({ actions, authUserId, isReadOnly, globalData }) {
   // Popola le 3 aree di esempio al primo utilizzo — no-op se già presenti,
   // stesso principio di ensureDefaultMealContent in MealsTab.
   useEffect(() => {
@@ -100,12 +100,7 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
   }
 
   return (
-    <div style={{ padding: '16px 16px 90px' }}>
-      <h2 style={{ fontSize: '1.1em', fontWeight: 800, marginBottom: 4 }}>🌱 Aree della vita</h2>
-      <p style={{ fontSize: '0.78em', color: '#888', marginTop: 0, marginBottom: 16 }}>
-        Tempo dedicato a migliorare ciò che conta — non è un'abitudine da ripetere, è crescita che si accumula.
-      </p>
-
+    <div style={{ paddingTop: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
         <StatCell label="Oggi" value={`${stats.todayMinutes}m`} />
         <StatCell label="Settimana" value={`${stats.weekMinutes}m`} />
@@ -295,6 +290,194 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
           >⚙️ Gestisci aree</button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Vista principale: "cosa ho fatto oggi" su ogni area ──────────────────────
+// Un campo di testo per area, sempre visibile: si scrive, Invio, la voce si
+// aggiunge in coda. Niente modali, niente durata, niente punti — pensata per
+// la compilazione serale in pochi tocchi. Timer/sessioni/statistiche restano
+// sotto, in una sezione richiudibile.
+const WEEKDAYS = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab']
+
+function dayLabel(dateStr) {
+  const today = toDateString(new Date())
+  const yesterday = toDateString(new Date(Date.now() - 86400000))
+  if (dateStr === today) return 'Oggi'
+  if (dateStr === yesterday) return 'Ieri'
+  const d = new Date(dateStr + 'T00:00:00')
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`
+}
+
+function shiftDate(dateStr, delta) {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + delta)
+  return toDateString(d)
+}
+
+function AreaEntryInput({ area, date, actions }) {
+  const [text, setText] = useState('')
+  const inputRef = useRef(null)
+
+  async function submit() {
+    const value = text.trim()
+    if (!value) return
+    setText('')
+    inputRef.current?.focus()
+    const ok = await actions.addLifeAreaNote(area.id, value, date)
+    if (ok === false) setText(prev => prev || value)
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+      <input
+        ref={inputRef}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
+        placeholder={date === toDateString(new Date()) ? 'Cosa hai fatto oggi?' : 'Cosa hai fatto quel giorno?'}
+        maxLength={1000}
+        enterKeyHint="send"
+        style={{
+          flex: 1, minWidth: 0, padding: '10px 12px', fontSize: '0.9em',
+          background: 'var(--surface-2, rgba(255,255,255,0.05))', color: 'var(--text)',
+          border: '1px solid var(--card-border)', borderRadius: 10, outline: 'none',
+        }}
+      />
+      <button
+        onClick={submit}
+        disabled={!text.trim()}
+        aria-label={`Aggiungi a ${area.name}`}
+        style={{
+          width: 44, flexShrink: 0, borderRadius: 10, border: 'none', cursor: text.trim() ? 'pointer' : 'default',
+          background: text.trim() ? (area.color || 'var(--theme-color)') : 'var(--surface-2, rgba(255,255,255,0.05))',
+          color: text.trim() ? '#000' : '#555', fontSize: '1.3em', fontWeight: 800,
+        }}
+      >＋</button>
+    </div>
+  )
+}
+
+function AreaEntry({ note, date, actions, isReadOnly }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(note.text)
+
+  async function save() {
+    setEditing(false)
+    const v = value.trim()
+    if (v && v !== note.text) await actions.editLifeAreaNote(date, note.id, v)
+    else setValue(note.text)
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setValue(note.text); setEditing(false) } }}
+        maxLength={1000}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: '0.86em', background: 'var(--surface-2, rgba(255,255,255,0.05))', color: 'var(--text)', border: '1px solid var(--theme-color)', borderRadius: 8, outline: 'none' }}
+      />
+    )
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0' }}>
+      <span style={{ color: '#666', lineHeight: '1.5em' }}>•</span>
+      <span
+        onClick={() => { if (!isReadOnly) { setValue(note.text); setEditing(true) } }}
+        style={{ flex: 1, fontSize: '0.88em', lineHeight: 1.5, wordBreak: 'break-word', cursor: isReadOnly ? 'default' : 'text' }}
+      >{note.text}</span>
+      {!isReadOnly && (
+        <button
+          onClick={() => actions.deleteLifeAreaNote(date, note.id)}
+          aria-label="Elimina voce"
+          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1em', padding: '2px 4px', lineHeight: 1 }}
+        >×</button>
+      )}
+    </div>
+  )
+}
+
+export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalData }) {
+  const [date, setDate] = useState(() => toDateString(new Date()))
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const today = toDateString(new Date())
+
+  const areas = (globalData?.lifeAreas || []).filter(a => a.active !== false)
+  const dayNotes = globalData?.lifeAreaNotes?.[date] || []
+  const ideas = globalData?.lifeAreaIdeas || []
+  const filledCount = areas.filter(a => dayNotes.some(n => n.areaId === a.id)).length
+
+  return (
+    <div style={{ padding: '16px 16px 90px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <h2 style={{ fontSize: '1.1em', fontWeight: 800, margin: 0 }}>🌱 Aree</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <button onClick={() => setDate(d => shiftDate(d, -1))} aria-label="Giorno precedente"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', padding: 4 }}>
+            <span className="material-icons-round" style={{ fontSize: 22 }}>chevron_left</span>
+          </button>
+          <button onClick={() => setDate(today)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', fontWeight: 700, fontSize: '0.9em', minWidth: 64, textAlign: 'center' }}>
+            {dayLabel(date)}
+          </button>
+          <button onClick={() => setDate(d => shiftDate(d, 1))} disabled={date >= today} aria-label="Giorno successivo"
+            style={{ background: 'none', border: 'none', cursor: date >= today ? 'default' : 'pointer', color: date >= today ? '#444' : 'var(--text)', padding: 4 }}>
+            <span className="material-icons-round" style={{ fontSize: 22 }}>chevron_right</span>
+          </button>
+        </div>
+      </div>
+      <p style={{ fontSize: '0.78em', color: '#888', margin: '0 0 14px' }}>
+        {filledCount === areas.length && areas.length > 0 ? '✅ Tutte le aree compilate' : `${filledCount}/${areas.length} aree compilate`}
+      </p>
+
+      {areas.length === 0 && (
+        <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85em', padding: '16px 0' }}>Nessuna area ancora — creane una da "Strumenti".</p>
+      )}
+
+      {areas.map(a => {
+        const entries = dayNotes.filter(n => n.areaId === a.id).sort((x, y) => (x.time || '').localeCompare(y.time || ''))
+        const pendingIdeas = ideas.filter(i => i.areaId === a.id && !i.done).length
+        return (
+          <div key={a.id} style={{
+            padding: '12px 14px', marginBottom: 10,
+            background: 'var(--surface)', border: '1px solid var(--card-border)',
+            borderLeft: `4px solid ${a.color || 'var(--theme-color)'}`, borderRadius: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '1.3em' }}>{a.emoji}</span>
+              <span style={{ fontWeight: 700, fontSize: '0.95em', flex: 1 }}>{a.name}</span>
+              <span style={{ fontSize: '0.72em', color: entries.length ? 'var(--success)' : '#666', fontWeight: 600 }}>
+                {entries.length ? `✓ ${entries.length}` : 'niente'}
+              </span>
+              {!isReadOnly && (
+                <button
+                  onClick={() => actions.openModal('lifeAreaDetail', { areaId: a.id })}
+                  title="Storico e spunti"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: '2px 4px' }}
+                >📓{pendingIdeas > 0 && <sup style={{ fontSize: '0.6em', color: 'var(--theme-color)', fontWeight: 800 }}>{pendingIdeas}</sup>}</button>
+              )}
+            </div>
+            {entries.length > 0 && (
+              <div style={{ marginTop: 6 }}>
+                {entries.map(n => <AreaEntry key={n.id} note={n} date={date} actions={actions} isReadOnly={isReadOnly} />)}
+              </div>
+            )}
+            {!isReadOnly && <AreaEntryInput area={a} date={date} actions={actions} />}
+          </div>
+        )
+      })}
+
+      <button
+        onClick={() => setToolsOpen(v => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, margin: '18px 0 4px' }}
+      >
+        <span style={{ fontSize: '0.72em', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>Strumenti: timer, sessioni, statistiche, gestione aree</span>
+        <span className="material-icons-round" style={{ fontSize: 16, color: '#666' }}>{toolsOpen ? 'expand_less' : 'expand_more'}</span>
+      </button>
+      {toolsOpen && <LifeAreaTools actions={actions} authUserId={authUserId} isReadOnly={isReadOnly} globalData={globalData} />}
     </div>
   )
 }

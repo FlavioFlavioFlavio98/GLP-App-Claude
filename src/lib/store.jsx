@@ -1443,8 +1443,24 @@ export function AppProvider({ children }) {
         time: new Date().toTimeString().slice(0, 8),
       }
       const ref = doc(db, 'users', 'flavio')
-      await updateDoc(ref, { [`lifeAreaNotes.${logDate}`]: arrayUnion(noteEntry) })
-      actions.showToast('Nota salvata', '📝')
+      // Aggiornamento ottimistico: la voce compare subito (anche offline, dove
+      // updateDoc si risolve solo alla riconnessione) e viene tolta se la
+      // scrittura fallisce davvero.
+      const patchDay = (fn) => dispatch({
+        type: 'PATCH_USER_FIELDS', user: 'flavio',
+        updater: cur => ({ lifeAreaNotes: { ...(cur.lifeAreaNotes || {}), [logDate]: fn((cur.lifeAreaNotes || {})[logDate] || []) } }),
+      })
+      patchDay(list => [...list.filter(n => n.id !== noteEntry.id), noteEntry])
+      try {
+        await updateDoc(ref, { [`lifeAreaNotes.${logDate}`]: arrayUnion(noteEntry) })
+      } catch (err) {
+        console.error('addLifeAreaNote failed:', err)
+        patchDay(list => list.filter(n => n.id !== noteEntry.id))
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+        return false
+      }
+      actions.vibrate?.('light')
+      return true
     },
 
     async editLifeAreaNote(dateStr, noteId, newText) {
@@ -1456,6 +1472,7 @@ export function AppProvider({ children }) {
       const dayNotes = (gd.lifeAreaNotes?.[dateStr] || [])
       const newNotes = dayNotes.map(n => n.id === noteId ? { ...n, text: trimmed } : n)
       const ref = doc(db, 'users', 'flavio')
+      dispatch({ type: 'PATCH_USER_FIELDS', user: 'flavio', updater: cur => ({ lifeAreaNotes: { ...(cur.lifeAreaNotes || {}), [dateStr]: newNotes } }) })
       await updateDoc(ref, { [`lifeAreaNotes.${dateStr}`]: newNotes })
       actions.showToast('Nota modificata ✏️', '✏️')
     },
@@ -1467,6 +1484,7 @@ export function AppProvider({ children }) {
       const dayNotes = (gd.lifeAreaNotes?.[dateStr] || [])
       const newNotes = dayNotes.filter(n => n.id !== noteId)
       const ref = doc(db, 'users', 'flavio')
+      dispatch({ type: 'PATCH_USER_FIELDS', user: 'flavio', updater: cur => ({ lifeAreaNotes: { ...(cur.lifeAreaNotes || {}), [dateStr]: newNotes } }) })
       await updateDoc(ref, { [`lifeAreaNotes.${dateStr}`]: newNotes })
       actions.showToast('Nota eliminata', '🗑️')
     },

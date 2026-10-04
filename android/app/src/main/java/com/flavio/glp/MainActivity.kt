@@ -89,11 +89,18 @@ class MainActivity : BridgeActivity() {
         val tab = intent?.getStringExtra("open_tab") ?: return
         android.util.Log.d("GLP_Notif", "Deep link to tab: $tab")
         // Attende che la WebView sia pronta prima di eseguire JS
-        bridge.webView.post {
-            bridge.webView.evaluateJavascript(
-                "window.dispatchEvent(new CustomEvent('glp_open_tab',{detail:'$tab'}))",
-                null
-            )
+        bridge.webView.post { dispatchOpenTab(tab, 0) }
+    }
+
+    // All'avvio a freddo da una notifica la web app potrebbe non essere ancora
+    // montata: riprova ogni 500 ms (max ~15 s) finché App.jsx non segnala
+    // window.__glpAppReady, così il tap sulla notifica apre davvero la tab.
+    private fun dispatchOpenTab(tab: String, attempt: Int) {
+        val js = "(function(){if(window.__glpAppReady){window.dispatchEvent(new CustomEvent('glp_open_tab',{detail:'$tab'}));return 'ok'}return 'wait'})()"
+        bridge.webView.evaluateJavascript(js) { res ->
+            if (res?.contains("ok") != true && attempt < 30) {
+                bridge.webView.postDelayed({ dispatchOpenTab(tab, attempt + 1) }, 500)
+            }
         }
     }
 

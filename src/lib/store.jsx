@@ -1489,6 +1489,33 @@ export function AppProvider({ children }) {
       actions.showToast('Nota eliminata', '🗑️')
     },
 
+    // ─── Intenzione settimanale per area ── una frase per area e per settimana
+    // (chiave = lunedì 'YYYY-MM-DD'), scritta in revisione e mostrata sulla card
+    // dell'area durante la settimana. Testo vuoto = rimuove l'intenzione.
+    async setLifeAreaIntention(weekKey, areaId, text) {
+      if (state.authUserId !== 'flavio') return
+      const value = (text || '').trim().slice(0, 300)
+      dispatch({
+        type: 'PATCH_USER_FIELDS', user: 'flavio',
+        updater: cur => {
+          const all = { ...(cur.lifeAreaIntentions || {}) }
+          const week = { ...(all[weekKey] || {}) }
+          if (value) week[areaId] = value
+          else delete week[areaId]
+          all[weekKey] = week
+          return { lifeAreaIntentions: all }
+        },
+      })
+      try {
+        await updateDoc(doc(db, 'users', 'flavio'), {
+          [`lifeAreaIntentions.${weekKey}.${areaId}`]: value ? value : deleteField(),
+        })
+      } catch (err) {
+        console.error('setLifeAreaIntention failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+      }
+    },
+
     // ─── Idee per area ── checklist di idee/miglioramenti senza scadenza,
     // volutamente separata dall'array "tasks" principale (niente punti,
     // niente scadenza) — richiesta esplicita di Flavio: le task vere hanno

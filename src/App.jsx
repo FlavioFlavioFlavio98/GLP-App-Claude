@@ -259,15 +259,22 @@ export default function App() {
   useEffect(() => { applyTheme(theme); trackThemeUsed(theme) }, [theme])
   useEffect(() => { applyUserColors(userColors.flavio) }, [userColors])
 
-  // Deep link da notifiche Android
+  // Deep link da notifiche Android. changeTabRef evita la closure ferma al
+  // primo render (changeTab legge viewUserId/authUserId correnti).
+  // __glpAppReady dice a MainActivity.kt che il listener è pronto: all'avvio
+  // a freddo da una notifica l'evento viene ritentato finché non lo è.
+  const changeTabRef = useRef(changeTab)
+  changeTabRef.current = changeTab
   useEffect(() => {
+    const TAB_FROM_NOTIFICATION = { habits: 'abitudini', tasks: 'task', aree: 'aree' }
     function handleOpenTab(e) {
       const tab = e.detail
-      if (tab === 'readings') setShowReadings(true)
-      // habits e tasks sono già visibili nella schermata principale
+      if (tab === 'readings') { setShowReadings(true); return }
+      if (TAB_FROM_NOTIFICATION[tab]) changeTabRef.current(TAB_FROM_NOTIFICATION[tab])
     }
     window.addEventListener('glp_open_tab', handleOpenTab)
-    return () => window.removeEventListener('glp_open_tab', handleOpenTab)
+    window.__glpAppReady = true
+    return () => { window.removeEventListener('glp_open_tab', handleOpenTab); window.__glpAppReady = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Level-up detection
@@ -456,7 +463,8 @@ export default function App() {
             </div>
           )}
 
-          <DateNav />
+          {/* La tab Aree ha il suo selettore di giorno/settimana */}
+          {!['aree', 'altro'].includes(currentTab) && <DateNav />}
         </>
       )}
 

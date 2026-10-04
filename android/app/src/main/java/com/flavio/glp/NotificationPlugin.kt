@@ -99,6 +99,48 @@ class NotificationPlugin : Plugin() {
         call.resolve(JSObject().apply { put("reminders", result) })
     }
 
+    // ─── Promemoria serale Aree (AreasReminder.kt) ─────────────────────────────
+
+    private fun areasStatus(): JSObject {
+        val ctx = context
+        return JSObject().apply {
+            put("enabled", AreasReminder.isEnabled(ctx))
+            put("hour", AreasReminder.hour(ctx))
+            put("minute", AreasReminder.minute(ctx))
+            put("timeZone", AreasReminder.ZONE.id)
+            put("nextTrigger", AreasReminder.nextTrigger(ctx))
+            put("exactAllowed", AreasReminder.canExact(ctx))
+            put("notificationsEnabled", androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled())
+        }
+    }
+
+    @PluginMethod
+    fun getAreasReminderStatus(call: PluginCall) {
+        AreasReminder.ensureScheduled(context)
+        call.resolve(areasStatus())
+    }
+
+    /** { enabled, hour, minute } — orario in ora bulgara (Europe/Sofia). */
+    @PluginMethod
+    fun setAreasReminder(call: PluginCall) {
+        AreasReminder.save(
+            context,
+            call.getBoolean("enabled", true) ?: true,
+            call.getInt("hour", AreasReminder.DEFAULT_HOUR) ?: AreasReminder.DEFAULT_HOUR,
+            call.getInt("minute", AreasReminder.DEFAULT_MINUTE) ?: AreasReminder.DEFAULT_MINUTE
+        )
+        NotificationReceiver.createChannel(context)
+        call.resolve(areasStatus())
+    }
+
+    /** Notifica di prova tra { delaySeconds } secondi, stesso percorso del promemoria vero. */
+    @PluginMethod
+    fun testAreasReminder(call: PluginCall) {
+        NotificationReceiver.createChannel(context)
+        val at = AreasReminder.scheduleTest(context, call.getInt("delaySeconds", 60) ?: 60)
+        call.resolve(JSObject().apply { put("at", at) })
+    }
+
     /**
      * Controlla e richiede POST_NOTIFICATIONS (richiesto da Android 13+).
      * Restituisce { status: "granted" | "denied" | "prompt" }

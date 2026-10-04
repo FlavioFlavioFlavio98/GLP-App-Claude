@@ -50,6 +50,7 @@ object NotificationScheduler {
             prefs.getInt("readings_hour",  9),
             prefs.getInt("readings_minute",0))
         scheduleCustomReminders(context, getCustomReminders(context))
+        AreasReminder.ensureScheduled(context)
     }
 
     /** Salva le impostazioni ricevute dal plugin JS e ri-schedula. */

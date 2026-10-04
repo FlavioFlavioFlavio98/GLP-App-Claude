@@ -3,6 +3,8 @@ import { toDateString } from '../lib/habitLogic'
 import { computeLifeAreaStats, computeLifeAreaDailyTotals } from '../lib/lifeAreaStats'
 import { Chart } from '../lib/chartSetup'
 import LifeAreaTimerCard from './LifeAreaTimerCard'
+import LifeAreaWeekView from './LifeAreaWeekView'
+import { addDays, mondayOf, shortDayLabel, entriesFor, isAreaFilled, frequentEntries, intentionFor } from '../lib/lifeAreaWeek'
 
 // Soglia oltre la quale un'area "ferma" merita un avviso in UI — non troppo
 // aggressiva (le aree della vita non sono abitudini quotidiane), ma abbastanza
@@ -296,24 +298,18 @@ function LifeAreaTools({ actions, authUserId, isReadOnly, globalData }) {
 
 // ─── Vista principale: "cosa ho fatto oggi" su ogni area ──────────────────────
 // Un campo di testo per area, sempre visibile: si scrive, Invio, la voce si
-// aggiunge in coda. Niente modali, niente durata, niente punti — pensata per
-// la compilazione serale in pochi tocchi. Timer/sessioni/statistiche restano
+// aggiunge in coda. Sotto il campo, le voci più frequenti come pulsanti a un
+// tocco. Niente durata, niente punti — pensata per la compilazione serale.
+// "Settimana" apre la revisione (LifeAreaWeekView): mappa di equilibrio,
+// riepilogo giorno per giorno e intenzioni. Timer/sessioni/statistiche restano
 // sotto, in una sezione richiudibile.
-const WEEKDAYS = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab']
 
 function dayLabel(dateStr) {
   const today = toDateString(new Date())
   const yesterday = toDateString(new Date(Date.now() - 86400000))
   if (dateStr === today) return 'Oggi'
   if (dateStr === yesterday) return 'Ieri'
-  const d = new Date(dateStr + 'T00:00:00')
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`
-}
-
-function shiftDate(dateStr, delta) {
-  const d = new Date(dateStr + 'T12:00:00')
-  d.setDate(d.getDate() + delta)
-  return toDateString(d)
+  return shortDayLabel(dateStr)
 }
 
 function AreaEntryInput({ area, date, actions }) {
@@ -355,6 +351,27 @@ function AreaEntryInput({ area, date, actions }) {
           color: text.trim() ? '#000' : '#555', fontSize: '1.3em', fontWeight: 800,
         }}
       >＋</button>
+    </div>
+  )
+}
+
+// Voci frequenti a un tocco: un tap aggiunge la voce al giorno selezionato.
+function QuickChips({ area, date, suggestions, actions }) {
+  if (!suggestions.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+      {suggestions.map(text => (
+        <button
+          key={text}
+          onClick={() => actions.addLifeAreaNote(area.id, text, date)}
+          style={{
+            padding: '5px 10px', borderRadius: 14, cursor: 'pointer', fontSize: '0.78em',
+            background: 'transparent', color: 'var(--text)',
+            border: `1px dashed ${area.color || 'var(--theme-color)'}`,
+            maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >+ {text}</button>
+      ))}
     </div>
   )
 }
@@ -401,44 +418,43 @@ function AreaEntry({ note, date, actions, isReadOnly }) {
   )
 }
 
-export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalData }) {
-  const [date, setDate] = useState(() => toDateString(new Date()))
-  const [toolsOpen, setToolsOpen] = useState(false)
+function DayView({ globalData, areas, date, setDate, actions, isReadOnly }) {
   const today = toDateString(new Date())
-
-  const areas = (globalData?.lifeAreas || []).filter(a => a.active !== false)
-  const dayNotes = globalData?.lifeAreaNotes?.[date] || []
   const ideas = globalData?.lifeAreaIdeas || []
-  const filledCount = areas.filter(a => dayNotes.some(n => n.areaId === a.id)).length
+  const weekKey = mondayOf(date)
+  const filledCount = areas.filter(a => isAreaFilled(globalData, a.id, date)).length
 
   return (
-    <div style={{ padding: '16px 16px 90px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <h2 style={{ fontSize: '1.1em', fontWeight: 800, margin: 0 }}>🌱 Aree</h2>
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span style={{ fontSize: '0.78em', color: '#888' }}>
+          {filledCount === areas.length && areas.length > 0 ? '✅ Tutte le aree compilate' : `${filledCount}/${areas.length} aree compilate`}
+        </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <button onClick={() => setDate(d => shiftDate(d, -1))} aria-label="Giorno precedente"
+          <button onClick={() => setDate(d => addDays(d, -1))} aria-label="Giorno precedente"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', padding: 4 }}>
             <span className="material-icons-round" style={{ fontSize: 22 }}>chevron_left</span>
           </button>
           <button onClick={() => setDate(today)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', fontWeight: 700, fontSize: '0.9em', minWidth: 64, textAlign: 'center' }}>
             {dayLabel(date)}
           </button>
-          <button onClick={() => setDate(d => shiftDate(d, 1))} disabled={date >= today} aria-label="Giorno successivo"
+          <button onClick={() => setDate(d => addDays(d, 1))} disabled={date >= today} aria-label="Giorno successivo"
             style={{ background: 'none', border: 'none', cursor: date >= today ? 'default' : 'pointer', color: date >= today ? '#444' : 'var(--text)', padding: 4 }}>
             <span className="material-icons-round" style={{ fontSize: 22 }}>chevron_right</span>
           </button>
         </div>
       </div>
-      <p style={{ fontSize: '0.78em', color: '#888', margin: '0 0 14px' }}>
-        {filledCount === areas.length && areas.length > 0 ? '✅ Tutte le aree compilate' : `${filledCount}/${areas.length} aree compilate`}
-      </p>
 
       {areas.length === 0 && (
         <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85em', padding: '16px 0' }}>Nessuna area ancora — creane una da "Strumenti".</p>
       )}
 
       {areas.map(a => {
-        const entries = dayNotes.filter(n => n.areaId === a.id).sort((x, y) => (x.time || '').localeCompare(y.time || ''))
+        const entries = entriesFor(globalData, a.id, date)
+        const notes = entries.filter(e => e.kind === 'note')
+        const sessions = entries.filter(e => e.kind === 'session')
+        const suggestions = isReadOnly ? [] : frequentEntries(globalData?.lifeAreaNotes, a.id, { exclude: notes.map(n => n.text) })
+        const intention = intentionFor(globalData, weekKey, a.id)
         const pendingIdeas = ideas.filter(i => i.areaId === a.id && !i.done).length
         return (
           <div key={a.id} style={{
@@ -460,15 +476,66 @@ export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalDat
                 >📓{pendingIdeas > 0 && <sup style={{ fontSize: '0.6em', color: 'var(--theme-color)', fontWeight: 800 }}>{pendingIdeas}</sup>}</button>
               )}
             </div>
+            {intention && (
+              <div style={{ fontSize: '0.76em', color: a.color || 'var(--theme-color)', marginTop: 4 }}>🎯 {intention}</div>
+            )}
             {entries.length > 0 && (
               <div style={{ marginTop: 6 }}>
-                {entries.map(n => <AreaEntry key={n.id} note={n} date={date} actions={actions} isReadOnly={isReadOnly} />)}
+                {notes.map(n => <AreaEntry key={n.id} note={n} date={date} actions={actions} isReadOnly={isReadOnly} />)}
+                {sessions.map(s => (
+                  <div key={s.id} style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: '0.84em', color: '#999' }}>
+                    <span>⏱</span><span>{s.text ? `${s.text} · ` : ''}{s.duration} min</span>
+                  </div>
+                ))}
               </div>
             )}
             {!isReadOnly && <AreaEntryInput area={a} date={date} actions={actions} />}
+            {!isReadOnly && <QuickChips area={a} date={date} suggestions={suggestions} actions={actions} />}
           </div>
         )
       })}
+    </>
+  )
+}
+
+export default function LifeAreaTab({ actions, authUserId, isReadOnly, globalData }) {
+  const [view, setView] = useState('day') // 'day' | 'week'
+  const [date, setDate] = useState(() => toDateString(new Date()))
+  const [toolsOpen, setToolsOpen] = useState(false)
+
+  const areas = (globalData?.lifeAreas || []).filter(a => a.active !== false)
+
+  function openDay(d) {
+    setDate(d)
+    setView('day')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const segBtn = (id, label) => (
+    <button
+      onClick={() => setView(id)}
+      style={{
+        flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer', borderRadius: 8,
+        fontWeight: 700, fontSize: '0.82em',
+        background: view === id ? 'var(--theme-color)' : 'transparent',
+        color: view === id ? '#000' : '#888',
+      }}
+    >{label}</button>
+  )
+
+  return (
+    <div style={{ padding: '16px 16px 90px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <h2 style={{ fontSize: '1.1em', fontWeight: 800, margin: 0 }}>🌱 Aree</h2>
+        <div style={{ flex: 1, display: 'flex', gap: 4, padding: 3, borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--card-border)' }}>
+          {segBtn('day', 'Giorno')}
+          {segBtn('week', 'Settimana')}
+        </div>
+      </div>
+
+      {view === 'day'
+        ? <DayView globalData={globalData} areas={areas} date={date} setDate={setDate} actions={actions} isReadOnly={isReadOnly} />
+        : <LifeAreaWeekView globalData={globalData} areas={areas} actions={actions} isReadOnly={isReadOnly} onOpenDay={openDay} />}
 
       <button
         onClick={() => setToolsOpen(v => !v)}

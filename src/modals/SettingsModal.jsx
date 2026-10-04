@@ -314,6 +314,7 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
 
         {/* NOTIFICHE ANDROID */}
         <NotificationSection globalData={state.globalData} authUserId={authUserId} actions={actions} />
+        <AreasReminderSection />
         <CustomRemindersSection />
 
           </>
@@ -635,6 +636,101 @@ function NotificationSection({ globalData, authUserId, actions }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Promemoria serale Aree (nativo: AreasReminder.kt) ───────────────────────
+// Ogni sera all'orario scelto (ora Bulgaria) il telefono controlla su Firestore
+// quali aree non hanno voci oggi e, se ne manca qualcuna, manda una notifica.
+// Attivo di default anche senza aprire questa sezione: qui si cambia orario,
+// si vede lo stato e si prova la notifica.
+function fmtSofia(ms) {
+  if (!ms) return '—'
+  return new Date(ms).toLocaleString('it-IT', { timeZone: 'Europe/Sofia', weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function AreasReminderSection() {
+  const [status, setStatus] = useState(null)
+  const [msg, setMsg] = useState('')
+  const plugin = IS_NATIVE ? window.Capacitor?.Plugins?.NotificationPlugin : null
+
+  async function refresh() {
+    if (!plugin?.getAreasReminderStatus) return
+    try { setStatus(await plugin.getAreasReminderStatus()) } catch (e) { setMsg(`Errore: ${e?.message || e}`) }
+  }
+  useEffect(() => { refresh() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function ensurePermission() {
+    const perm = await plugin.requestPermission()
+    if (perm?.status === 'denied') {
+      setMsg('Permesso notifiche negato: abilitalo nelle impostazioni Android dell\'app.')
+      return false
+    }
+    return true
+  }
+
+  async function update(patch) {
+    if (!(await ensurePermission())) return
+    const next = { enabled: status.enabled, hour: status.hour, minute: status.minute, ...patch }
+    setStatus(await plugin.setAreasReminder(next))
+    setMsg('')
+  }
+
+  async function test(delaySeconds) {
+    if (!(await ensurePermission())) return
+    const res = await plugin.testAreasReminder({ delaySeconds })
+    const at = new Date(res.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    setMsg(delaySeconds > 10
+      ? `Notifica di prova alle ${at}: ora chiudi l'app (anche dalle app recenti) e aspetta.`
+      : 'Notifica di prova in arrivo tra pochi secondi…')
+  }
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">🌱 Promemoria serale Aree</div>
+      {!IS_NATIVE && (
+        <div style={{ padding: '10px 12px', borderRadius: 10, fontSize: '0.78em', background: 'rgba(255,255,255,0.04)', color: '#666', border: '1px solid rgba(255,255,255,0.07)' }}>
+          Disponibile solo sull'app Android
+        </div>
+      )}
+      {IS_NATIVE && !plugin?.getAreasReminderStatus && (
+        <div style={{ fontSize: '0.78em', color: '#f2994a' }}>Serve l'APK aggiornato per questa funzione.</div>
+      )}
+      {IS_NATIVE && status && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+            <span style={{ flex: 1, fontSize: '0.85em' }}>Se mancano aree da compilare</span>
+            <label className="toggle-switch">
+              <input type="checkbox" checked={status.enabled} onChange={e => update({ enabled: e.target.checked })} />
+              <span className="toggle-slider" />
+            </label>
+          </div>
+          {status.enabled && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: '0.78em', color: '#888' }}>Orario (ora Bulgaria):</span>
+              <input
+                type="time"
+                value={`${String(status.hour).padStart(2, '0')}:${String(status.minute).padStart(2, '0')}`}
+                onChange={e => {
+                  const [h, m] = e.target.value.split(':').map(Number)
+                  if (!Number.isNaN(h) && !Number.isNaN(m)) update({ hour: h, minute: m })
+                }}
+                style={{ padding: '4px 8px', borderRadius: 8, fontSize: '0.85em', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', color: 'var(--text)', colorScheme: 'dark' }}
+              />
+            </div>
+          )}
+          <div style={{ fontSize: '0.72em', color: '#888', lineHeight: 1.6 }}>
+            {status.enabled && <>Prossimo controllo: <strong>{fmtSofia(status.nextTrigger)}</strong> (ora Bulgaria)<br /></>}
+            Notifiche permesse: {status.notificationsEnabled ? '✅' : '❌ (abilitale nelle impostazioni Android)'} · Orario preciso: {status.exactAllowed ? '✅' : '⚠️ può tardare fino a 10 min'}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button className="btn-backup" style={{ flex: 1 }} onClick={() => test(3)}>Prova subito</button>
+            <button className="btn-backup" style={{ flex: 1 }} onClick={() => test(60)}>Prova tra 1 minuto</button>
+          </div>
+        </>
+      )}
+      {msg && <div style={{ fontSize: '0.76em', color: '#aaa', marginTop: 8 }}>{msg}</div>}
     </div>
   )
 }

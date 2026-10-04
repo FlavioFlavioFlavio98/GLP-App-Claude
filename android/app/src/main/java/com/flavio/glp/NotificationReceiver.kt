@@ -35,6 +35,11 @@ class NotificationReceiver : BroadcastReceiver() {
             return
         }
 
+        if (intent.getStringExtra("type") == AreasReminder.TYPE) {
+            AreasReminder.onAlarm(context, intent, this)
+            return
+        }
+
         val type = intent.getStringExtra("type") ?: return
 
         val widgetPrefs = context.getSharedPreferences("glp_widget", Context.MODE_PRIVATE)

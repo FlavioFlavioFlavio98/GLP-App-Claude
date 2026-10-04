@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { getApp } from 'firebase/app'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { useApp } from '../lib/store'
 import { APP_VERSION, APP_UPDATED, APP_BUILD_TIME, APP_BUILD_HASH } from '../version'
 import { getRestDuration, setRestDuration } from '../lib/workoutStats'
@@ -196,6 +198,9 @@ export default function SettingsModal({ onOpenPsych, onOpenReadings }) {
             Notifiche & Backup email
           </button>
         </div>
+
+        {/* EMAIL TASK GIORNALIERA — solo Flavio */}
+        {authUserId === 'flavio' && <TaskDigestSection />}
 
         {/* ALLENAMENTO — solo Flavio */}
         {authUserId === 'flavio' && (
@@ -788,6 +793,45 @@ function ToggleRow({ label, sublabel, icon, value, onChange }) {
           left: value ? 23 : 3,
         }} />
       </button>
+    </div>
+  )
+}
+
+// ─── Email giornaliera con le task (07:30) + pulsante di prova ────────────────
+function TaskDigestSection() {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  async function sendTest() {
+    setBusy(true); setMsg(null)
+    try {
+      const fn = httpsCallable(getFunctions(getApp(), 'europe-west1'), 'sendTaskDigestTest', { timeout: 30000 })
+      const { data } = await fn()
+      setMsg(data?.sent
+        ? { ok: true, text: `Email inviata! (${data.counts.today} oggi, ${data.counts.overdue} in ritardo). Controlla anche lo spam.` }
+        : { ok: false, text: 'Nessuna email inviata.' })
+    } catch (err) {
+      setMsg({ ok: false, text: `Invio non riuscito: ${err?.message || 'errore sconosciuto'}` })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">📧 Email task giornaliera</div>
+      <p style={{ fontSize: '0.75em', color: '#888', margin: '2px 0 10px' }}>
+        Ogni mattina alle 07:30 ricevi una email con le task di oggi e quelle scadute.
+      </p>
+      <button className="btn-backup" onClick={sendTest} disabled={busy}>
+        <span className="material-icons-round" style={{ fontSize: 18 }}>forward_to_inbox</span>
+        {busy ? 'Invio in corso…' : 'Invia email di prova'}
+      </button>
+      {msg && (
+        <p style={{ fontSize: '0.78em', margin: '8px 0 0', color: msg.ok ? 'var(--success, #4caf50)' : 'var(--danger, #ef5350)' }}>
+          {msg.text}
+        </p>
+      )}
     </div>
   )
 }

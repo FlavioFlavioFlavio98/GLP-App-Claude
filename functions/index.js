@@ -9,6 +9,8 @@ admin.initializeApp()
 
 const anthropicKey = defineSecret('ANTHROPIC_KEY')
 const geminiKey = defineSecret('GEMINI_KEY')
+const resendKey = defineSecret('RESEND_KEY')
+const { buildDigest } = require('./dailyDigest')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
 const shared = require('./sharedHabits')
 const ALLOWED_EMAIL = 'flavio.rossi94@gmail.com'
@@ -192,6 +194,59 @@ exports.expireTasks = onSchedule(
     // (penaltyApplied:true viene già letto dal calcolo dinamico della penalità).
     await flavioRef.update({ tasks: updatedTasks })
     console.log(`[expireTasks] expired ${updatedTasks.filter(t => t.status === 'expired').length - tasks.filter(t => t.status === 'expired').length} tasks`)
+  }
+)
+
+// ── sendDailyTaskDigest ───────────────────────────────────────────────────────
+// Ogni mattina manda a Flavio una mail (via Resend) con le task di oggi e quelle
+// in ritardo/scadute. Senza dominio verificato Resend consente di scrivere solo
+// all'email con cui è stato creato l'account (= quella di Flavio).
+// Se non c'è nessuna task la mail non parte (il test dalle Impostazioni invece
+// parte sempre, così si può verificare che tutto funzioni).
+async function sendTaskDigestEmail({ test = false } = {}) {
+  const snap = await admin.firestore().collection('users').doc('flavio').get()
+  if (!snap.exists) return { sent: false, reason: 'no-user' }
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+  const digest = buildDigest(snap.data()?.tasks || [], today, { sendWhenEmpty: test })
+  if (!digest) {
+    console.log('[sendDailyTaskDigest] nessuna task, mail non inviata')
+    return { sent: false, reason: 'empty' }
+  }
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${resendKey.value().trim()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'GLP App <onboarding@resend.dev>',
+      to: [ALLOWED_EMAIL],
+      subject: test ? `[TEST] ${digest.subject}` : digest.subject,
+      html: digest.html,
+      text: digest.text,
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`[sendDailyTaskDigest] Resend HTTP ${res.status}: ${body}`)
+    throw new Error(`Resend HTTP ${res.status}: ${body}`)
+  }
+  console.log(`[sendDailyTaskDigest] inviata${test ? ' (test)' : ''}: ${digest.counts.today} oggi, ${digest.counts.overdue} in ritardo`)
+  return { sent: true, counts: digest.counts }
+}
+
+exports.sendDailyTaskDigest = onSchedule(
+  { schedule: '30 7 * * *', timeZone: 'Europe/Rome', region: REGION, secrets: [resendKey] },
+  async () => { await sendTaskDigestEmail() }
+)
+
+// Pulsante "Invia email di prova" nelle Impostazioni.
+exports.sendTaskDigestTest = onCall(
+  { region: REGION, secrets: [resendKey], invoker: 'public' },
+  async (request) => {
+    authCheck(request)
+    try {
+      return await sendTaskDigestEmail({ test: true })
+    } catch (err) {
+      throw new HttpsError('internal', err.message || 'Invio non riuscito')
+    }
   }
 )
 

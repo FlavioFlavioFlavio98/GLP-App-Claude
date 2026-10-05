@@ -9,7 +9,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.material.Button
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.wear.compose.material.Chip
+import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 
@@ -40,16 +42,24 @@ fun LoginScreen(
             style = MaterialTheme.typography.title3,
             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
         )
-        Button(onClick = onGoogleSignInClick, enabled = !loading) {
-            Text(if (loading) "..." else "Accedi con Google")
-        }
-        Button(
+        // Chip (non Button): sul watch reale il Button di Wear è un cerchio e
+        // tagliava le etichette ("Accedi con Googl…"), rendendo il login
+        // illeggibile — visto su Pixel Watch 5.
+        Chip(
+            onClick = onGoogleSignInClick,
+            enabled = !loading,
+            label = { Text(if (loading) "Attendi…" else "Accedi con Google") },
+            colors = ChipDefaults.primaryChipColors(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Chip(
             onClick = onPasswordSignInClick,
             enabled = !loading,
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            Text("Password (account watch)")
-        }
+            label = { Text("Password") },
+            secondaryLabel = { Text("account watch") },
+            colors = ChipDefaults.secondaryChipColors(),
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        )
         if (error != null) {
             Text(
                 text = error,

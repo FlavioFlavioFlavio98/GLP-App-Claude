@@ -44,6 +44,50 @@
             android:taskAffinity="com.flavio.glp.wear.voiceaddtask"
             android:theme="@android:style/Theme.DeviceDefault" />
 
+        <!-- Momenti di consapevolezza: schermata "salva e chiudi" aperta da
+             complicazione, Tile e hub. exported=true perché la Tile la lancia
+             dal processo di sistema; fuori dai recenti e senza cronologia
+             perché vive un paio di secondi. -->
+        <activity
+            android:name="com.flavio.glp.wear.MindfulAddActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="com.flavio.glp.wear.mindfuladd"
+            android:theme="@android:style/Theme.DeviceDefault" />
+
+        <!-- Complicazione "Consapevolezza" — mostra N/obiettivo sul quadrante,
+             tocco = +1. RANGED_VALUE per gli slot con arco di avanzamento,
+             SHORT_TEXT per gli altri. Aggiornamento periodico ogni 30 min come
+             rete di sicurezza: il cambio di giorno lo gestisce già la timeline. -->
+        <service
+            android:name="com.flavio.glp.wear.MindfulComplicationService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Consapevolezza"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="1800" />
+        </service>
+
+        <!-- Tile "Consapevolezza" — N/obiettivo in grande, tocco = +1. -->
+        <service
+            android:name="com.flavio.glp.wear.MindfulTileService"
+            android:exported="true"
+            android:label="Consapevolezza"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+        </service>
+
         <!-- Tile "punti di oggi" — raggiungibile scorrendo da destra sul
              quadrante senza aprire l'app. -->
         <service

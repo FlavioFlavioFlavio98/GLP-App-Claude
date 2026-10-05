@@ -1612,6 +1612,56 @@ export function AppProvider({ children }) {
       actions.showToast(`Sessione da ${mins} min registrata! +${rate}pt 🧘`, '🧘')
     },
 
+    // ─── Momenti di consapevolezza ── un tocco = un momento (solo l'orario,
+    // niente punti), con obiettivo giornaliero. Nati per il Pixel Watch
+    // (MindfulStore.kt scrive gli stessi campi); qui la stessa azione per
+    // web/telefono. Aggiornamento ottimistico: il conteggio sale subito.
+    async addMindfulMoment() {
+      if (state.authUserId !== 'flavio') return
+      trackSectionUsage('actions', 'mindful')
+      const logDate = toDateString(new Date())
+      const time = new Date().toTimeString().slice(0, 8)
+      const patchDay = fn => dispatch({
+        type: 'PATCH_USER_FIELDS', user: 'flavio',
+        updater: cur => ({ mindfulLog: { ...(cur.mindfulLog || {}), [logDate]: fn((cur.mindfulLog || {})[logDate] || []) } }),
+      })
+      patchDay(list => list.includes(time) ? list : [...list, time])
+      actions.vibrate('light')
+      try {
+        await updateDoc(doc(db, 'users', 'flavio'), { [`mindfulLog.${logDate}`]: arrayUnion(time) })
+      } catch (err) {
+        console.error('addMindfulMoment failed:', err)
+        patchDay(list => list.filter(t => t !== time))
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+      }
+    },
+
+    async removeMindfulMoment(dateStr, time) {
+      if (state.authUserId !== 'flavio') return
+      dispatch({
+        type: 'PATCH_USER_FIELDS', user: 'flavio',
+        updater: cur => ({ mindfulLog: { ...(cur.mindfulLog || {}), [dateStr]: ((cur.mindfulLog || {})[dateStr] || []).filter(t => t !== time) } }),
+      })
+      try {
+        await updateDoc(doc(db, 'users', 'flavio'), { [`mindfulLog.${dateStr}`]: arrayRemove(time) })
+      } catch (err) {
+        console.error('removeMindfulMoment failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+      }
+    },
+
+    async setMindfulGoal(goal) {
+      if (state.authUserId !== 'flavio') return
+      const value = Math.min(20, Math.max(1, parseInt(goal) || 3))
+      dispatch({ type: 'PATCH_USER_FIELDS', user: 'flavio', fields: { mindfulGoal: value } })
+      try {
+        await updateDoc(doc(db, 'users', 'flavio'), { mindfulGoal: value })
+      } catch (err) {
+        console.error('setMindfulGoal failed:', err)
+        actions.showToast('Errore nel salvataggio — riprova', '❌')
+      }
+    },
+
     // Pasti consapevoli: sessione stile workout (inizio/fine dal componente),
     // qui si registra solo il risultato finale — durata + autovalutazione di
     // quanto sei stato calmo (non rileviamo le masticazioni senza sensori).

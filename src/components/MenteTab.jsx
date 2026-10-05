@@ -2,6 +2,7 @@ import WillpowerSection from './WillpowerSection'
 import DayRecapSection from './DayRecapSection'
 import DiscoveriesSection from './DiscoveriesSection'
 import MeditationSection from './MeditationSection'
+import MindfulSection from './MindfulSection'
 
 export default function MenteTab({ actions, authUserId, isReadOnly, globalData }) {
   if (authUserId !== 'flavio' || isReadOnly) {
@@ -16,6 +17,7 @@ export default function MenteTab({ actions, authUserId, isReadOnly, globalData }
 
   return (
     <div style={{ paddingTop: 8 }}>
+      <MindfulSection globalData={globalData} actions={actions} />
       <DayRecapSection dayRecapLog={dayRecapLog} actions={actions} />
       <MeditationSection meditationLog={meditationLog} meditationNotes={meditationNotes} actions={actions} />
       <DiscoveriesSection discoveries={discoveries} actions={actions} />

@@ -4,7 +4,7 @@
 export const ALTRO_ITEMS = [
   { id: 'oggi',       icon: 'today',         label: 'Oggi',       desc: 'Riepilogo della giornata' },
   { id: 'body',       icon: 'spa',           label: 'Benessere',  desc: 'Corpo, sonno, energia' },
-  { id: 'mente',      icon: 'psychology',    label: 'Mente',      desc: 'Umore e mindfulness' },
+  { id: 'mente',      icon: 'psychology',    label: 'Mente',      desc: 'Consapevolezza, meditazione, willpower' },
   { id: 'nutrizione', icon: 'restaurant',    label: 'Nutrizione', desc: 'Alimentazione e macro' },
   { id: 'pasti',      icon: 'lunch_dining',  label: 'Pasti',      desc: 'Pasti consapevoli' },
   { id: 'stats',      icon: 'bar_chart',     label: 'Stats',      desc: 'Statistiche e andamento' },

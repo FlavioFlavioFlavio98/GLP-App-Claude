@@ -2,6 +2,8 @@ package com.flavio.glp.wear
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -35,6 +37,10 @@ data class MindfulState(val count: Int, val goal: Int)
  * complicazione. La copia locale si aggiorna subito a ogni tocco e viene
  * riallineata al server da un listener quando l'app, la Tile o la schermata di
  * conferma sono attive (così entrano anche i momenti aggiunti da telefono/web).
+ *
+ * Offline (modalità aereo): il tocco funziona uguale, perché conteggio e
+ * quadrante usano solo la copia locale. La scrittura resta nella coda su disco
+ * di Firestore e PendingWritesWorker la spedisce da solo al ritorno della rete.
  */
 object MindfulStore {
 
@@ -59,16 +65,62 @@ object MindfulStore {
     fun count(ctx: Context) = times(ctx).size
     fun goal(ctx: Context) = prefs(ctx).getInt("goal", DEFAULT_GOAL).coerceAtLeast(1)
 
+    // ─── Modifiche locali non ancora confermate dal server ────────────────────
+    // Servono a due cose: (1) sapere se c'è qualcosa da spedire, (2) non farsi
+    // sovrascrivere il tocco appena fatto da una lettura "vecchia" del
+    // documento. Caso reale visto su Pixel Watch 5: il listener appena
+    // agganciato consegna prima una fotografia calcolata PRIMA del tocco, e
+    // senza questa lista il conteggio tornava indietro per qualche secondo
+    // (3 → 2 → 3). Restano salvate su disco finché il server non conferma,
+    // quindi sopravvivono anche alla chiusura del processo in modalità aereo.
+
+    private fun pendingList(ctx: Context, key: String): List<String> {
+        val p = prefs(ctx)
+        if (p.getString("date", "") != today()) return emptyList()
+        return (p.getString(key, "") ?: "").split(',').filter { it.isNotBlank() }
+    }
+
+    fun pendingAdds(ctx: Context) = pendingList(ctx, "pendingAdd")
+    fun pendingRemoves(ctx: Context) = pendingList(ctx, "pendingRemove")
+
+    private fun setPending(ctx: Context, adds: List<String>, removes: List<String>, localChange: Boolean = false) {
+        prefs(ctx).edit()
+            .apply { if (localChange) putLong("lastLocalChangeAt", System.currentTimeMillis()) }
+            .putString("pendingAdd", adds.distinct().joinToString(","))
+            .putString("pendingRemove", removes.distinct().joinToString(","))
+            .putBoolean("dirty", adds.isNotEmpty() || removes.isNotEmpty())
+            .apply()
+    }
+
+    /** true finché c'è almeno una modifica locale non ancora confermata dal server. */
+    fun isDirty(ctx: Context) = pendingAdds(ctx).isNotEmpty() || pendingRemoves(ctx).isNotEmpty()
+
+    /** Il server ha confermato (o rifiutato) queste modifiche: non sono più "in sospeso". */
+    @Synchronized
+    fun confirm(ctx: Context, adds: Collection<String> = emptyList(), removes: Collection<String> = emptyList()) {
+        setPending(ctx, pendingAdds(ctx) - adds.toSet(), pendingRemoves(ctx) - removes.toSet())
+    }
+
+    fun isOnline(ctx: Context): Boolean {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
     /** Allinea lo StateFlow (per Compose) alla copia locale, senza toccare le superfici. */
     fun refreshState(ctx: Context) {
         _state.value = MindfulState(count(ctx), goal(ctx))
     }
 
     private fun save(ctx: Context, list: List<String>, goal: Int? = null) {
+        val newDay = prefs(ctx).getString("date", "") != today()
         prefs(ctx).edit().apply {
             putString("date", today())
-            putString("times", list.joinToString(","))
+            putString("times", list.distinct().sorted().joinToString(","))
             if (goal != null) putInt("goal", goal)
+            // Giorno nuovo: le modifiche in sospeso di ieri non riguardano più
+            // il conteggio di oggi (la loro scrittura resta comunque in coda).
+            if (newDay) { putString("pendingAdd", ""); putString("pendingRemove", ""); putBoolean("dirty", false) }
         }.apply()
         refreshState(ctx)
         notifySurfaces(ctx)
@@ -78,6 +130,7 @@ object MindfulStore {
      * Registra un momento adesso. Ritorna l'orario salvato, o null se ignorato
      * (secondo tocco entro 1 s = doppio tocco accidentale).
      */
+    @Synchronized
     fun add(ctx: Context): String? {
         val now = System.currentTimeMillis()
         if (now - lastAddAt < 1000) return null
@@ -86,28 +139,54 @@ object MindfulStore {
         val list = times(ctx)
         if (time in list) return null
         save(ctx, list + time)
+        setPending(ctx, pendingAdds(ctx) + time, pendingRemoves(ctx) - time, localChange = true)
+        PendingWritesWorker.enqueue(ctx)
         val app = ctx.applicationContext
-        // Offline la scrittura resta in coda e parte da sola alla riconnessione;
-        // il listener di errore scatta solo per un rifiuto vero (es. non loggato).
+        // Offline la scrittura resta in coda (su disco) e parte da sola alla
+        // riconnessione: nessuno dei due listener scatta finché il server non
+        // risponde. Il rifiuto vero (es. non loggato) toglie il momento.
         userRef().update("mindfulLog.${today()}", FieldValue.arrayUnion(time))
+            .addOnSuccessListener { confirm(app, adds = listOf(time)) }
             .addOnFailureListener { e ->
                 android.util.Log.e("GLP_Mindful", "add failed: ${e.message}")
+                confirm(app, adds = listOf(time))
                 save(app, times(app) - time)
             }
         return time
     }
 
+    @Synchronized
     fun remove(ctx: Context, time: String) {
         save(ctx, times(ctx) - time)
+        setPending(ctx, pendingAdds(ctx) - time, pendingRemoves(ctx) + time, localChange = true)
+        PendingWritesWorker.enqueue(ctx)
+        val app = ctx.applicationContext
         userRef().update("mindfulLog.${today()}", FieldValue.arrayRemove(time))
-            .addOnFailureListener { e -> android.util.Log.e("GLP_Mindful", "remove failed: ${e.message}") }
+            .addOnSuccessListener { confirm(app, removes = listOf(time)) }
+            .addOnFailureListener { e ->
+                android.util.Log.e("GLP_Mindful", "remove failed: ${e.message}")
+                confirm(app, removes = listOf(time))
+            }
     }
 
+    @Synchronized
     private fun syncFromDoc(ctx: Context, doc: DocumentSnapshot) {
-        val list = ((doc.get("mindfulLog") as? Map<*, *>)?.get(today()) as? List<*>)
+        val fromDoc = ((doc.get("mindfulLog") as? Map<*, *>)?.get(today()) as? List<*>)
             ?.map { it.toString() } ?: emptyList()
+        // Il documento vale come base, ma i tocchi locali non ancora confermati
+        // restano: aggiunte in più, rimozioni in meno.
+        val merged = ((fromDoc + pendingAdds(ctx)).distinct() - pendingRemoves(ctx).toSet()).sorted()
         val goal = ((doc.get("mindfulGoal") as? Number)?.toInt() ?: DEFAULT_GOAL).coerceAtLeast(1)
-        if (list != times(ctx) || goal != goal(ctx)) save(ctx, list, goal)
+        if (merged != times(ctx) || goal != goal(ctx)) save(ctx, merged, goal)
+
+        // Conferma alternativa a quella del worker: se Firestore dice che per
+        // questo documento non ha più scritture locali in attesa, tutto ciò
+        // che era in sospeso è stato spedito (capita quando il processo è
+        // stato chiuso prima della conferma e la coda si è svuotata dopo).
+        // Si aspetta qualche secondo dall'ultimo tocco perché la prima
+        // fotografia dopo un tocco può essere stata calcolata prima di esso.
+        val quiet = System.currentTimeMillis() - prefs(ctx).getLong("lastLocalChangeAt", 0L) > 10_000
+        if (quiet && !doc.metadata.hasPendingWrites() && isDirty(ctx)) setPending(ctx, emptyList(), emptyList())
     }
 
     /** Listener persistente (uno per processo) che riallinea la copia locale al server. */

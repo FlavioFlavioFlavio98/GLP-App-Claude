@@ -1,6 +1,7 @@
 package com.flavio.glp.wear
 
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,6 +28,7 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 
 // Tocco su complicazione / Tile / hub → questa schermata: registra SUBITO un
@@ -47,7 +49,23 @@ class MindfulAddActivity : ComponentActivity() {
             finish()
             return
         }
+        // Solo nelle build di debug, per provare via adb senza toccare la
+        // modalità aereo del watch (che staccherebbe anche adb):
+        //   --ez debug_offline true  → spegne la rete di Firestore in questo
+        //     processo prima di salvare: la scrittura resta in coda come in aereo.
+        //   --ez debug_undo true     → non aggiunge nulla, toglie l'ultimo
+        //     momento di oggi (per ripulire dopo una prova) e chiude.
+        val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable && intent.getBooleanExtra("debug_offline", false)) {
+            FirebaseFirestore.getInstance().disableNetwork()
+        }
+        if (debuggable && intent.getBooleanExtra("debug_undo", false)) {
+            MindfulStore.times(this).lastOrNull()?.let { MindfulStore.remove(this, it) }
+            finish()
+            return
+        }
         MindfulStore.ensureListening(this)
+        val online = MindfulStore.isOnline(this)
 
         if (savedInstanceState == null) {
             addedTime = MindfulStore.add(this)
@@ -65,9 +83,25 @@ class MindfulAddActivity : ComponentActivity() {
         setContent {
             val state by MindfulStore.state.collectAsState()
             var undone by remember { mutableStateOf(false) }
+            var syncing by remember { mutableStateOf(false) }
 
             LaunchedEffect(undone) {
+                val started = System.currentTimeMillis()
                 delay(if (undone) 900 else 2200)
+                // Con la rete: si resta in primo piano finché il server non ha
+                // confermato (di solito è già successo; al massimo ~7 s in
+                // tutto). Chiudendo prima, a schermo spento il sistema può
+                // rimandare l'invio anche di molto. Offline si chiude subito:
+                // ci pensa PendingWritesWorker al ritorno della rete.
+                fun stillPending(): Boolean {
+                    val t = addedTime ?: return false
+                    val ctx = this@MindfulAddActivity
+                    return if (undone) t in MindfulStore.pendingRemoves(ctx) else t in MindfulStore.pendingAdds(ctx)
+                }
+                while (online && stillPending() && System.currentTimeMillis() - started < 7000) {
+                    syncing = true
+                    delay(250)
+                }
                 finish()
             }
 
@@ -85,9 +119,14 @@ class MindfulAddActivity : ComponentActivity() {
                 )
                 Text(
                     when {
+                        syncing -> "Sincronizzo…"
                         undone -> "Annullato"
                         addedTime == null -> "Già registrato"
                         state.count == state.goal -> "Obiettivo raggiunto 🎉"
+                        // Senza rete il momento è salvato sul watch e parte da
+                        // solo al ritorno della connessione: lo si dice, così
+                        // non resta il dubbio che sia andato perso.
+                        !online -> "Salvato offline 📴"
                         else -> "Momento salvato"
                     },
                     style = MaterialTheme.typography.caption1,

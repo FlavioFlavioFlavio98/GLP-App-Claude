@@ -85,6 +85,14 @@ class MainActivity : ComponentActivity() {
     // anche a parità di pagina, forzando comunque lo scroll.
     private var requestedPageNonce by mutableStateOf(0)
 
+    // Uscendo dall'app: se qualcosa è stato registrato senza rete (abitudini,
+    // task, workout…), questo worker lo spedisce appena il watch torna online,
+    // senza dover riaprire l'app. Con la coda vuota finisce subito.
+    override fun onStop() {
+        super.onStop()
+        PendingWritesWorker.enqueue(this)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

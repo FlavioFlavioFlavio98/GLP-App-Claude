@@ -65,6 +65,9 @@ class MindfulComplicationService : SuspendingTimelineComplicationDataSourceServi
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationDataTimeline? {
         val goal = MindfulStore.goal(this)
+        // Aggiornamento periodico (ogni 30 min): se c'è ancora qualcosa di non
+        // confermato dal server, rimette in coda la spedizione.
+        if (MindfulStore.isDirty(this)) PendingWritesWorker.enqueue(this)
         val now = data(request.complicationType, MindfulStore.count(this), goal) ?: return null
         val zero = data(request.complicationType, 0, goal) ?: return null
         val midnight = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant()

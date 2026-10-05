@@ -46,6 +46,10 @@ dependencies {
     implementation 'androidx.wear:wear:1.3.0'
     implementation 'com.google.firebase:firebase-firestore-ktx:25.0.0'
     implementation 'com.google.firebase:firebase-auth-ktx:23.0.0'
+    // Spedisce le scritture rimaste in coda offline appena torna la rete,
+    // anche ad app chiusa — vedi PendingWritesWorker.kt (stessa versione del
+    // modulo telefono).
+    implementation 'androidx.work:work-runtime-ktx:2.9.0'
 
     // Tile "punti di oggi", raggiungibile scorrendo da destra sul quadrante
     // senza aprire l'app — richiesta esplicita di Flavio.
